@@ -94,11 +94,13 @@ export default function LessonDetailScreen() {
     );
   }
 
+  const isReadOnly = lesson.status !== LessonStatus.IN_PROGRESS;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
       <View style={styles.header}>
         <Text style={styles.dateText}>{lesson.date}</Text>
-        <View style={styles.statusBadge}>
+        <View style={[styles.statusBadge, isReadOnly && { backgroundColor: theme.colors.success }]}>
           <Text style={styles.statusText}>{lesson.status}</Text>
         </View>
       </View>
@@ -106,16 +108,18 @@ export default function LessonDetailScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Identificação</Text>
         <TextInput 
-          style={styles.input}
+          style={[styles.input, isReadOnly && styles.disabledInput]}
           value={lesson.lesson_title}
           placeholder="Título da Aula"
           onChangeText={(val) => updateField('lesson_title', val)}
+          editable={!isReadOnly}
         />
         <TextInput 
-          style={[styles.input, { marginTop: 10 }]}
+          style={[styles.input, { marginTop: 10 }, isReadOnly && styles.disabledInput]}
           value={lesson.professor_name}
           placeholder="Nome do Professor"
           onChangeText={(val) => updateField('professor_name', val)}
+          editable={!isReadOnly}
         />
       </View>
 
@@ -125,12 +129,14 @@ export default function LessonDetailScreen() {
           <TimeCaptureButton 
             label="Início Real" 
             value={lesson.time_real_start} 
-            onCapture={() => captureTime('time_real_start')} 
+            onCapture={() => captureTime('time_real_start')}
+            disabled={isReadOnly}
           />
           <TimeCaptureButton 
             label="Fim Real" 
             value={lesson.time_real_end} 
-            onCapture={() => captureTime('time_real_end')} 
+            onCapture={() => captureTime('time_real_end')}
+            disabled={isReadOnly}
           />
         </View>
         <Text style={styles.hint}>Previsto: {lesson.time_expected_start} às {lesson.time_expected_end}</Text>
@@ -143,24 +149,28 @@ export default function LessonDetailScreen() {
           value={lesson.attendance_start}
           onIncrement={() => updateField('attendance_start', lesson.attendance_start + 1)}
           onDecrement={() => updateField('attendance_start', Math.max(0, lesson.attendance_start - 1))}
+          disabled={isReadOnly}
         />
         <CounterStepper 
           label="Meio da Aula" 
           value={lesson.attendance_mid}
           onIncrement={() => updateField('attendance_mid', lesson.attendance_mid + 1)}
           onDecrement={() => updateField('attendance_mid', Math.max(0, lesson.attendance_mid - 1))}
+          disabled={isReadOnly}
         />
         <CounterStepper 
           label="Fim da Aula" 
           value={lesson.attendance_end}
           onIncrement={() => updateField('attendance_end', lesson.attendance_end + 1)}
           onDecrement={() => updateField('attendance_end', Math.max(0, lesson.attendance_end - 1))}
+          disabled={isReadOnly}
         />
         <CounterStepper 
           label="Participantes Únicos" 
           value={lesson.unique_participants}
           onIncrement={() => updateField('unique_participants', lesson.unique_participants + 1)}
           onDecrement={() => updateField('unique_participants', Math.max(0, lesson.unique_participants - 1))}
+          disabled={isReadOnly}
         />
       </View>
 
@@ -235,6 +245,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: theme.colors.border,
+  },
+  disabledInput: {
+    backgroundColor: '#E5E5EA',
+    color: theme.colors.textSecondary,
   },
   row: {
     flexDirection: 'row',

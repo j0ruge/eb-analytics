@@ -79,11 +79,17 @@ export const lessonService = {
   async updateLesson(id: string, updates: Partial<Lesson>): Promise<void> {
     const db = await getDatabase();
     
-    const fields = Object.keys(updates);
-    if (fields.length === 0) return;
+    // Filter out ID and ensure we have valid keys
+    const entries = Object.entries(updates).filter(([key]) => key !== 'id');
+    
+    if (entries.length === 0) return;
+
+    const fields = entries.map(([key]) => key);
+    // Explicitly map values and convert undefined to null to avoid native NPE
+    const values = entries.map(([_, value]) => value === undefined ? null : value);
 
     const query = `UPDATE lessons_data SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE id = ?`;
-    const params = [...Object.values(updates), id];
+    const params = [...values, id];
 
     await db.runAsync(query, params);
   },

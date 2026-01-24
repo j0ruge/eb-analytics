@@ -88,6 +88,7 @@
 - [X] T026 [US3] Create Export Screen UI in `app/sync/index.tsx`
 - [X] T027 [US3] Implement JSON generation (Array of Lesson objects) and FileSystem write logic in `src/services/exportService.ts`
 - [X] T028 [US3] Connect `Sharing.shareAsync` to "Export Data" button in `app/sync/index.tsx`
+- [X] T035 [US3] Implement read-only state logic in `app/lesson/[id].tsx` (disable all inputs if status is COMPLETED)
 - [ ] T029 [US3] Add integration test for JSON payload structure in `tests/integration/export.test.ts` (DEFERRED)
 
 **Checkpoint**: End-to-end flow complete (Start -> Collect -> Complete -> Export).

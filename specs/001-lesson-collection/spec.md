@@ -64,6 +64,7 @@ As a Coordinator, I want to export completed lesson data so that I can aggregate
 - **FR-005**: Database updates MUST occur automatically after a 500ms debounce on any field change.
 - **FR-006**: The "Real Start" and "Real End" times MUST support one-tap capture from the system clock (`Date.now()` formatted to `HH:MM`).
 - **FR-007**: The Export function MUST select only records where `status = 'COMPLETED'`.
+- **FR-008**: Once a lesson status is `COMPLETED` or `SYNCED`, all form inputs (text fields, steppers, and time capture buttons) MUST be disabled to prevent further edits.
 
 ### Edge Cases & Constraints
 
