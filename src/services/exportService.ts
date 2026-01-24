@@ -1,5 +1,5 @@
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { Paths, File } from 'expo-file-system';
+import { isAvailableAsync, shareAsync } from 'expo-sharing';
 import { lessonService } from './lessonService';
 
 export const exportService = {
@@ -12,14 +12,15 @@ export const exportService = {
       }
 
       const fileName = `EBD_Export_${new Date().toISOString().split('T')[0]}.json`;
-      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+      const file = new File(Paths.cache, fileName);
       
       const payload = JSON.stringify(completedLessons, null, 2);
       
-      await FileSystem.writeAsStringAsync(fileUri, payload);
+      // In SDK 54, File.write is synchronous
+      file.write(payload);
       
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri);
+      if (await isAvailableAsync()) {
+        await shareAsync(file.uri);
         return true;
       } else {
         throw new Error('Sharing is not available on this device.');
