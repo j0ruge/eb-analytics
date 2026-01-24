@@ -1,50 +1,59 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+- Version change: (New) -> 1.0.0
+- List of modified principles: Established Principles I through V (Initial Ratification)
+- Added sections: Technology Stack, Governance
+- Removed sections: None (Template placeholders filled)
+- Templates requiring updates:
+  - .specify/templates/plan-template.md (✅ Aligned via generic placeholder)
+  - .specify/templates/spec-template.md (✅ Aligned)
+  - .specify/templates/tasks-template.md (✅ Aligned)
+- Follow-up TODOs: None
+-->
+
+# EBD Insights (App Mobile) Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Local-First Architecture
+**NON-NEGOTIABLE:** The application must be fully functional without network connectivity. All user input and data collection MUST be persisted immediately to the local SQLite database (`expo-sqlite/next`). Network synchronization is a secondary, background concern and must never block the user interface or data entry flow.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Minimalism & Native-First
+**MANDATE:** Strict limit on external dependencies. Develop using native Expo APIs and standard React Native `StyleSheet` wherever possible. Heavy UI libraries (e.g., NativeBase, Tamagui) are PROHIBITED unless a specific component is impossible to build natively. Complexity must be justified by critical business value.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Fail-Safe UX & State Recovery
+**RULE:** The application must withstand crashes or OS-initiated termination without data loss. Complex flows (like the 3-stage class form) MUST automatically save "in-progress" state to persistent storage. Upon relaunch, the application MUST offer to restore the user's previous context/session exactly where they left off.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Decoupled Export Strategy
+**DESIGN PATTERN:** The data collection domain is architecturally separated from the reporting/BI domain. Local data remains on the device until explicitly exported or synced. The export mechanism (JSON generation or API Sync) MUST be decoupled from the core data entry loops, ensuring performance and stability during class time.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Zero-Friction UX
+**UX STANDARD:** "Zero Typing" is the goal. Input interfaces MUST prioritize single-tap interactions (Steppers, Native Selects, Toggles) over text fields. Automated data capture (e.g., using the system clock for timestamps) is mandatory to reduce cognitive load and manual entry effort.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Technology Stack & Constraints
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+**Core Stack:**
+- **Language:** TypeScript (Strict Mode required)
+- **Framework:** React Native with Expo (Optimized for Expo Go)
+- **Router:** Expo Router (File-based routing)
+- **Database:** SQLite (`expo-sqlite/next`)
+- **Styling:** Native `StyleSheet` (No CSS-in-JS runtimes or heavy UI kits)
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Compliance:**
+- All code must pass `tsc` with strict settings.
+- UI must be responsive across standard mobile screen sizes.
+- Application must be "Eject-free" compatible with Expo Go workflow where feasible.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This Constitution acts as the supreme source of truth for architectural and design decisions within the **EBD Insights** project.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+1.  **Supremacy:** In conflicts between this document and other documentation (PRs, tickets, casual discussions), this Constitution prevails.
+2.  **Amendments:** Changes to these principles require a formal "Constitutional Amendment" process, involving a version bump and rationale documentation.
+3.  **Enforcement:** Code Reviews must explicitly verify alignment with these principles (e.g., rejecting a PR that adds a heavy UI library without justification).
+4.  **Version Policy:**
+    - **MAJOR:** Change in core philosophy (e.g., moving away from Local-First).
+    - **MINOR:** New principle added or significant clarification.
+    - **PATCH:** Wording tweaks, typos, non-substantive updates.
+
+**Version**: 1.0.0 | **Ratified**: 2026-01-24 | **Last Amended**: 2026-01-24
