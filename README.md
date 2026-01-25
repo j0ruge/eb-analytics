@@ -1,4 +1,4 @@
-# 📊 EBD Insights
+# 📊 EB Insights
 
 ![Status](https://img.shields.io/badge/Status-Em_Desenvolvimento-yellow)
 ![Plataforma](https://img.shields.io/badge/Plataforma-Web_/_Mobile-blue)
@@ -72,7 +72,7 @@ Com base na sua nova documentação, redesenhei o Wireframe. Apliquei uma regra 
 ### 📱 Wireframe: Formulário de Coleta (Tela Mobile) - Versão 1.0
 
 **[ CABEÇALHO ]**
-🔹 **EBD Insights** | Nova Aula
+🔹 **EB Insights** | Nova Aula
 👤 **Coordenador:** `[ Nome Logado ]`
 📅 **Data:** `[24/01/2026]` *(Automático)*
 

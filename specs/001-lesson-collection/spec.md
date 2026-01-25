@@ -3,7 +3,7 @@
 **Feature Branch**: `001-lesson-collection`
 **Created**: 2026-01-24
 **Status**: Draft
-**Input**: User description (EBD Insights Domain)
+**Input**: User description (EB Insights Domain)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -76,13 +76,13 @@ As a Coordinator, I want to export completed lesson data so that I can aggregate
 ### Key Entities
 
 - **Lesson (`lessons_data`)**:
-    - `id` (UUID): Primary Key.
-    - `date` (ISO8601): Date of the lesson.
-    - `status`: 'IN_PROGRESS' | 'COMPLETED' | 'SYNCED'.
-    - `time_expected_start/end`: Default '09:00'/'10:15'.
-    - `time_real_start/end`: Actual captured times.
-    - `attendance_*`: Integer counters.
-    - `unique_participants`: Integer counter.
+  - `id` (UUID): Primary Key.
+  - `date` (ISO8601): Date of the lesson.
+  - `status`: 'IN_PROGRESS' | 'COMPLETED' | 'SYNCED'.
+  - `time_expected_start/end`: Default '09:00'/'10:15'.
+  - `time_real_start/end`: Actual captured times.
+  - `attendance_*`: Integer counters.
+  - `unique_participants`: Integer counter.
 
 ## Success Criteria *(mandatory)*
 

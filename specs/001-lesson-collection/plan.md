@@ -5,7 +5,7 @@
 
 ## Summary
 
-Implement the core "Local-First" data collection flow for EBD Insights. This includes setting up the SQLite database schema, creating the "New Lesson" entry point, building the 3-stage Lesson Form (Start, Mid, End) with "Zero Typing" controls (Steppers, Time Capture), and establishing the "Auto-Save" mechanism to ensure data persistence. Finally, implement the JSON export for completed lessons.
+Implement the core "Local-First" data collection flow for EB Insights. This includes setting up the SQLite database schema, creating the "New Lesson" entry point, building the 3-stage Lesson Form (Start, Mid, End) with "Zero Typing" controls (Steppers, Time Capture), and establishing the "Auto-Save" mechanism to ensure data persistence. Finally, implement the JSON export for completed lessons.
 
 ## Technical Context
 

@@ -9,7 +9,7 @@
 /speckit.constitution
 
 # Identidade do Projeto
-Nome: EBD Insights (App Mobile)
+Nome: EB Insights (App Mobile)
 Propósito: Aplicativo de coleta de dados locais (offline-first) para gestão e BI da Escola Bíblica.
 
 # Stack Tecnológica Principal
@@ -40,7 +40,7 @@ Propósito: Aplicativo de coleta de dados locais (offline-first) para gestão e 
 ```markdown
 /speckit.specify
 
-# Domínio: Coleta de Dados (EBD Insights)
+# Domínio: Coleta de Dados (EB Insights)
 
 ## 1. Schema do Banco de Dados Local (SQLite)
 Tabela principal: `lessons_data`
@@ -116,4 +116,3 @@ O desenvolvimento será dividido em 3 Milestones focados em entregar valor incre
 ```
 
 ---
-
