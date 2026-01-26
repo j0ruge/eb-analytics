@@ -119,4 +119,4 @@ specs/{feature-id}/
 
 ## Specs Reference
 
-Feature planning docs live in `specs/001-lesson-collection/`. Check [plan.md](../specs/001-lesson-collection/plan.md) for implementation context.
+Feature planning docs live in `specs/001-lesson-collection/` and `specs/002-professors-catalog/`. Check [plan.md](../specs/001-lesson-collection/plan.md) and [plan.md](../specs/002-professors-catalog/plan.md) for implementation context.

@@ -184,6 +184,12 @@ tests/                  # Testes unitários
 
 ---
 
+## TROUBLESHOOTINGS
+
+Você pode encontrar soluções para problemas comuns no arquivo [Troubleshootings.md](./Troubleshootings.md).
+
+---
+
 ## 📄 Licença
 
 Projeto desenvolvido para uso interno da Escola Bíblica.
