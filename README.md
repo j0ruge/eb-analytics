@@ -5,7 +5,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue)
 ![SQLite](https://img.shields.io/badge/Storage-SQLite_(Local--First)-orange)
 
-Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento da Escola Bíblica (EBD), com arquitetura **local-first** (offline-first).
+Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento da Escola Bíblica (EB), com arquitetura **local-first** (offline-first).
 
 ---
 
