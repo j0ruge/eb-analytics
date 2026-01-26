@@ -1,33 +1,64 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { Link, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { lessonService } from '../src/services/lessonService';
-import { Lesson } from '../src/types/lesson';
-import { theme } from '../src/theme';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useState } from "react";
+import { lessonService } from "../src/services/lessonService";
+import { professorService } from "../src/services/professorService";
+import { Lesson } from "../src/types/lesson";
+import { Professor } from "../src/types/professor";
+import { theme } from "../src/theme";
 
 export default function HomeScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [professors, setProfessors] = useState<Professor[]>([]);
   const router = useRouter();
 
-  useEffect(() => {
-    loadLessons();
-  }, []);
+  // Recarrega lista quando a tela volta ao foco
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, []),
+  );
 
-  async function loadLessons() {
-    const data = await lessonService.getAllLessons();
-    setLessons(data);
+  async function loadData() {
+    const [lessonsData, professorsData] = await Promise.all([
+      lessonService.getAllLessons(),
+      professorService.getAllProfessors(),
+    ]);
+    setLessons(lessonsData);
+    setProfessors(professorsData);
+  }
+
+  function getProfessorName(professorId: string | null): string {
+    if (!professorId) return "Sem professor";
+    const professor = professors.find((p) => p.id === professorId);
+    return professor?.name || "Sem professor";
   }
 
   const renderItem = ({ item }: { item: Lesson }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.lessonItem}
       onPress={() => router.push(`/lesson/${item.id}`)}
     >
       <View>
-        <Text style={styles.lessonTitle}>{item.lesson_title || 'Aula sem título'}</Text>
-        <Text style={styles.lessonSubtitle}>{item.date} - {item.professor_name || 'Sem professor'}</Text>
+        <Text style={styles.lessonTitle}>
+          {item.lesson_title || "Aula sem título"}
+        </Text>
+        <Text style={styles.lessonSubtitle}>
+          {item.date} - {getProfessorName(item.professor_id)}
+        </Text>
       </View>
-      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+      <View
+        style={[
+          styles.statusBadge,
+          { backgroundColor: getStatusColor(item.status) },
+        ]}
+      >
         <Text style={styles.statusText}>{item.status}</Text>
       </View>
     </TouchableOpacity>
@@ -39,13 +70,15 @@ export default function HomeScreen() {
         data={lessons}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.emptyText}>Nenhuma aula registrada.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>Nenhuma aula registrada.</Text>
+        }
         contentContainerStyle={styles.listContent}
       />
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push('/lesson/new')}
+        onPress={() => router.push("/lesson/new")}
       >
         <Text style={styles.fabText}>+ Nova Aula</Text>
       </TouchableOpacity>
@@ -55,9 +88,12 @@ export default function HomeScreen() {
 
 function getStatusColor(status: string) {
   switch (status) {
-    case 'IN_PROGRESS': return theme.colors.primary;
-    case 'COMPLETED': return theme.colors.success;
-    default: return theme.colors.textSecondary;
+    case "IN_PROGRESS":
+      return theme.colors.primary;
+    case "COMPLETED":
+      return theme.colors.success;
+    default:
+      return theme.colors.textSecondary;
   }
 }
 
@@ -70,9 +106,9 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
   },
   lessonItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: theme.spacing.md,
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.md,
@@ -80,7 +116,7 @@ const styles = StyleSheet.create({
   },
   lessonTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: theme.colors.text,
   },
   lessonSubtitle: {
@@ -93,17 +129,17 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.sm,
   },
   statusText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   emptyText: {
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 50,
     color: theme.colors.textSecondary,
   },
   fab: {
-    position: 'absolute',
+    position: "absolute",
     bottom: theme.spacing.xl,
     right: theme.spacing.xl,
     backgroundColor: theme.colors.primary,
@@ -111,14 +147,14 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     borderRadius: 30,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
   fabText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 16,
   },
 });

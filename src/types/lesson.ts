@@ -8,7 +8,8 @@ export interface Lesson {
   id: string;
   date: string; // ISO 8601 YYYY-MM-DD
   coordinator_name: string;
-  professor_name: string;
+  professor_name: string; // DEPRECATED: Use professor_id instead
+  professor_id: string | null;
   series_name: string;
   lesson_title: string;
   time_expected_start: string; // HH:MM

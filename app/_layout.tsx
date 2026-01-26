@@ -1,7 +1,7 @@
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { initializeDatabase } from "../src/db/client";
-import { TouchableOpacity, Text } from "react-native";
+import { TouchableOpacity, Text, View } from "react-native";
 import { theme } from "../src/theme";
 
 export default function RootLayout() {
@@ -28,13 +28,22 @@ export default function RootLayout() {
         options={{
           title: "EB Insights",
           headerRight: () => (
-            <TouchableOpacity onPress={() => router.push("/sync")}>
-              <Text
-                style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
-              >
-                Sinc
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={() => router.push("/professors")}>
+                <Text
+                  style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
+                >
+                  Profs
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/sync")}>
+                <Text
+                  style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
+                >
+                  Sinc
+                </Text>
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -42,6 +51,14 @@ export default function RootLayout() {
       <Stack.Screen
         name="lesson/[id]"
         options={{ title: "Detalhes da Aula" }}
+      />
+      <Stack.Screen
+        name="professors/index"
+        options={{ title: "Professores" }}
+      />
+      <Stack.Screen
+        name="professors/new"
+        options={{ title: "Novo Professor" }}
       />
       <Stack.Screen name="sync/index" options={{ title: "Sincronizar" }} />
     </Stack>
