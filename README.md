@@ -1,137 +1,189 @@
 # 📊 EB Insights
 
-![Status](https://img.shields.io/badge/Status-Em_Desenvolvimento-yellow)
-![Plataforma](https://img.shields.io/badge/Plataforma-Web_/_Mobile-blue)
+![Status](https://img.shields.io/badge/Status-MVP_Funcional-green)
+![Plataforma](https://img.shields.io/badge/Plataforma-Mobile_(Expo)-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue)
+![SQLite](https://img.shields.io/badge/Storage-SQLite_(Local--First)-orange)
 
-Um sistema de **Coleta de Dados e Business Intelligence (BI)** focado na gestão da Escola Bíblica (EBD).
-
-O objetivo do projeto é promover a mudança de uma cultura de "achismo" para uma **gestão baseada em dados**, substituindo o controle manual (ou inexistente) por um formulário web mobile-first. Os dados coletados a cada aula alimentam automaticamente painéis (Dashboards) para a tomada de decisão da diretoria.
-
----
-
-## Visão Geral do Sistema
-
-Um sistema de **Coleta de Dados e Business Intelligence (BI)** para a Escola Bíblica. O objetivo é substituir o controle manual/inexistente por um formulário web simples de preenchimento a cada aula, que alimentará automaticamente painéis de indicadores (Dashboards) para a tomada de decisão da diretoria.
+Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento da Escola Bíblica (EBD), com arquitetura **local-first** (offline-first).
 
 ---
 
-## Modelo de Dados (O que será "catalogado")
+## 🚀 Funcionalidades Implementadas
 
-Para o BI funcionar, o formulário de entrada precisará capturar obrigatoriamente os seguintes atributos por aula:
+### ✅ Coleta de Dados (Feature 001)
 
-* **Logística:** Data, Horário Previsto de Início, Horário Real de Início, Horário Previsto de Término, Horário de Término.
-* **Conteúdo:** Professor do dia, Série de Lições, Título da Lição.
-* **Métricas de Presença:**  Qtd. no Início (exato momento que o professor começa), Qtd. no Meio da aula, Qtd. no Final.
-* **Métrica de Engajamento:** Qtd. de Participantes Únicos (pessoas distintas que fizeram perguntas/comentários).
+- Formulário em 3 momentos: Início, Meio e Fim da aula
+- Contadores de frequência com steppers (+ / -)
+- Captura automática de horários com um toque
+- Auto-save com debounce de 500ms
+- Recuperação de aulas em andamento
 
----
+### ✅ Cadastro de Professores (Feature 002)
 
-## Requisitos do Sistema
-
-### Requisitos Funcionais (RF)
-
-* **RF01:** O sistema deve ter uma interface web (formulário) para entrada dos dados da aula, substituindo planilhas Excel.
-* **RF02:** O sistema deve calcular a variação de público (Início, Meio e Fim) da aula.
-* **RF03:** O sistema deve gerar relatórios/dashboards que cruzem o nome do professor com a quantidade de participantes e engajamento.
-* **RF04:** O sistema deve permitir o cruzamento de dados de presença versus o "Título da Lição".
-
-### Requisitos Não-Funcionais (RNF)
-
-* **RNF01 (Usabilidade):** O formulário de entrada deve ser simples e rápido, permitindo o uso via celular durante a aula.
-* **RNF02 (Histórico):** O banco de dados deve permitir análises comparativas de longo prazo (trimestres/anos anteriores).
+- Cadastro com validação de CPF (algoritmo oficial)
+- Formatação automática do CPF na digitação
+- Picker para seleção de professor na aula
+- Proteção contra exclusão de professor com aulas vinculadas
+- Migração automática de banco de dados existente
 
 ---
 
-## 📖 Histórias de Usuário (User Stories)
+## 📱 Telas do Aplicativo
 
-Organizei as histórias na perspectiva de quem vai usar o sistema, para facilitar o desenvolvimento:
-
-| ID | Como um(a)... | Eu quero... | Para que eu possa... | Critério de Aceitação (Exemplo) |
-| --- | --- | --- | --- | --- |
-| **US01** | Coordenador | Preencher os dados da aula através de um formulário em tela. | Não precisar lidar com planilhas Excel e enviar os dados direto para o BI. | O formulário salva direto no banco; Campos obrigatórios definidos. |
-| **US02** | Coordenador | Visualizar a variação do nº de alunos no Início, Meio e Fim da aula. | Entender se as pessoas estão chegando atrasadas ou saindo antes do fim. | Gráfico de linha/barras mostrando a flutuação nas 3 etapas. |
-| **US03** | Diretor | Visualizar o engajamento através da contagem de "participantes únicos". | Avaliar a didática do professor (evitar que apenas "um aluno fale a aula toda"). | O input deve pedir "nº de pessoas distintas que falaram", não o nº de falas. |
-| **US04** | Diretor | Cruzar a média de presença/engajamento com o nome do professor. | Ter um "termômetro" da aceitação e comunicação de cada professor. | Dashboard com ranking ou histórico de professores. |
-| **US05** | Diretor | Comparar a participação baseada na "Série de Lições" e "Título da Lição" | Entender quais temas atraem mais ou menos público (sazonalidade de interesse). | Filtro no BI por "Título da Lição" e "Série de Lições", permitindo comparar trimestres. |
-| **US06** | Coordenador | Registrar e visualizar os horários reais de início e fim. | Medir a pontualidade da escola bíblica e dos professores. | Alerta visual se o atraso for superior a X minutos. |
+| Tela | Descrição |
+|------|-----------|
+| `/` | Lista de aulas com status e professor |
+| `/lesson/new` | Criar nova aula |
+| `/lesson/[id]` | Formulário de coleta (3 momentos) |
+| `/professors` | Lista de professores cadastrados |
+| `/professors/new` | Cadastrar novo professor |
+| `/sync` | Exportar dados (JSON) |
 
 ---
 
-## :memo: Notas
+## 🏗️ Arquitetura
 
-O ponto de alerta principal da entrevista é a métrica de **"Participantes Únicos"**. A pessoa que for preencher o formulário no dia precisará de uma prancheta ou papel de rascunho para ir marcando (com "tracinhos") quem já falou, para no fim da aula apenas colocar o **número final** no sistema. O sistema não precisa saber *quem* falou, apenas *quantos* falaram.
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Expo Router (app/)                   │
+├─────────────────────────────────────────────────────────┤
+│  Screens        │  Components       │  Services         │
+│  - index.tsx    │  - CounterStepper │  - lessonService  │
+│  - lesson/[id]  │  - TimeCaptureBtn │  - professorSvc   │
+│  - professors/  │  - ProfessorPicker│  - exportService  │
+├─────────────────────────────────────────────────────────┤
+│                    SQLite (expo-sqlite)                 │
+│                   📱 Local-First Storage                │
+└─────────────────────────────────────────────────────────┘
+```
 
----
+**Princípios:**
 
-As suas modificações ficaram excelentes! A troca de "Tipo/Tema" para **"Série de Lições"** reflete muito melhor a realidade das revistas de Escola Bíblica, e concentrar a responsabilidade do preenchimento no **Coordenador** centraliza o processo. A inclusão dos "Horários Previstos" também é fundamental para o cálculo de pontualidade.
-
-Com base na sua nova documentação, redesenhei o Wireframe. Apliquei uma regra de UX para os "Horários Previstos": como a escola costuma ter um horário padrão, o sistema já deve trazer o *previsto* preenchido, poupando tempo do Coordenador.
-
----
-
-### 📱 Wireframe: Formulário de Coleta (Tela Mobile) - Versão 1.0
-
-**[ CABEÇALHO ]**
-🔹 **EB Insights** | Nova Aula
-👤 **Coordenador:** `[ Nome Logado ]`
-📅 **Data:** `[24/01/2026]` *(Automático)*
-
----
-
-#### 📍 MOMENTO 1: INÍCIO DA AULA
-
-*(Preenchido assim que a aula começa)*
-
-**Professor do Dia:**
-`[ ▼ Selecione o Professor... ]`
-
-**Série de Lições:**
-`[ ▼ Ex: Série Romanos, Doutrinas, etc. ]` *(Atualizado)*
-
-**Título da Lição:**
-`[ Digite o título da lição do dia...    ]` ⌨️
-
-**Pontualidade de Início:**
-*Previsto:* `[ 09:00 ]` *(Sugestão preenchida pelo sistema)*
-*Início Real:* 🕙 `[ 09:05 ]` `[ 🕒 Marcar Hora Atual ]`
-
-**Público Inicial:**
-*(Ao começar a aula)*
-`[ - ]`  `[  18  ]`  `[ + ]`
+- **Local-First**: SQLite é a única fonte de verdade
+- **Zero-Friction UX**: Steppers e Pickers ao invés de teclado
+- **Auto-Save**: Mudanças salvas automaticamente (debounce 500ms)
+- **Fail-Safe**: Estado recuperável após fechar o app
 
 ---
 
-#### 📍 MOMENTO 2: DURANTE A AULA
+## 🗄️ Modelo de Dados
 
-*(Preenchido por volta das 09:40)*
+### Tabela `lessons_data`
 
-**Público no Meio:**
-*(Pico da aula)*
-`[ - ]`  `[  25  ]`  `[ + ]`
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | TEXT (UUID) | Identificador único |
+| `date` | TEXT | Data da aula (YYYY-MM-DD) |
+| `professor_id` | TEXT (FK) | Referência ao professor |
+| `lesson_title` | TEXT | Título da lição |
+| `series_name` | TEXT | Série de lições |
+| `time_expected_start` | TEXT | Horário previsto início (09:00) |
+| `time_real_start` | TEXT | Horário real início |
+| `time_expected_end` | TEXT | Horário previsto término (10:15) |
+| `time_real_end` | TEXT | Horário real término |
+| `attendance_start` | INTEGER | Frequência no início |
+| `attendance_mid` | INTEGER | Frequência no meio |
+| `attendance_end` | INTEGER | Frequência no fim |
+| `unique_participants` | INTEGER | Participantes únicos |
+| `status` | TEXT | IN_PROGRESS / COMPLETED / SYNCED |
+
+### Tabela `professors`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | TEXT (UUID) | Identificador único |
+| `doc_id` | TEXT (UNIQUE) | CPF validado (11 dígitos) |
+| `name` | TEXT | Nome completo |
+| `created_at` | TEXT | Data de cadastro |
+
+---
+
+## 🛠️ Tecnologias
+
+- **React Native** + **Expo SDK 54**
+- **Expo Router** (File-based routing)
+- **TypeScript** (Strict mode)
+- **SQLite** (`expo-sqlite`)
+- **Jest** (Testes unitários)
 
 ---
 
-#### 📍 MOMENTO 3: FIM DA AULA
+## 🚀 Como Executar
 
-*(Preenchido no encerramento)*
+```bash
+# Instalar dependências
+npm install
 
-**Público Final:**
-*(Ao terminar a aula)*
-`[ - ]`  `[  22  ]`  `[ + ]`
+# Iniciar servidor de desenvolvimento
+npm start
 
-**Pontualidade de Término:**
-*Previsto:* `[ 10:15 ]` *(Sugestão preenchida pelo sistema)*
-*Término Real:* 🕚 `[ 10:15 ]` `[ 🕒 Marcar Hora Atual ]`
+# Executar testes
+npx jest
+```
 
-**Engajamento (Participantes Únicos):**
-🗣️ Quantas pessoas **distintas** fizeram perguntas/comentários?
-`[ - ]`  `[   4   ]`  `[ + ]`
+**Requisitos:**
 
-> 💡 *Dica: Use seu rascunho para contar quem falou. Não conte repetições.*
+- Node.js 18+
+- Expo Go no celular (Android/iOS)
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+app/                    # Telas (Expo Router)
+├── index.tsx           # Home - Lista de aulas
+├── lesson/[id].tsx     # Formulário de coleta
+├── professors/         # CRUD de professores
+└── sync/               # Exportação de dados
+
+src/
+├── components/         # CounterStepper, TimeCaptureButton, ProfessorPicker
+├── db/                 # Schema e cliente SQLite
+├── services/           # Lógica de negócio (CRUD)
+├── types/              # Interfaces TypeScript
+├── hooks/              # useDebounce
+└── utils/              # Validação de CPF
+
+specs/                  # Especificações (Spec-Driven Dev)
+tests/                  # Testes unitários
+```
 
 ---
 
-**[ RODAPÉ FIXO ]**
-`[ ☁️ SALVAR E ENVIAR PARA O BI ]`
+## 📋 Roadmap
+
+- [x] **Feature 001**: Coleta de dados (formulário 3 momentos)
+- [x] **Feature 002**: Cadastro de professores com CPF
+- [ ] **Feature 003**: Dashboard local com métricas
+- [ ] **Feature 004**: Sincronização com API na nuvem
+- [ ] **Feature 005**: Relatórios PDF/Excel
 
 ---
+
+## 📖 Histórias de Usuário
+
+| ID | Persona | Desejo | Status |
+|----|---------|--------|--------|
+| US01 | Coordenador | Preencher dados da aula em formulário mobile | ✅ Implementado |
+| US02 | Coordenador | Visualizar variação de público (Início/Meio/Fim) | ✅ Implementado |
+| US03 | Diretor | Contar participantes únicos (engajamento) | ✅ Implementado |
+| US04 | Diretor | Cruzar presença/engajamento com professor | 🔄 Parcial |
+| US05 | Diretor | Comparar por Série/Título da Lição | ⏳ Pendente |
+| US06 | Coordenador | Registrar horários reais de início/fim | ✅ Implementado |
+
+---
+
+## 📊 Métricas Capturadas
+
+- **Logística:** Data, Horários Previstos e Reais
+- **Conteúdo:** Professor, Série de Lições, Título
+- **Frequência:** Público no Início, Meio e Fim da aula
+- **Engajamento:** Participantes únicos (pessoas distintas que falaram)
+
+---
+
+## 📄 Licença
+
+Projeto desenvolvido para uso interno da Escola Bíblica.
