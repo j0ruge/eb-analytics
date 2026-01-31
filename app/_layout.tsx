@@ -60,6 +60,10 @@ export default function RootLayout() {
         name="professors/new"
         options={{ title: "Novo Professor" }}
       />
+      <Stack.Screen
+        name="professors/[id]"
+        options={{ title: "Editar Professor" }}
+      />
       <Stack.Screen name="sync/index" options={{ title: "Sincronizar" }} />
     </Stack>
   );

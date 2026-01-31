@@ -102,10 +102,10 @@ export const professorService = {
   async deleteProfessor(id: string): Promise<void> {
     const db = await getDatabase();
     
-    // Verificar se o professor tem aulas vinculadas
+    // Verificar se o professor tem aulas vinculadas (por professor_id ou professor_name)
     const lessonsCount = await db.getFirstAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM lessons_data WHERE professor_name = (SELECT name FROM professors WHERE id = ?)',
-      [id]
+      'SELECT COUNT(*) as count FROM lessons_data WHERE professor_id = ? OR professor_name = (SELECT name FROM professors WHERE id = ?)',
+      [id, id]
     );
 
     if (lessonsCount && lessonsCount.count > 0) {

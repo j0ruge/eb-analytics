@@ -6,7 +6,8 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { professorService } from "../../src/services/professorService";
 import { Professor } from "../../src/types/professor";
 import { theme } from "../../src/theme";
@@ -15,9 +16,11 @@ export default function ProfessorsScreen() {
   const [professors, setProfessors] = useState<Professor[]>([]);
   const router = useRouter();
 
-  useEffect(() => {
-    loadProfessors();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadProfessors();
+    }, [])
+  );
 
   async function loadProfessors() {
     const data = await professorService.getAllProfessors();
@@ -25,12 +28,15 @@ export default function ProfessorsScreen() {
   }
 
   const renderItem = ({ item }: { item: Professor }) => (
-    <View style={styles.professorItem}>
+    <TouchableOpacity
+      style={styles.professorItem}
+      onPress={() => router.push(`/professors/${item.id}` as any)}
+    >
       <View>
         <Text style={styles.professorName}>{item.name}</Text>
         <Text style={styles.professorCpf}>CPF: {formatCpf(item.doc_id)}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   function formatCpf(cpf: string): string {
