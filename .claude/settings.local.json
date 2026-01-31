@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\pc_admin\\\\source\\\\repos\\\\eb-analytics\")",
+      "Bash(dir:*)",
+      "Bash(npm install)",
+      "Bash(npm view:*)",
+      "Bash(timeout:*)",
+      "Bash(npm install:*)",
+      "Bash(del webpack.config.js)",
+      "Bash(npx expo start --web --clear)",
+      "Bash(npx expo start:*)"
+    ]
+  }
+}

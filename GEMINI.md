@@ -19,4 +19,4 @@
 
 ## Implementation Plan
 
-See `specs/001-lesson-collection/plan.md` for details.
+See `specs/001-lesson-collection/plan.md` and `specs/002-professors-catalog/plan.md` for details.
