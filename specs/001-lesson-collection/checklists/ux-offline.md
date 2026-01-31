@@ -16,7 +16,7 @@
 
 - [x] CHK006 Is "Zero Data Loss" defined with specific recovery scenarios? [Clarity, Spec §SC-001]
 - [x] CHK007 Is the term "Minimal Interaction" quantified (e.g., number of taps)? [Clarity, Spec §US2]
-- [x] CHK008 Are the default values for "Expected Start/End" times explicitly stated? [Clarity, Spec §FR-006 - *Correction: Spec §US1 Sc2 says defaults are 09:00/10:15*]
+- [x] CHK008 Are the default values for "Expected Start/End" times explicitly stated? [Clarity, Spec §FR-006 - *Correction: Spec §US1 Sc2 says defaults are 10:00/11:00*]
 - [x] CHK009 Is the format of the exported JSON payload explicitly defined or referenced? [Clarity, Gap - *Plan mentions JSON but Spec doesn't define schema*]
 
 ## Requirement Consistency

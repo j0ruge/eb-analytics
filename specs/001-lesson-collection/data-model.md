@@ -14,9 +14,9 @@
 | `professor_name` | TEXT | `string` | Name of professor | `''` |
 | `series_name` | TEXT | `string` | Name of lesson series | `''` |
 | `lesson_title` | TEXT | `string` | Title of the lesson | `''` |
-| `time_expected_start`| TEXT | `string` | Expected start time (HH:MM) | `'09:00'` |
+| `time_expected_start`| TEXT | `string` | Expected start time (HH:MM) | `'10:00'` |
 | `time_real_start` | TEXT | `string` | Actual start time (HH:MM) | `null` |
-| `time_expected_end` | TEXT | `string` | Expected end time (HH:MM) | `'10:15'` |
+| `time_expected_end` | TEXT | `string` | Expected end time (HH:MM) | `'11:00'` |
 | `time_real_end` | TEXT | `string` | Actual end time (HH:MM) | `null` |
 | `attendance_start` | INTEGER | `number` | Count at start | `0` |
 | `attendance_mid` | INTEGER | `number` | Count at middle | `0` |
@@ -28,6 +28,7 @@
 ### Enums
 
 **LessonStatus**:
+
 - `'IN_PROGRESS'`: Active, editable.
 - `'COMPLETED'`: Finished, ready for export.
 - `'SYNCED'`: Exported/Uploaded (Logic for future).

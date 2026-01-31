@@ -74,7 +74,7 @@ A tela `/lesson/[id]` deve ser renderizada baseada nos 3 momentos:
 - `TimeCaptureButton`: Botão que captura `Date.now()`, formata para 'HH:MM' e salva no campo correspondente (time_real_start ou time_real_end).
 
 **Regras de Negócio (User Stories):**
-- [US01/US06]: Os horários previstos (09:00 e 10:15) devem vir pré-preenchidos como default.
+- [US01/US06]: Os horários previstos (10:00 e 11:00) devem vir pré-preenchidos como default.
 - [US02/US03]: Os contadores (Início, Meio, Fim e Participantes Únicos) nunca podem ser negativos.
 - A cada modificação de campo, o app executa um UPDATE no SQLite (`WHERE id = current_lesson_id`).
 

@@ -18,7 +18,7 @@ As a Class Secretary, I want to quickly start a new lesson for the day so that I
 **Acceptance Scenarios**:
 
 1. **Given** I am on the Home Screen (`/`), **When** I tap "Nova Aula", **Then** the app creates a new record in `lessons_data` with status `IN_PROGRESS` and redirects me to the Lesson Form (`/lesson/[id]`).
-2. **Given** a new lesson is created, **When** the form loads, **Then** the `time_expected_start` defaults to '09:00' and `time_expected_end` defaults to '10:15'.
+2. **Given** a new lesson is created, **When** the form loads, **Then** the `time_expected_start` defaults to '10:00' and `time_expected_end` defaults to '11:00'.
 
 ---
 
@@ -79,7 +79,7 @@ As a Coordinator, I want to export completed lesson data so that I can aggregate
   - `id` (UUID): Primary Key.
   - `date` (ISO8601): Date of the lesson.
   - `status`: 'IN_PROGRESS' | 'COMPLETED' | 'SYNCED'.
-  - `time_expected_start/end`: Default '09:00'/'10:15'.
+  - `time_expected_start/end`: Default '10:00'/'11:00'.
   - `time_real_start/end`: Actual captured times.
   - `attendance_*`: Integer counters.
   - `unique_participants`: Integer counter.

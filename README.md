@@ -78,9 +78,9 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 | `professor_id` | TEXT (FK) | Referência ao professor |
 | `lesson_title` | TEXT | Título da lição |
 | `series_name` | TEXT | Série de lições |
-| `time_expected_start` | TEXT | Horário previsto início (09:00) |
+| `time_expected_start` | TEXT | Horário previsto início (10:00) |
 | `time_real_start` | TEXT | Horário real início |
-| `time_expected_end` | TEXT | Horário previsto término (10:15) |
+| `time_expected_end` | TEXT | Horário previsto término (11:00) |
 | `time_real_end` | TEXT | Horário real término |
 | `attendance_start` | INTEGER | Frequência no início |
 | `attendance_mid` | INTEGER | Frequência no meio |
