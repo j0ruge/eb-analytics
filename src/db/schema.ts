@@ -35,3 +35,39 @@ CREATE TABLE IF NOT EXISTS professors (
 
 export const CREATE_INDEX_PROFESSORS_DOC_ID = `CREATE INDEX IF NOT EXISTS idx_professors_doc_id ON professors(doc_id);`;
 export const CREATE_INDEX_PROFESSORS_NAME = `CREATE INDEX IF NOT EXISTS idx_professors_name ON professors(name);`;
+
+// ============================================================================
+// LESSON SERIES TABLE (003-migrate-schema-structure)
+// ============================================================================
+export const CREATE_LESSON_SERIES_TABLE = `
+CREATE TABLE IF NOT EXISTS lesson_series (
+    id TEXT PRIMARY KEY NOT NULL,
+    code TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+`;
+
+export const CREATE_INDEX_SERIES_CODE = `CREATE INDEX IF NOT EXISTS idx_lesson_series_code ON lesson_series(code);`;
+
+// ============================================================================
+// LESSON TOPICS TABLE (003-migrate-schema-structure)
+// ============================================================================
+export const CREATE_LESSON_TOPICS_TABLE = `
+CREATE TABLE IF NOT EXISTS lesson_topics (
+    id TEXT PRIMARY KEY NOT NULL,
+    series_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    suggested_date TEXT,
+    sequence_order INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (series_id) REFERENCES lesson_series(id)
+);
+`;
+
+export const CREATE_INDEX_TOPICS_SERIES_ID = `CREATE INDEX IF NOT EXISTS idx_lesson_topics_series_id ON lesson_topics(series_id);`;
+export const CREATE_INDEX_TOPICS_SEQUENCE = `CREATE INDEX IF NOT EXISTS idx_lesson_topics_sequence ON lesson_topics(series_id, sequence_order);`;
+
+// Index for lesson_topic_id in lessons_data
+export const CREATE_INDEX_LESSON_TOPIC_ID = `CREATE INDEX IF NOT EXISTS idx_lessons_topic_id ON lessons_data(lesson_topic_id);`;

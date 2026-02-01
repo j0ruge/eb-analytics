@@ -9,7 +9,10 @@
       "Bash(npm install:*)",
       "Bash(del webpack.config.js)",
       "Bash(npx expo start --web --clear)",
-      "Bash(npx expo start:*)"
+      "Bash(npx expo start:*)",
+      "Bash(git fetch:*)",
+      "Bash(powershell:*)",
+      "Bash(git branch:*)"
     ]
   }
 }

@@ -15,14 +15,20 @@ import { theme } from "../../src/theme";
 import { CounterStepper } from "../../src/components/CounterStepper";
 import { TimeCaptureButton } from "../../src/components/TimeCaptureButton";
 import { ProfessorPicker } from "../../src/components/ProfessorPicker";
+import { SeriesPicker } from "../../src/components/SeriesPicker";
+import { TopicPicker } from "../../src/components/TopicPicker";
 import { useDebounce } from "../../src/hooks/useDebounce";
 import { TouchableOpacity } from "react-native";
+import { LessonSeries } from "../../src/types/lessonSeries";
+import { LessonTopic } from "../../src/types/lessonTopic";
+import { topicService } from "../../src/services/topicService";
 
 export default function LessonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const isFirstRender = useRef(true);
 
   const debouncedLesson = useDebounce(lesson, 500);
@@ -46,6 +52,15 @@ export default function LessonDetailScreen() {
   async function loadLesson() {
     const data = await lessonService.getById(id);
     setLesson(data);
+
+    // Se tiver lesson_topic_id, buscar a series_id correspondente
+    if (data?.lesson_topic_id) {
+      const topic = await topicService.getTopicById(data.lesson_topic_id);
+      if (topic) {
+        setSelectedSeriesId(topic.series_id);
+      }
+    }
+
     setLoading(false);
   }
 
@@ -70,6 +85,23 @@ export default function LessonDetailScreen() {
   function updateField<K extends keyof Lesson>(field: K, value: Lesson[K]) {
     if (!lesson) return;
     setLesson({ ...lesson, [field]: value });
+  }
+
+  function handleSeriesSelect(series: LessonSeries | null) {
+    setSelectedSeriesId(series?.id || null);
+    // Quando troca a série, limpa o tópico selecionado
+    if (lesson && lesson.lesson_topic_id) {
+      updateField("lesson_topic_id", null);
+      updateField("series_name", series?.title || "");
+      updateField("lesson_title", "");
+    }
+  }
+
+  function handleTopicSelect(topic: LessonTopic | null) {
+    if (!lesson) return;
+    updateField("lesson_topic_id", topic?.id || null);
+    // Auto-populate legacy fields for compatibility
+    updateField("lesson_title", topic?.title || "");
   }
 
   async function handleComplete() {
@@ -125,12 +157,16 @@ export default function LessonDetailScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Identificação</Text>
-        <TextInput
-          style={[styles.input, isReadOnly && styles.disabledInput]}
-          value={lesson.lesson_title}
-          placeholder="Título da Aula"
-          onChangeText={(val) => updateField("lesson_title", val)}
-          editable={!isReadOnly}
+        <SeriesPicker
+          selectedId={selectedSeriesId}
+          onSelect={handleSeriesSelect}
+          disabled={isReadOnly}
+        />
+        <TopicPicker
+          seriesId={selectedSeriesId}
+          selectedId={lesson.lesson_topic_id}
+          onSelect={handleTopicSelect}
+          disabled={isReadOnly}
         />
         <ProfessorPicker
           label="Professor"

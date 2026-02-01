@@ -8,14 +8,11 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useState } from "react";
 import { lessonService } from "../src/services/lessonService";
-import { professorService } from "../src/services/professorService";
-import { Lesson } from "../src/types/lesson";
-import { Professor } from "../src/types/professor";
+import { LessonWithDetails } from "../src/types/lesson";
 import { theme } from "../src/theme";
 
 export default function HomeScreen() {
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [professors, setProfessors] = useState<Professor[]>([]);
+  const [lessons, setLessons] = useState<LessonWithDetails[]>([]);
   const router = useRouter();
 
   // Recarrega lista quando a tela volta ao foco
@@ -26,31 +23,22 @@ export default function HomeScreen() {
   );
 
   async function loadData() {
-    const [lessonsData, professorsData] = await Promise.all([
-      lessonService.getAllLessons(),
-      professorService.getAllProfessors(),
-    ]);
+    const lessonsData = await lessonService.getAllLessonsWithDetails();
     setLessons(lessonsData);
-    setProfessors(professorsData);
   }
 
-  function getProfessorName(professorId: string | null): string {
-    if (!professorId) return "Sem professor";
-    const professor = professors.find((p) => p.id === professorId);
-    return professor?.name || "Sem professor";
-  }
-
-  const renderItem = ({ item }: { item: Lesson }) => (
+  const renderItem = ({ item }: { item: LessonWithDetails }) => (
     <TouchableOpacity
       style={styles.lessonItem}
       onPress={() => router.push(`/lesson/${item.id}`)}
     >
-      <View>
+      <View style={{ flex: 1 }}>
         <Text style={styles.lessonTitle}>
-          {item.lesson_title || "Aula sem título"}
+          {item.topic_title || item.lesson_title || "Aula sem título"}
         </Text>
         <Text style={styles.lessonSubtitle}>
-          {item.date} - {getProfessorName(item.professor_id)}
+          {item.series_code ? `${item.series_code} · ` : ""}
+          {item.date} · {item.professor_name_resolved || "Sem professor"}
         </Text>
       </View>
       <View
