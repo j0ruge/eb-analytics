@@ -129,7 +129,7 @@ export const lessonService = {
   async getAllLessonsWithDetails(): Promise<LessonWithDetails[]> {
     const db = await getDatabase();
     const results = await db.getAllAsync<LessonWithDetails>(
-      `SELECT 
+      `SELECT
         ld.*,
         lt.title as topic_title,
         ls.code as series_code,
@@ -142,5 +142,24 @@ export const lessonService = {
        ORDER BY ld.date DESC, ld.created_at DESC`
     );
     return results;
+  },
+
+  async deleteLesson(id: string): Promise<void> {
+    const db = await getDatabase();
+
+    // Validar que a aula existe
+    const lesson = await this.getById(id);
+
+    if (!lesson) {
+      throw new Error('Aula não encontrada');
+    }
+
+    // Validar status - apenas IN_PROGRESS pode ser deletada
+    if (lesson.status !== LessonStatus.IN_PROGRESS) {
+      throw new Error('Não é possível excluir aulas finalizadas. Apenas aulas em andamento podem ser excluídas.');
+    }
+
+    // Hard delete
+    await db.runAsync('DELETE FROM lessons_data WHERE id = ?', [id]);
   }
 };

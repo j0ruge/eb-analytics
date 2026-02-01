@@ -28,6 +28,7 @@ export default function LessonDetailScreen() {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const isFirstRender = useRef(true);
 
@@ -169,6 +170,40 @@ export default function LessonDetailScreen() {
         },
       },
     ]);
+  }
+
+  async function handleDelete() {
+    if (!lesson) return;
+    Alert.alert(
+      "Excluir Aula",
+      "Tem certeza que deseja excluir esta aula? Esta ação não pode ser desfeita.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: confirmDelete,
+        },
+      ]
+    );
+  }
+
+  async function confirmDelete() {
+    if (!lesson) return;
+    setDeleting(true);
+    try {
+      await lessonService.deleteLesson(lesson.id);
+      Alert.alert("Sucesso", "Aula excluída com sucesso", [
+        { text: "OK", onPress: () => router.replace("/") },
+      ]);
+    } catch (error) {
+      Alert.alert(
+        "Erro",
+        error instanceof Error ? error.message : "Erro ao excluir aula"
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (loading) {
@@ -320,6 +355,18 @@ export default function LessonDetailScreen() {
           <Text style={styles.completeButtonText}>Finalizar Aula</Text>
         </TouchableOpacity>
       )}
+
+      {lesson.status === LessonStatus.IN_PROGRESS && (
+        <TouchableOpacity
+          style={[styles.deleteButton, deleting && styles.buttonDisabled]}
+          onPress={handleDelete}
+          disabled={deleting}
+        >
+          <Text style={styles.deleteButtonText}>
+            {deleting ? "Processando..." : "Excluir Aula"}
+          </Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 }
@@ -412,5 +459,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+  },
+  deleteButton: {
+    backgroundColor: theme.colors.danger,
+    marginHorizontal: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    marginTop: theme.spacing.sm,
+  },
+  deleteButtonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  buttonDisabled: {
+    backgroundColor: theme.colors.textSecondary,
+    opacity: 0.6,
   },
 });
