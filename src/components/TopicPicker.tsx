@@ -25,7 +25,7 @@ export function TopicPicker({
   selectedId,
   onSelect,
   disabled = false,
-  placeholder = "Selecione um tópico",
+  placeholder = "Selecione uma lição",
 }: TopicPickerProps) {
   const [topics, setTopics] = useState<LessonTopic[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,7 +79,7 @@ export function TopicPicker({
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.label}>Tópico/Lição</Text>
+        <Text style={styles.label}>Lição</Text>
         <View style={[styles.picker, styles.pickerDisabled]}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>
@@ -89,7 +89,7 @@ export function TopicPicker({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Tópico/Lição</Text>
+      <Text style={styles.label}>Lição</Text>
       <TouchableOpacity
         style={[styles.picker, isDisabled && styles.pickerDisabled]}
         onPress={() => !isDisabled && setModalVisible(true)}
@@ -114,7 +114,7 @@ export function TopicPicker({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecione um Tópico</Text>
+              <Text style={styles.modalTitle}>Selecione uma Lição</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -122,9 +122,9 @@ export function TopicPicker({
 
             {topics.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>Nenhum tópico nesta série</Text>
+                <Text style={styles.emptyText}>Nenhuma lição nesta série</Text>
                 <Text style={styles.emptySubtext}>
-                  Cadastre um tópico primeiro
+                  Cadastre uma lição primeiro
                 </Text>
               </View>
             ) : (

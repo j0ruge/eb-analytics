@@ -24,6 +24,7 @@ export default function SeriesDetailScreen() {
   const [topics, setTopics] = useState<LessonTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [editedCode, setEditedCode] = useState("");
   const [editedTitle, setEditedTitle] = useState("");
   const [editedDescription, setEditedDescription] = useState("");
 
@@ -41,6 +42,7 @@ export default function SeriesDetailScreen() {
       setSeries(seriesData);
       setTopics(topicsData);
       if (seriesData) {
+        setEditedCode(seriesData.code);
         setEditedTitle(seriesData.title);
         setEditedDescription(seriesData.description || "");
       }
@@ -54,6 +56,11 @@ export default function SeriesDetailScreen() {
   async function handleSaveEdit() {
     if (!series) return;
 
+    if (!editedCode.trim()) {
+      Alert.alert("Erro", "O código é obrigatório.");
+      return;
+    }
+
     if (!editedTitle.trim()) {
       Alert.alert("Erro", "O título é obrigatório.");
       return;
@@ -61,11 +68,13 @@ export default function SeriesDetailScreen() {
 
     try {
       await seriesService.updateSeries(series.id, {
+        code: editedCode.trim(),
         title: editedTitle.trim(),
         description: editedDescription.trim() || null,
       });
       setSeries({
         ...series,
+        code: editedCode.trim(),
         title: editedTitle.trim(),
         description: editedDescription.trim() || null,
       });
@@ -124,6 +133,14 @@ export default function SeriesDetailScreen() {
             <View style={styles.editForm}>
               <TextInput
                 style={styles.input}
+                value={editedCode}
+                onChangeText={setEditedCode}
+                placeholder="Código (ex: EB354)"
+                autoCapitalize="characters"
+                maxLength={20}
+              />
+              <TextInput
+                style={styles.input}
                 value={editedTitle}
                 onChangeText={setEditedTitle}
                 placeholder="Título"
@@ -141,6 +158,7 @@ export default function SeriesDetailScreen() {
                   style={[styles.editButton, styles.cancelButton]}
                   onPress={() => {
                     setEditing(false);
+                    setEditedCode(series.code);
                     setEditedTitle(series.title);
                     setEditedDescription(series.description || "");
                   }}
@@ -186,15 +204,15 @@ export default function SeriesDetailScreen() {
           )}
         </View>
 
-        {/* Lista de tópicos */}
+        {/* Lista de lições */}
         <View style={styles.topicsSection}>
           <View style={styles.topicsHeader}>
-            <Text style={styles.sectionTitle}>Tópicos ({topics.length})</Text>
+            <Text style={styles.sectionTitle}>Lições ({topics.length})</Text>
           </View>
 
           {topics.length === 0 ? (
             <View style={styles.emptyTopics}>
-              <Text style={styles.emptyText}>Nenhum tópico cadastrado</Text>
+              <Text style={styles.emptyText}>Nenhuma lição cadastrada</Text>
             </View>
           ) : (
             topics.map((topic) => (

@@ -79,8 +79,8 @@ export default function TopicDetailScreen() {
 
   async function handleDelete() {
     Alert.alert(
-      "Excluir Tópico",
-      `Deseja excluir o tópico "${topic?.title}"?`,
+      "Excluir Lição",
+      `Deseja excluir a lição "${topic?.title}"?`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -110,7 +110,7 @@ export default function TopicDetailScreen() {
   if (!topic) {
     return (
       <View style={styles.errorContainer}>
-        <Text>Tópico não encontrado.</Text>
+        <Text>Lição não encontrada.</Text>
       </View>
     );
   }
@@ -125,7 +125,7 @@ export default function TopicDetailScreen() {
         </Text>
       </View>
 
-      {/* Detalhes do tópico */}
+      {/* Detalhes da lição */}
       <View style={styles.card}>
         {editing ? (
           <View style={styles.editForm}>
@@ -135,7 +135,7 @@ export default function TopicDetailScreen() {
                 style={styles.input}
                 value={editedTitle}
                 onChangeText={setEditedTitle}
-                placeholder="Título do tópico"
+                placeholder="Título da lição"
               />
             </View>
 

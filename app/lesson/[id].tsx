@@ -82,26 +82,77 @@ export default function LessonDetailScreen() {
     updateField(field, time);
   }
 
+  function clearTime(field: "time_real_start" | "time_real_end") {
+    updateField(field, null);
+  }
+
+  function setManualTime(field: "time_real_start" | "time_real_end", time: string) {
+    updateField(field, time);
+  }
+
   function updateField<K extends keyof Lesson>(field: K, value: Lesson[K]) {
     if (!lesson) return;
     setLesson({ ...lesson, [field]: value });
   }
 
-  function handleSeriesSelect(series: LessonSeries | null) {
+  async function handleSeriesSelect(series: LessonSeries | null) {
     setSelectedSeriesId(series?.id || null);
+
     // Quando troca a série, limpa o tópico selecionado
     if (lesson && lesson.lesson_topic_id) {
-      updateField("lesson_topic_id", null);
-      updateField("series_name", series?.title || "");
-      updateField("lesson_title", "");
+      const updates = {
+        lesson_topic_id: null,
+        series_name: series?.title || "",
+        lesson_title: "",
+      };
+
+      setLesson({ ...lesson, ...updates });
+
+      // Save immediately
+      try {
+        await lessonService.updateLesson(lesson.id, updates);
+        console.log("Series updated successfully");
+      } catch (error) {
+        console.error("Failed to update series:", error);
+      }
     }
   }
 
-  function handleTopicSelect(topic: LessonTopic | null) {
+  async function handleProfessorSelect(professorId: string | null) {
     if (!lesson) return;
-    updateField("lesson_topic_id", topic?.id || null);
-    // Auto-populate legacy fields for compatibility
-    updateField("lesson_title", topic?.title || "");
+
+    const updates = { professor_id: professorId };
+
+    // Update local state
+    setLesson({ ...lesson, ...updates });
+
+    // Save immediately
+    try {
+      await lessonService.updateLesson(lesson.id, updates);
+      console.log("Professor updated successfully");
+    } catch (error) {
+      console.error("Failed to update professor:", error);
+    }
+  }
+
+  async function handleTopicSelect(topic: LessonTopic | null) {
+    if (!lesson) return;
+
+    const updates = {
+      lesson_topic_id: topic?.id || null,
+      lesson_title: topic?.title || "",
+    };
+
+    // Update local state
+    setLesson({ ...lesson, ...updates });
+
+    // Save immediately (don't wait for debounce)
+    try {
+      await lessonService.updateLesson(lesson.id, updates);
+      console.log("Topic updated successfully");
+    } catch (error) {
+      console.error("Failed to update topic:", error);
+    }
   }
 
   async function handleComplete() {
@@ -171,7 +222,7 @@ export default function LessonDetailScreen() {
         <ProfessorPicker
           label="Professor"
           selectedProfessorId={lesson.professor_id}
-          onSelect={(professorId) => updateField("professor_id", professorId)}
+          onSelect={handleProfessorSelect}
           disabled={isReadOnly}
         />
       </View>
@@ -183,12 +234,16 @@ export default function LessonDetailScreen() {
             label="Início Real"
             value={lesson.time_real_start}
             onCapture={() => captureTime("time_real_start")}
+            onClear={() => clearTime("time_real_start")}
+            onManualSet={(time) => setManualTime("time_real_start", time)}
             disabled={isReadOnly}
           />
           <TimeCaptureButton
             label="Fim Real"
             value={lesson.time_real_end}
             onCapture={() => captureTime("time_real_end")}
+            onClear={() => clearTime("time_real_end")}
+            onManualSet={(time) => setManualTime("time_real_end", time)}
             disabled={isReadOnly}
           />
         </View>

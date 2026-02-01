@@ -43,7 +43,7 @@ export default function NewTopicScreen() {
     }
 
     if (!title.trim()) {
-      Alert.alert("Erro", "O título do tópico é obrigatório.");
+      Alert.alert("Erro", "O título da lição é obrigatório.");
       return;
     }
 
@@ -63,7 +63,7 @@ export default function NewTopicScreen() {
       });
       router.back();
     } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível criar o tópico.");
+      Alert.alert("Erro", error.message || "Não foi possível criar a lição.");
     } finally {
       setSaving(false);
     }
@@ -85,7 +85,7 @@ export default function NewTopicScreen() {
         )}
 
         <View style={styles.field}>
-          <Text style={styles.label}>Título do Tópico *</Text>
+          <Text style={styles.label}>Título da Lição *</Text>
           <TextInput
             style={styles.input}
             value={title}
@@ -130,7 +130,7 @@ export default function NewTopicScreen() {
           disabled={saving}
         >
           <Text style={styles.saveButtonText}>
-            {saving ? "Salvando..." : "Criar Tópico"}
+            {saving ? "Salvando..." : "Criar Lição"}
           </Text>
         </TouchableOpacity>
       </ScrollView>
