@@ -107,6 +107,27 @@ export const lessonService = {
     return results;
   },
 
+  async markLessonsAsExported(lessonIds: string[]): Promise<void> {
+    if (lessonIds.length === 0) return;
+
+    const db = await getDatabase();
+    const placeholders = lessonIds.map(() => '?').join(', ');
+
+    await db.runAsync(
+      `UPDATE lessons_data SET status = ? WHERE id IN (${placeholders})`,
+      [LessonStatus.EXPORTED, ...lessonIds]
+    );
+  },
+
+  async getExportedLessons(): Promise<Lesson[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Lesson>(
+      'SELECT * FROM lessons_data WHERE status = ?',
+      [LessonStatus.EXPORTED]
+    );
+    return results;
+  },
+
   async getByIdWithDetails(id: string): Promise<LessonWithDetails | null> {
     const db = await getDatabase();
     const result = await db.getFirstAsync<LessonWithDetails>(

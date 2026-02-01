@@ -18,6 +18,7 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 - Captura automática de horários com um toque
 - Auto-save com debounce de 500ms
 - Recuperação de aulas em andamento
+- Exclusão de aulas em andamento (com confirmação e validação de status)
 
 ### ✅ Cadastro de Professores (Feature 002)
 
@@ -36,15 +37,23 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 - Proteção contra exclusão de séries com aulas vinculadas
 - Campos legados preservados para compatibilidade
 
+### ✅ Filtros de Status (Feature 004)
+
+- Barra de filtros horizontais no topo da listagem principal
+- Filtros multi-select por status: Em Andamento, Completa, Exportada, Sincronizada
+- Padrão: apenas aulas "Em Andamento" visíveis (reduz poluição visual)
+- Labels traduzidos em português com cores distintas por status
+- Filtragem instantânea client-side
+
 ---
 
 ## 📱 Telas do Aplicativo
 
 | Tela | Descrição |
 |------|-----------|
-| `/` | Lista de aulas com status, série e professor |
+| `/` | Lista de aulas com filtros de status, série e professor |
 | `/lesson/new` | Criar nova aula (com seleção de série/tópico) |
-| `/lesson/[id]` | Formulário de coleta (3 momentos) |
+| `/lesson/[id]` | Formulário de coleta (3 momentos) + Finalizar/Excluir aula |
 | `/professors` | Lista de professores cadastrados |
 | `/professors/new` | Cadastrar novo professor |
 | `/series` | Lista de séries de lições |
@@ -62,12 +71,13 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 ┌─────────────────────────────────────────────────────────┐
 │                    Expo Router (app/)                   │
 ├─────────────────────────────────────────────────────────┤
-│  Screens        │  Components       │  Services         │
-│  - index.tsx    │  - CounterStepper │  - lessonService  │
-│  - lesson/[id]  │  - TimeCaptureBtn │  - professorSvc   │
-│  - professors/  │  - ProfessorPicker│  - seriesService  │
-│  - series/      │  - SeriesPicker   │  - topicService   │
-│  - topics/      │  - TopicPicker    │  - exportService  │
+│  Screens        │  Components        │  Services        │
+│  - index.tsx    │  - CounterStepper  │  - lessonService │
+│  - lesson/[id]  │  - TimeCaptureBtn  │  - professorSvc  │
+│  - professors/  │  - ProfessorPicker │  - seriesService │
+│  - series/      │  - SeriesPicker    │  - topicService  │
+│  - topics/      │  - TopicPicker     │  - exportService │
+│                 │  - StatusFilterBar │                  │
 ├─────────────────────────────────────────────────────────┤
 │                    SQLite (expo-sqlite)                 │
 │                   📱 Local-First Storage                │
@@ -124,7 +134,7 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 | `attendance_mid` | INTEGER | Frequência no meio |
 | `attendance_end` | INTEGER | Frequência no fim |
 | `unique_participants` | INTEGER | Participantes únicos |
-| `status` | TEXT | IN_PROGRESS / COMPLETED / SYNCED |
+| `status` | TEXT | IN_PROGRESS / COMPLETED / EXPORTED / SYNCED |
 
 ### Tabela `professors`
 
@@ -219,6 +229,77 @@ npx jest
 
 ---
 
+## 📦 Gerar Build APK (Android)
+
+Para testar o aplicativo em um celular Android sem usar o Expo Go, você pode gerar um APK standalone.
+
+### Método 1: EAS Build (Recomendado - Build na Nuvem)
+
+**Pré-requisitos:**
+
+- Conta Expo (gratuita) - crie em <https://expo.dev>
+
+**Passo a Passo:**
+
+```bash
+# 1. Instalar EAS CLI globalmente
+npm install -g eas-cli
+
+# 2. Fazer login na sua conta Expo
+eas login
+
+# 3. Configurar o projeto (primeira vez)
+eas build:configure
+
+# 4. Gerar APK de preview (para testes)
+eas build --platform android --profile preview
+
+# 5. Ou gerar APK de produção
+eas build --platform android --profile production
+```
+
+**O que acontece:**
+
+1. EAS envia o código para servidores na nuvem
+2. Compila o APK automaticamente (10-15 minutos)
+3. Retorna um link de download
+4. Você baixa o APK no celular e instala
+
+**Instalação no Celular:**
+
+1. Abra o link de download no navegador do celular
+2. Baixe o APK
+3. Permita instalação de fontes desconhecidas (se solicitado)
+4. Instale o aplicativo
+
+### Método 2: Build Local (Requer Android Studio)
+
+Se você tem Android Studio configurado:
+
+```bash
+# Instalar dependências de build
+npx expo install expo-dev-client
+
+# Build e instalação automática
+npx expo run:android
+```
+
+**Requisitos adicionais:**
+
+- Android Studio instalado
+- Android SDK configurado
+- Emulador ou celular conectado via USB
+
+### Perfis de Build Disponíveis
+
+Configurados em `eas.json`:
+
+- **development**: Build com dev client (debugging habilitado)
+- **preview**: Build de teste interno (APK otimizado)
+- **production**: Build final para distribuição
+
+---
+
 ## 📁 Estrutura do Projeto
 
 ```
@@ -231,7 +312,7 @@ app/                    # Telas (Expo Router)
 └── sync/               # Exportação de dados
 
 src/
-├── components/         # CounterStepper, TimeCaptureButton, Pickers
+├── components/         # CounterStepper, TimeCaptureButton, Pickers, StatusFilterBar
 ├── db/                 # Schema, migrations, cliente SQLite
 ├── services/           # Lógica de negócio (lesson, professor, series, topic)
 ├── types/              # Interfaces TypeScript
@@ -249,9 +330,10 @@ tests/                  # Testes unitários
 - [x] **Feature 001**: Coleta de dados (formulário 3 momentos)
 - [x] **Feature 002**: Cadastro de professores com CPF
 - [x] **Feature 003**: Migração para schema normalizado (lesson_series/lesson_topics)
-- [ ] **Feature 004**: Dashboard local com métricas
-- [ ] **Feature 005**: Sincronização com API na nuvem
-- [ ] **Feature 006**: Relatórios PDF/Excel
+- [x] **Feature 004**: Filtros de status na listagem de aulas
+- [ ] **Feature 005**: Dashboard local com métricas
+- [ ] **Feature 006**: Sincronização com API na nuvem
+- [ ] **Feature 007**: Relatórios PDF/Excel
 
 ---
 
@@ -266,6 +348,8 @@ tests/                  # Testes unitários
 | US05 | Diretor | Comparar por Série/Título da Lição | ✅ Implementado |
 | US06 | Coordenador | Registrar horários reais de início/fim | ✅ Implementado |
 | US07 | Admin | Gerenciar séries e tópicos de lições | ✅ Implementado |
+| US08 | Coordenador | Excluir aulas criadas por engano (apenas IN_PROGRESS) | ✅ Implementado |
+| US09 | Coordenador | Filtrar aulas por status para reduzir poluição visual | ✅ Implementado |
 
 ---
 

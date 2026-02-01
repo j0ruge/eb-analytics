@@ -1,6 +1,7 @@
 export enum LessonStatus {
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
+  EXPORTED = 'EXPORTED',
   SYNCED = 'SYNCED',
 }
 

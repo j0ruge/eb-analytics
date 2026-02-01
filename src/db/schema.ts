@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS lessons_data (
     attendance_mid INTEGER DEFAULT 0,
     attendance_end INTEGER DEFAULT 0,
     unique_participants INTEGER DEFAULT 0,
-    status TEXT CHECK(status IN ('IN_PROGRESS', 'COMPLETED', 'SYNCED')) DEFAULT 'IN_PROGRESS',
+    status TEXT CHECK(status IN ('IN_PROGRESS', 'COMPLETED', 'EXPORTED', 'SYNCED')) DEFAULT 'IN_PROGRESS',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 `;

@@ -8,11 +8,15 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useState } from "react";
 import { lessonService } from "../src/services/lessonService";
-import { LessonWithDetails } from "../src/types/lesson";
+import { LessonWithDetails, LessonStatus } from "../src/types/lesson";
 import { theme } from "../src/theme";
+import { StatusFilterBar } from "../src/components/StatusFilterBar";
 
 export default function HomeScreen() {
   const [lessons, setLessons] = useState<LessonWithDetails[]>([]);
+  const [activeFilters, setActiveFilters] = useState<LessonStatus[]>([
+    LessonStatus.IN_PROGRESS,
+  ]);
   const router = useRouter();
 
   // Recarrega lista quando a tela volta ao foco
@@ -25,6 +29,27 @@ export default function HomeScreen() {
   async function loadData() {
     const lessonsData = await lessonService.getAllLessonsWithDetails();
     setLessons(lessonsData);
+  }
+
+  const filteredLessons = activeFilters.length === 0
+    ? []
+    : lessons.filter(lesson =>
+        activeFilters.includes(lesson.status as LessonStatus)
+      );
+
+  function getStatusLabel(status: string): string {
+    switch (status) {
+      case "IN_PROGRESS":
+        return "Em Andamento";
+      case "COMPLETED":
+        return "Completa";
+      case "EXPORTED":
+        return "Exportada";
+      case "SYNCED":
+        return "Sincronizada";
+      default:
+        return status;
+    }
   }
 
   const renderItem = ({ item }: { item: LessonWithDetails }) => (
@@ -47,19 +72,29 @@ export default function HomeScreen() {
           { backgroundColor: getStatusColor(item.status) },
         ]}
       >
-        <Text style={styles.statusText}>{item.status}</Text>
+        <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
+      <StatusFilterBar
+        activeFilters={activeFilters}
+        onFilterChange={setActiveFilters}
+      />
       <FlatList
-        data={lessons}
+        data={filteredLessons}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Nenhuma aula registrada.</Text>
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {activeFilters.length === 0
+                ? "Selecione um filtro para ver as aulas"
+                : "Nenhuma aula encontrada com os filtros selecionados"}
+            </Text>
+          </View>
         }
         contentContainerStyle={styles.listContent}
       />
@@ -80,6 +115,10 @@ function getStatusColor(status: string) {
       return theme.colors.primary;
     case "COMPLETED":
       return theme.colors.success;
+    case "EXPORTED":
+      return theme.colors.warning;
+    case "SYNCED":
+      return theme.colors.info;
     default:
       return theme.colors.textSecondary;
   }
@@ -120,6 +159,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 10,
     fontWeight: "bold",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptyText: {
     textAlign: "center",
