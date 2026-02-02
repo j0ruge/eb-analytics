@@ -29,6 +29,13 @@ export default function RootLayout() {
           title: "EB Insights",
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={() => router.push("/series")}>
+                <Text
+                  style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
+                >
+                  Séries
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push("/professors")}>
                 <Text
                   style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
@@ -65,6 +72,17 @@ export default function RootLayout() {
         options={{ title: "Editar Professor" }}
       />
       <Stack.Screen name="sync/index" options={{ title: "Sincronizar" }} />
+      <Stack.Screen name="series/index" options={{ title: "Séries" }} />
+      <Stack.Screen name="series/new" options={{ title: "Nova Série" }} />
+      <Stack.Screen
+        name="series/[id]"
+        options={{ title: "Detalhes da Série" }}
+      />
+      <Stack.Screen name="topics/new" options={{ title: "Novo Tópico" }} />
+      <Stack.Screen
+        name="topics/[id]"
+        options={{ title: "Detalhes do Tópico" }}
+      />
     </Stack>
   );
 }

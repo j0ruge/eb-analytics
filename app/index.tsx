@@ -8,14 +8,15 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useState } from "react";
 import { lessonService } from "../src/services/lessonService";
-import { professorService } from "../src/services/professorService";
-import { Lesson } from "../src/types/lesson";
-import { Professor } from "../src/types/professor";
+import { LessonWithDetails, LessonStatus } from "../src/types/lesson";
 import { theme } from "../src/theme";
+import { StatusFilterBar } from "../src/components/StatusFilterBar";
 
 export default function HomeScreen() {
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [professors, setProfessors] = useState<Professor[]>([]);
+  const [lessons, setLessons] = useState<LessonWithDetails[]>([]);
+  const [activeFilters, setActiveFilters] = useState<LessonStatus[]>([
+    LessonStatus.IN_PROGRESS,
+  ]);
   const router = useRouter();
 
   // Recarrega lista quando a tela volta ao foco
@@ -26,31 +27,43 @@ export default function HomeScreen() {
   );
 
   async function loadData() {
-    const [lessonsData, professorsData] = await Promise.all([
-      lessonService.getAllLessons(),
-      professorService.getAllProfessors(),
-    ]);
+    const lessonsData = await lessonService.getAllLessonsWithDetails();
     setLessons(lessonsData);
-    setProfessors(professorsData);
   }
 
-  function getProfessorName(professorId: string | null): string {
-    if (!professorId) return "Sem professor";
-    const professor = professors.find((p) => p.id === professorId);
-    return professor?.name || "Sem professor";
+  const filteredLessons = activeFilters.length === 0
+    ? []
+    : lessons.filter(lesson =>
+        activeFilters.includes(lesson.status as LessonStatus)
+      );
+
+  function getStatusLabel(status: string): string {
+    switch (status) {
+      case "IN_PROGRESS":
+        return "Em Andamento";
+      case "COMPLETED":
+        return "Completa";
+      case "EXPORTED":
+        return "Exportada";
+      case "SYNCED":
+        return "Sincronizada";
+      default:
+        return status;
+    }
   }
 
-  const renderItem = ({ item }: { item: Lesson }) => (
+  const renderItem = ({ item }: { item: LessonWithDetails }) => (
     <TouchableOpacity
       style={styles.lessonItem}
       onPress={() => router.push(`/lesson/${item.id}`)}
     >
-      <View>
+      <View style={{ flex: 1 }}>
         <Text style={styles.lessonTitle}>
-          {item.lesson_title || "Aula sem título"}
+          {item.topic_title || item.lesson_title || "Aula sem título"}
         </Text>
         <Text style={styles.lessonSubtitle}>
-          {item.date} - {getProfessorName(item.professor_id)}
+          {item.series_code ? `${item.series_code} · ` : ""}
+          {item.date} · {item.professor_name_resolved || "Sem professor"}
         </Text>
       </View>
       <View
@@ -59,19 +72,29 @@ export default function HomeScreen() {
           { backgroundColor: getStatusColor(item.status) },
         ]}
       >
-        <Text style={styles.statusText}>{item.status}</Text>
+        <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
+      <StatusFilterBar
+        activeFilters={activeFilters}
+        onFilterChange={setActiveFilters}
+      />
       <FlatList
-        data={lessons}
+        data={filteredLessons}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Nenhuma aula registrada.</Text>
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {activeFilters.length === 0
+                ? "Selecione um filtro para ver as aulas"
+                : "Nenhuma aula encontrada com os filtros selecionados"}
+            </Text>
+          </View>
         }
         contentContainerStyle={styles.listContent}
       />
@@ -92,6 +115,10 @@ function getStatusColor(status: string) {
       return theme.colors.primary;
     case "COMPLETED":
       return theme.colors.success;
+    case "EXPORTED":
+      return theme.colors.warning;
+    case "SYNCED":
+      return theme.colors.info;
     default:
       return theme.colors.textSecondary;
   }
@@ -132,6 +159,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 10,
     fontWeight: "bold",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptyText: {
     textAlign: "center",

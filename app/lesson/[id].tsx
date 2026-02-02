@@ -15,14 +15,21 @@ import { theme } from "../../src/theme";
 import { CounterStepper } from "../../src/components/CounterStepper";
 import { TimeCaptureButton } from "../../src/components/TimeCaptureButton";
 import { ProfessorPicker } from "../../src/components/ProfessorPicker";
+import { SeriesPicker } from "../../src/components/SeriesPicker";
+import { TopicPicker } from "../../src/components/TopicPicker";
 import { useDebounce } from "../../src/hooks/useDebounce";
 import { TouchableOpacity } from "react-native";
+import { LessonSeries } from "../../src/types/lessonSeries";
+import { LessonTopic } from "../../src/types/lessonTopic";
+import { topicService } from "../../src/services/topicService";
 
 export default function LessonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const isFirstRender = useRef(true);
 
   const debouncedLesson = useDebounce(lesson, 500);
@@ -46,6 +53,15 @@ export default function LessonDetailScreen() {
   async function loadLesson() {
     const data = await lessonService.getById(id);
     setLesson(data);
+
+    // Se tiver lesson_topic_id, buscar a series_id correspondente
+    if (data?.lesson_topic_id) {
+      const topic = await topicService.getTopicById(data.lesson_topic_id);
+      if (topic) {
+        setSelectedSeriesId(topic.series_id);
+      }
+    }
+
     setLoading(false);
   }
 
@@ -67,9 +83,77 @@ export default function LessonDetailScreen() {
     updateField(field, time);
   }
 
+  function clearTime(field: "time_real_start" | "time_real_end") {
+    updateField(field, null);
+  }
+
+  function setManualTime(field: "time_real_start" | "time_real_end", time: string) {
+    updateField(field, time);
+  }
+
   function updateField<K extends keyof Lesson>(field: K, value: Lesson[K]) {
     if (!lesson) return;
     setLesson({ ...lesson, [field]: value });
+  }
+
+  async function handleSeriesSelect(series: LessonSeries | null) {
+    setSelectedSeriesId(series?.id || null);
+
+    // Quando troca a série, limpa o tópico selecionado
+    if (lesson && lesson.lesson_topic_id) {
+      const updates = {
+        lesson_topic_id: null,
+        series_name: series?.title || "",
+        lesson_title: "",
+      };
+
+      setLesson({ ...lesson, ...updates });
+
+      // Save immediately
+      try {
+        await lessonService.updateLesson(lesson.id, updates);
+        console.log("Series updated successfully");
+      } catch (error) {
+        console.error("Failed to update series:", error);
+      }
+    }
+  }
+
+  async function handleProfessorSelect(professorId: string | null) {
+    if (!lesson) return;
+
+    const updates = { professor_id: professorId };
+
+    // Update local state
+    setLesson({ ...lesson, ...updates });
+
+    // Save immediately
+    try {
+      await lessonService.updateLesson(lesson.id, updates);
+      console.log("Professor updated successfully");
+    } catch (error) {
+      console.error("Failed to update professor:", error);
+    }
+  }
+
+  async function handleTopicSelect(topic: LessonTopic | null) {
+    if (!lesson) return;
+
+    const updates = {
+      lesson_topic_id: topic?.id || null,
+      lesson_title: topic?.title || "",
+    };
+
+    // Update local state
+    setLesson({ ...lesson, ...updates });
+
+    // Save immediately (don't wait for debounce)
+    try {
+      await lessonService.updateLesson(lesson.id, updates);
+      console.log("Topic updated successfully");
+    } catch (error) {
+      console.error("Failed to update topic:", error);
+    }
   }
 
   async function handleComplete() {
@@ -86,6 +170,40 @@ export default function LessonDetailScreen() {
         },
       },
     ]);
+  }
+
+  async function handleDelete() {
+    if (!lesson) return;
+    Alert.alert(
+      "Excluir Aula",
+      "Tem certeza que deseja excluir esta aula? Esta ação não pode ser desfeita.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: confirmDelete,
+        },
+      ]
+    );
+  }
+
+  async function confirmDelete() {
+    if (!lesson) return;
+    setDeleting(true);
+    try {
+      await lessonService.deleteLesson(lesson.id);
+      Alert.alert("Sucesso", "Aula excluída com sucesso", [
+        { text: "OK", onPress: () => router.replace("/") },
+      ]);
+    } catch (error) {
+      Alert.alert(
+        "Erro",
+        error instanceof Error ? error.message : "Erro ao excluir aula"
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (loading) {
@@ -125,17 +243,21 @@ export default function LessonDetailScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Identificação</Text>
-        <TextInput
-          style={[styles.input, isReadOnly && styles.disabledInput]}
-          value={lesson.lesson_title}
-          placeholder="Título da Aula"
-          onChangeText={(val) => updateField("lesson_title", val)}
-          editable={!isReadOnly}
+        <SeriesPicker
+          selectedId={selectedSeriesId}
+          onSelect={handleSeriesSelect}
+          disabled={isReadOnly}
+        />
+        <TopicPicker
+          seriesId={selectedSeriesId}
+          selectedId={lesson.lesson_topic_id}
+          onSelect={handleTopicSelect}
+          disabled={isReadOnly}
         />
         <ProfessorPicker
           label="Professor"
           selectedProfessorId={lesson.professor_id}
-          onSelect={(professorId) => updateField("professor_id", professorId)}
+          onSelect={handleProfessorSelect}
           disabled={isReadOnly}
         />
       </View>
@@ -147,12 +269,16 @@ export default function LessonDetailScreen() {
             label="Início Real"
             value={lesson.time_real_start}
             onCapture={() => captureTime("time_real_start")}
+            onClear={() => clearTime("time_real_start")}
+            onManualSet={(time) => setManualTime("time_real_start", time)}
             disabled={isReadOnly}
           />
           <TimeCaptureButton
             label="Fim Real"
             value={lesson.time_real_end}
             onCapture={() => captureTime("time_real_end")}
+            onClear={() => clearTime("time_real_end")}
+            onManualSet={(time) => setManualTime("time_real_end", time)}
             disabled={isReadOnly}
           />
         </View>
@@ -227,6 +353,18 @@ export default function LessonDetailScreen() {
           onPress={handleComplete}
         >
           <Text style={styles.completeButtonText}>Finalizar Aula</Text>
+        </TouchableOpacity>
+      )}
+
+      {lesson.status === LessonStatus.IN_PROGRESS && (
+        <TouchableOpacity
+          style={[styles.deleteButton, deleting && styles.buttonDisabled]}
+          onPress={handleDelete}
+          disabled={deleting}
+        >
+          <Text style={styles.deleteButtonText}>
+            {deleting ? "Processando..." : "Excluir Aula"}
+          </Text>
         </TouchableOpacity>
       )}
     </ScrollView>
@@ -321,5 +459,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+  },
+  deleteButton: {
+    backgroundColor: theme.colors.danger,
+    marginHorizontal: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    marginTop: theme.spacing.sm,
+  },
+  deleteButtonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  buttonDisabled: {
+    backgroundColor: theme.colors.textSecondary,
+    opacity: 0.6,
   },
 });

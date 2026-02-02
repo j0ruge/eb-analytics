@@ -1,5 +1,5 @@
 import { getDatabase } from '../db/client';
-import { Lesson, LessonStatus } from '../types/lesson';
+import { Lesson, LessonStatus, LessonWithDetails } from '../types/lesson';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,6 +16,7 @@ export const lessonService = {
       coordinator_name: partialLesson?.coordinator_name || lastLesson?.coordinator_name || '',
       professor_name: partialLesson?.professor_name || lastLesson?.professor_name || '',
       professor_id: partialLesson?.professor_id || lastLesson?.professor_id || null,
+      lesson_topic_id: partialLesson?.lesson_topic_id || lastLesson?.lesson_topic_id || null,
       series_name: partialLesson?.series_name || lastLesson?.series_name || '',
       lesson_title: partialLesson?.lesson_title || '',
       time_expected_start: partialLesson?.time_expected_start || '10:00',
@@ -33,15 +34,16 @@ export const lessonService = {
 
     await db.runAsync(
       `INSERT INTO lessons_data (
-        id, date, coordinator_name, professor_name, professor_id, series_name, lesson_title,
+        id, date, coordinator_name, professor_name, professor_id, lesson_topic_id, series_name, lesson_title,
         time_expected_start, time_expected_end, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newLesson.id,
         newLesson.date,
         newLesson.coordinator_name,
         newLesson.professor_name,
         newLesson.professor_id,
+        newLesson.lesson_topic_id,
         newLesson.series_name,
         newLesson.lesson_title,
         newLesson.time_expected_start,
@@ -103,5 +105,82 @@ export const lessonService = {
       [LessonStatus.COMPLETED]
     );
     return results;
+  },
+
+  async markLessonsAsExported(lessonIds: string[]): Promise<void> {
+    if (lessonIds.length === 0) return;
+
+    const db = await getDatabase();
+    const placeholders = lessonIds.map(() => '?').join(', ');
+
+    await db.runAsync(
+      `UPDATE lessons_data SET status = ? WHERE id IN (${placeholders})`,
+      [LessonStatus.EXPORTED, ...lessonIds]
+    );
+  },
+
+  async getExportedLessons(): Promise<Lesson[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Lesson>(
+      'SELECT * FROM lessons_data WHERE status = ?',
+      [LessonStatus.EXPORTED]
+    );
+    return results;
+  },
+
+  async getByIdWithDetails(id: string): Promise<LessonWithDetails | null> {
+    const db = await getDatabase();
+    const result = await db.getFirstAsync<LessonWithDetails>(
+      `SELECT 
+        ld.*,
+        lt.title as topic_title,
+        ls.code as series_code,
+        ls.title as series_title,
+        p.name as professor_name_resolved
+       FROM lessons_data ld
+       LEFT JOIN lesson_topics lt ON ld.lesson_topic_id = lt.id
+       LEFT JOIN lesson_series ls ON lt.series_id = ls.id
+       LEFT JOIN professors p ON ld.professor_id = p.id
+       WHERE ld.id = ?`,
+      [id]
+    );
+    return result;
+  },
+
+  async getAllLessonsWithDetails(): Promise<LessonWithDetails[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<LessonWithDetails>(
+      `SELECT
+        ld.*,
+        lt.title as topic_title,
+        ls.code as series_code,
+        ls.title as series_title,
+        p.name as professor_name_resolved
+       FROM lessons_data ld
+       LEFT JOIN lesson_topics lt ON ld.lesson_topic_id = lt.id
+       LEFT JOIN lesson_series ls ON lt.series_id = ls.id
+       LEFT JOIN professors p ON ld.professor_id = p.id
+       ORDER BY ld.date DESC, ld.created_at DESC`
+    );
+    return results;
+  },
+
+  async deleteLesson(id: string): Promise<void> {
+    const db = await getDatabase();
+
+    // Validar que a aula existe
+    const lesson = await this.getById(id);
+
+    if (!lesson) {
+      throw new Error('Aula não encontrada');
+    }
+
+    // Validar status - apenas IN_PROGRESS pode ser deletada
+    if (lesson.status !== LessonStatus.IN_PROGRESS) {
+      throw new Error('Não é possível excluir aulas finalizadas. Apenas aulas em andamento podem ser excluídas.');
+    }
+
+    // Hard delete
+    await db.runAsync('DELETE FROM lessons_data WHERE id = ?', [id]);
   }
 };
