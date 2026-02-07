@@ -15,6 +15,7 @@ import { topicService } from "../../src/services/topicService";
 import { seriesService } from "../../src/services/seriesService";
 import { LessonSeries } from "../../src/types/lessonSeries";
 import { theme } from "../../src/theme";
+import { DatePickerInput } from "../../src/components/DatePickerInput";
 
 export default function NewTopicScreen() {
   const { seriesId } = useLocalSearchParams<{ seriesId: string }>();
@@ -110,19 +111,15 @@ export default function NewTopicScreen() {
           </Text>
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Data Sugerida</Text>
-          <TextInput
-            style={styles.input}
-            value={suggestedDate}
-            onChangeText={setSuggestedDate}
-            placeholder="Ex: 2026-02-15 (AAAA-MM-DD)"
-            maxLength={10}
-          />
-          <Text style={styles.hint}>
-            Data prevista na revista (apenas informativo)
-          </Text>
-        </View>
+        <DatePickerInput
+          label="Data Sugerida"
+          value={suggestedDate || null}
+          onChange={setSuggestedDate}
+          placeholder="Selecione uma data"
+        />
+        <Text style={styles.hint}>
+          Data prevista na revista (apenas informativo)
+        </Text>
 
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}

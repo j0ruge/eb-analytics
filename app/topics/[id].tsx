@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { topicService } from "../../src/services/topicService";
 import { LessonTopicWithSeries } from "../../src/types/lessonTopic";
 import { theme } from "../../src/theme";
+import { DatePickerInput } from "../../src/components/DatePickerInput";
 
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -78,25 +79,21 @@ export default function TopicDetailScreen() {
   }
 
   async function handleDelete() {
-    Alert.alert(
-      "Excluir Lição",
-      `Deseja excluir a lição "${topic?.title}"?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await topicService.deleteTopic(id);
-              router.back();
-            } catch (error: any) {
-              Alert.alert("Erro", error.message || "Não foi possível excluir.");
-            }
-          },
+    Alert.alert("Excluir Lição", `Deseja excluir a lição "${topic?.title}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await topicService.deleteTopic(id);
+            router.back();
+          } catch (error: any) {
+            Alert.alert("Erro", error.message || "Não foi possível excluir.");
+          }
         },
-      ],
-    );
+      },
+    ]);
   }
 
   if (loading) {
@@ -150,15 +147,12 @@ export default function TopicDetailScreen() {
               />
             </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Data Sugerida</Text>
-              <TextInput
-                style={styles.input}
-                value={editedDate}
-                onChangeText={setEditedDate}
-                placeholder="AAAA-MM-DD"
-              />
-            </View>
+            <DatePickerInput
+              label="Data Sugerida"
+              value={editedDate || null}
+              onChange={setEditedDate}
+              placeholder="Selecione uma data"
+            />
 
             <View style={styles.editButtons}>
               <TouchableOpacity
