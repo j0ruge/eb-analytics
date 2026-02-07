@@ -6,6 +6,7 @@ import { theme } from '../../src/theme';
 
 export default function SyncScreen() {
   const [completedCount, setCompletedCount] = useState(0);
+  const [exportedCount, setExportedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -16,7 +17,9 @@ export default function SyncScreen() {
   async function loadStats() {
     try {
       const completed = await lessonService.getCompletedLessons();
+      const exported = await lessonService.getExportedLessons();
       setCompletedCount(completed.length);
+      setExportedCount(exported.length);
     } catch (err) {
       console.error(err);
     } finally {
@@ -33,6 +36,12 @@ export default function SyncScreen() {
     setExporting(true);
     try {
       await exportService.exportData();
+      Alert.alert(
+        'Sucesso',
+        `${completedCount} aula(s) exportada(s) com sucesso! O status foi atualizado para EXPORTED.`
+      );
+      // Recarregar estatísticas após exportação
+      await loadStats();
     } catch (err: any) {
       Alert.alert('Erro na Exportação', err.message);
     } finally {
@@ -56,8 +65,12 @@ export default function SyncScreen() {
           <Text style={styles.statLabel}>Aulas Finalizadas:</Text>
           <Text style={styles.statValue}>{completedCount}</Text>
         </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Aulas Exportadas:</Text>
+          <Text style={[styles.statValue, { color: theme.colors.warning }]}>{exportedCount}</Text>
+        </View>
         <Text style={styles.info}>
-          Aulas finalizadas estão prontas para serem enviadas ao sistema central de BI.
+          Aulas finalizadas estão prontas para serem exportadas. Aulas exportadas aguardam sincronização.
         </Text>
       </View>
 

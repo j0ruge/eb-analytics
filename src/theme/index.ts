@@ -8,6 +8,8 @@ export const theme = {
     border: '#C6C6C8',
     success: '#34C759',
     danger: '#FF3B30',
+    warning: '#FF9500',
+    info: '#5856D6',
   },
   spacing: {
     xs: 4,
@@ -20,5 +22,6 @@ export const theme = {
     sm: 4,
     md: 8,
     lg: 12,
+    pill: 20,
   }
 };

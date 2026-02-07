@@ -1,66 +1,93 @@
-<!--
-Sync Impact Report:
-- Version change: (New) -> 1.0.0
-- List of modified principles: Established Principles I through V (Initial Ratification)
-- Added sections: Technology Stack, Governance
-- Removed sections: None (Template placeholders filled)
-- Templates requiring updates:
-  - .specify/templates/plan-template.md (✅ Aligned via generic placeholder)
-  - .specify/templates/spec-template.md (✅ Aligned)
-  - .specify/templates/tasks-template.md (✅ Aligned)
-- Follow-up TODOs: None
--->
-
-# EB Insights (App Mobile) Constitution
+# EB Insights Constitution
 
 ## Core Principles
 
 ### I. Local-First Architecture
 
-**NON-NEGOTIABLE:** The application must be fully functional without network connectivity. All user input and data collection MUST be persisted immediately to the local SQLite database (`expo-sqlite/next`). Network synchronization is a secondary, background concern and must never block the user interface or data entry flow.
+SQLite é a **única fonte de verdade**. Todas as operações devem funcionar offline.
 
-### II. Minimalism & Native-First
+- Dados persistem localmente via expo-sqlite
+- Nenhuma feature pode depender de conectividade para funcionar
+- Sincronização com cloud (quando implementada) é secundária e assíncrona
+- Estado do app deve ser recuperável após fechar/reabrir
 
-**MANDATE:** Strict limit on external dependencies. Develop using native Expo APIs and standard React Native `StyleSheet` wherever possible. Heavy UI libraries (e.g., NativeBase, Tamagui) are PROHIBITED unless a specific component is impossible to build natively. Complexity must be justified by critical business value.
+### II. Zero-Friction UX
 
-### III. Fail-Safe UX & State Recovery
+Priorizar **Pickers e Steppers** sobre entrada de texto manual.
 
-**RULE:** The application must withstand crashes or OS-initiated termination without data loss. Complex flows (like the 3-stage class form) MUST automatically save "in-progress" state to persistent storage. Upon relaunch, the application MUST offer to restore the user's previous context/session exactly where they left off.
+- Campos numéricos usam CounterStepper (+ / -)
+- Seleções usam Picker/Modal ao invés de digitação livre
+- Captura de horário com um toque (TimeCaptureButton)
+- Minimizar teclado virtual sempre que possível
 
-### IV. Decoupled Export Strategy
+### III. Auto-Save & Fail-Safe
 
-**DESIGN PATTERN:** The data collection domain is architecturally separated from the reporting/BI domain. Local data remains on the device until explicitly exported or synced. The export mechanism (JSON generation or API Sync) MUST be decoupled from the core data entry loops, ensuring performance and stability during class time.
+Mudanças são salvas **automaticamente** com debounce de 500ms.
 
-### V. Zero-Friction UX
+- Usuário nunca precisa clicar "Salvar" explicitamente
+- Aulas IN_PROGRESS são recuperáveis após crash
+- Estado parcial é melhor que perda de dados
+- Debounce evita escritas excessivas no banco
 
-**UX STANDARD:** "Zero Typing" is the goal. Input interfaces MUST prioritize single-tap interactions (Steppers, Native Selects, Toggles) over text fields. Automated data capture (e.g., using the system clock for timestamps) is mandatory to reduce cognitive load and manual entry effort.
+### IV. Backward Compatibility
 
-## Technology Stack & Constraints
+Migrações de schema devem **preservar dados existentes**.
 
-**Core Stack:**
+- Novos campos devem ter defaults ou valores migrados
+- Campos legados podem ser mantidos durante transição
+- Migrations são idempotentes (podem rodar múltiplas vezes)
+- Rollback implícito via campos legados quando aplicável
 
-- **Language:** TypeScript (Strict Mode required)
-- **Framework:** React Native with Expo (Optimized for Expo Go)
-- **Router:** Expo Router (File-based routing)
-- **Database:** SQLite (`expo-sqlite/next`)
-- **Styling:** Native `StyleSheet` (No CSS-in-JS runtimes or heavy UI kits)
+### V. Separation of Concerns
 
-**Compliance:**
+Estrutura de código segue **separação clara de responsabilidades**.
 
-- All code must pass `tsc` with strict settings.
-- UI must be responsive across standard mobile screen sizes.
-- Application must be "Eject-free" compatible with Expo Go workflow where feasible.
+```
+src/
+├── types/      # Interfaces TypeScript (dados puros)
+├── db/         # Schema, migrations, client SQLite
+├── services/   # Lógica de negócio (CRUD, validação)
+├── components/ # UI reutilizável (Pickers, Steppers)
+├── hooks/      # Custom hooks React
+└── utils/      # Funções utilitárias puras
+
+app/            # Telas (Expo Router, file-based)
+```
+
+- Services não conhecem UI
+- Components não acessam banco diretamente
+- Types não têm dependências
+
+## Technology Stack
+
+| Camada | Tecnologia | Versão |
+|--------|------------|--------|
+| Framework | React Native + Expo | SDK 54 |
+| Navegação | Expo Router | 6.x |
+| Linguagem | TypeScript | 5.9 (strict) |
+| Banco de Dados | SQLite (expo-sqlite) | 16.x |
+| Testes | Jest + jest-expo | 29.x |
+| IDs | UUID v4 | 9.x |
+
+## Quality Gates
+
+### Pre-Implementation
+
+- [ ] Feature specification (spec.md) aprovada
+- [ ] Clarificações de escopo resolvidas
+- [ ] Migrações de dados planejadas (se aplicável)
+
+### Pre-Release
+
+- [ ] Todas as tasks marcadas como complete
+- [ ] App executa sem erros no Expo Go
+- [ ] Dados existentes preservados após migração
+- [ ] Campos legados populados para compatibilidade
 
 ## Governance
 
-This Constitution acts as the supreme source of truth for architectural and design decisions within the **EB Insights** project.
+- Constitution supersedes preferências individuais
+- Amendments require documentation and migration plan
+- Use `/speckit.constitution` for updates
 
-1. **Supremacy:** In conflicts between this document and other documentation (PRs, tickets, casual discussions), this Constitution prevails.
-2. **Amendments:** Changes to these principles require a formal "Constitutional Amendment" process, involving a version bump and rationale documentation.
-3. **Enforcement:** Code Reviews must explicitly verify alignment with these principles (e.g., rejecting a PR that adds a heavy UI library without justification).
-4. **Version Policy:**
-    - **MAJOR:** Change in core philosophy (e.g., moving away from Local-First).
-    - **MINOR:** New principle added or significant clarification.
-    - **PATCH:** Wording tweaks, typos, non-substantive updates.
-
-**Version**: 1.0.0 | **Ratified**: 2026-01-24 | **Last Amended**: 2026-01-24
+**Version**: 1.0.0 | **Ratified**: 2026-01-31 | **Last Amended**: 2026-01-31
