@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   Platform,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { theme } from "../theme";
+import { useTheme } from "../hooks/useTheme";
+import { Theme } from "../theme";
 import { parseInputDate, formatToYYYYMMMDD } from "../utils/date";
+import { AnimatedPressable } from "./AnimatedPressable";
 
 interface DatePickerInputProps {
   label: string;
@@ -26,6 +28,8 @@ export function DatePickerInput({
   disabled = false,
   placeholder = "Selecione uma data",
 }: DatePickerInputProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [showPicker, setShowPicker] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(new Date());
 
@@ -72,7 +76,7 @@ export function DatePickerInput({
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
+      <AnimatedPressable
         style={[
           styles.button,
           disabled && styles.buttonDisabled,
@@ -90,7 +94,7 @@ export function DatePickerInput({
         >
           {displayValue || placeholder}
         </Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       {/* Modal para iOS */}
       {Platform.OS === "ios" && showPicker && (
@@ -135,72 +139,72 @@ export function DatePickerInput({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginVertical: theme.spacing.sm,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
-  },
-  button: {
-    backgroundColor: theme.colors.background,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    minHeight: 50,
-    justifyContent: "center",
-  },
-  buttonFilled: {
-    borderColor: theme.colors.primary,
-    borderWidth: 1.5,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-    backgroundColor: "#E5E5EA",
-  },
-  buttonText: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  buttonTextPlaceholder: {
-    color: theme.colors.textSecondary,
-  },
-  buttonTextDisabled: {
-    color: theme.colors.textSecondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    paddingBottom: theme.spacing.xl,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  modalButtonCancel: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-  modalButtonConfirm: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.primary,
-  },
-  picker: {
-    height: 200,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      marginVertical: theme.spacing.sm,
+    },
+    label: {
+      ...theme.typography.label,
+      color: theme.colors.text,
+      marginBottom: theme.spacing.xs,
+    },
+    button: {
+      backgroundColor: theme.colors.background,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      minHeight: 50,
+      justifyContent: "center",
+    },
+    buttonFilled: {
+      borderColor: theme.colors.primary,
+      borderWidth: 1.5,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+      backgroundColor: theme.colors.borderLight,
+    },
+    buttonText: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+    },
+    buttonTextPlaceholder: {
+      color: theme.colors.textSecondary,
+    },
+    buttonTextDisabled: {
+      color: theme.colors.textSecondary,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "flex-end",
+    },
+    modalContent: {
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: theme.borderRadius.lg,
+      borderTopRightRadius: theme.borderRadius.lg,
+      paddingBottom: theme.spacing.xl,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modalButtonCancel: {
+      ...theme.typography.body,
+      color: theme.colors.textSecondary,
+    },
+    modalButtonConfirm: {
+      ...theme.typography.body,
+      fontWeight: "600",
+      color: theme.colors.primary,
+    },
+    picker: {
+      height: 200,
+    },
+  });

@@ -1,67 +1,33 @@
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { initializeDatabase } from "../src/db/client";
-import { TouchableOpacity, Text, View } from "react-native";
-import { theme } from "../src/theme";
+import { ThemeProvider } from "../src/theme/ThemeProvider";
+import { useTheme } from "../src/hooks/useTheme";
 
-export default function RootLayout() {
-  const router = useRouter();
-
-  useEffect(() => {
-    initializeDatabase().catch((err) => console.error("DB Init Error:", err));
-  }, []);
+function RootStack() {
+  const { theme } = useTheme();
 
   return (
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: "#007AFF",
+          backgroundColor: theme.colors.primary,
         },
-        headerTintColor: "#fff",
+        headerTintColor: theme.colors.background,
         headerTitleStyle: {
           fontWeight: "bold",
         },
+        contentStyle: {
+          backgroundColor: theme.colors.background,
+        },
+        animation: "slide_from_right",
       }}
     >
-      <Stack.Screen
-        name="index"
-        options={{
-          title: "EB Insights",
-          headerRight: () => (
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity onPress={() => router.push("/series")}>
-                <Text
-                  style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
-                >
-                  Séries
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push("/professors")}>
-                <Text
-                  style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
-                >
-                  Profs
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push("/sync")}>
-                <Text
-                  style={{ color: "#fff", fontWeight: "bold", marginRight: 10 }}
-                >
-                  Sinc
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ),
-        }}
-      />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="lesson/new" options={{ title: "Nova Aula" }} />
       <Stack.Screen
         name="lesson/[id]"
         options={{ title: "Detalhes da Aula" }}
-      />
-      <Stack.Screen
-        name="professors/index"
-        options={{ title: "Professores" }}
       />
       <Stack.Screen
         name="professors/new"
@@ -71,8 +37,6 @@ export default function RootLayout() {
         name="professors/[id]"
         options={{ title: "Editar Professor" }}
       />
-      <Stack.Screen name="sync/index" options={{ title: "Sincronizar" }} />
-      <Stack.Screen name="series/index" options={{ title: "Séries" }} />
       <Stack.Screen name="series/new" options={{ title: "Nova Série" }} />
       <Stack.Screen
         name="series/[id]"
@@ -83,6 +47,19 @@ export default function RootLayout() {
         name="topics/[id]"
         options={{ title: "Detalhes do Tópico" }}
       />
+      <Stack.Screen name="settings" options={{ title: "Configurações" }} />
     </Stack>
+  );
+}
+
+export default function RootLayout() {
+  useEffect(() => {
+    initializeDatabase().catch((err) => console.error("DB Init Error:", err));
+  }, []);
+
+  return (
+    <ThemeProvider>
+      <RootStack />
+    </ThemeProvider>
   );
 }

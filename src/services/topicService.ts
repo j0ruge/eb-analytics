@@ -160,4 +160,24 @@ export const topicService = {
     );
     return result?.count || 0;
   },
+
+  async getTopicCountsBySeries(seriesIds: string[]): Promise<Record<string, number>> {
+    if (seriesIds.length === 0) return {};
+
+    const db = await getDatabase();
+    const placeholders = seriesIds.map(() => '?').join(', ');
+    const rows = await db.getAllAsync<{ series_id: string; count: number }>(
+      `SELECT series_id, COUNT(*) as count FROM lesson_topics WHERE series_id IN (${placeholders}) GROUP BY series_id`,
+      seriesIds
+    );
+
+    const counts: Record<string, number> = {};
+    for (const id of seriesIds) {
+      counts[id] = 0;
+    }
+    for (const row of rows) {
+      counts[row.series_id] = row.count;
+    }
+    return counts;
+  },
 };

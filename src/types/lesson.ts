@@ -5,6 +5,13 @@ export enum LessonStatus {
   SYNCED = 'SYNCED',
 }
 
+export const STATUS_LABELS: Record<LessonStatus, string> = {
+  [LessonStatus.IN_PROGRESS]: 'Em Andamento',
+  [LessonStatus.COMPLETED]: 'Completa',
+  [LessonStatus.EXPORTED]: 'Exportada',
+  [LessonStatus.SYNCED]: 'Sincronizada',
+};
+
 export interface Lesson {
   id: string;
   date: string; // ISO 8601 YYYY-MM-DD

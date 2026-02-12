@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   ToastAndroid,
   Modal,
   Pressable,
-} from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { theme } from '../theme';
+} from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTheme } from "../hooks/useTheme";
+import { Theme } from "../theme";
+import { AnimatedPressable } from "./AnimatedPressable";
+import { hexToRgba } from "../utils/color";
 
 interface TimeCaptureButtonProps {
   label: string;
@@ -27,15 +30,17 @@ export function TimeCaptureButton({
   onCapture,
   onClear,
   onManualSet,
-  disabled
+  disabled,
 }: TimeCaptureButtonProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [tempTime, setTempTime] = useState(new Date());
 
   const showProtectedMessage = () => {
-    if (Platform.OS === 'android') {
-      ToastAndroid.show('⏱️ Segure para editar', ToastAndroid.SHORT);
+    if (Platform.OS === "android") {
+      ToastAndroid.show("Segure para editar", ToastAndroid.SHORT);
     }
   };
 
@@ -67,7 +72,7 @@ export function TimeCaptureButton({
 
     // Parse do horário atual para inicializar o picker
     if (value) {
-      const [hours, minutes] = value.split(':').map(Number);
+      const [hours, minutes] = value.split(":").map(Number);
       const now = new Date();
       now.setHours(hours, minutes, 0, 0);
       setTempTime(now);
@@ -84,11 +89,11 @@ export function TimeCaptureButton({
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
+    setShowTimePicker(Platform.OS === "ios");
 
-    if (event.type === 'set' && selectedTime && onManualSet) {
-      const hours = selectedTime.getHours().toString().padStart(2, '0');
-      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+    if (event.type === "set" && selectedTime && onManualSet) {
+      const hours = selectedTime.getHours().toString().padStart(2, "0");
+      const minutes = selectedTime.getMinutes().toString().padStart(2, "0");
       onManualSet(`${hours}:${minutes}`);
     }
   };
@@ -96,29 +101,30 @@ export function TimeCaptureButton({
   return (
     <View style={[styles.container, disabled && styles.disabledContainer]}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
+      <AnimatedPressable
         style={[
           styles.button,
           value && styles.buttonFilled,
-          disabled && styles.disabledButton
+          disabled && styles.disabledButton,
         ]}
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={800}
         disabled={disabled}
-        activeOpacity={0.7}
       >
-        <Text style={[
-          styles.buttonText,
-          value && styles.buttonTextFilled,
-          disabled && styles.disabledText
-        ]}>
-          {value || (disabled ? '--:--' : '⏱️ Capturar')}
+        <Text
+          style={[
+            styles.buttonText,
+            value && styles.buttonTextFilled,
+            disabled && styles.disabledText,
+          ]}
+        >
+          {value || (disabled ? "--:--" : "Capturar")}
         </Text>
         {value && !disabled && (
           <Text style={styles.hintText}>Segure para editar</Text>
         )}
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       {/* Modal de Opções */}
       <Modal
@@ -131,7 +137,10 @@ export function TimeCaptureButton({
           style={styles.modalOverlay}
           onPress={() => setShowOptionsModal(false)}
         >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <View style={styles.modalHeader}>
               <View style={styles.modalTimeDisplay}>
@@ -232,167 +241,164 @@ export function TimeCaptureButton({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    marginRight: theme.spacing.sm,
-  },
-  disabledContainer: {
-    opacity: 0.7,
-  },
-  label: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
-  },
-  button: {
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    minHeight: 60,
-    justifyContent: 'center',
-  },
-  buttonFilled: {
-    backgroundColor: theme.colors.primary + '10',
-    borderColor: theme.colors.primary,
-    borderWidth: 2,
-  },
-  disabledButton: {
-    backgroundColor: '#E5E5EA',
-    borderColor: '#C6C6C8',
-  },
-  buttonText: {
-    fontSize: 16,
-    color: theme.colors.primary,
-    fontWeight: 'bold',
-  },
-  buttonTextFilled: {
-    fontSize: 20,
-    color: theme.colors.primary,
-  },
-  disabledText: {
-    color: theme.colors.textSecondary,
-  },
-  hintText: {
-    fontSize: 10,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      marginRight: theme.spacing.sm,
+    },
+    disabledContainer: {
+      opacity: 0.7,
+    },
+    label: {
+      ...theme.typography.label,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    button: {
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: "center",
+      minHeight: 60,
+      justifyContent: "center",
+    },
+    buttonFilled: {
+      backgroundColor: theme.colors.primaryLight,
+      borderColor: theme.colors.primary,
+      borderWidth: 2,
+    },
+    disabledButton: {
+      backgroundColor: theme.colors.borderLight,
+      borderColor: theme.colors.border,
+    },
+    buttonText: {
+      ...theme.typography.body,
+      color: theme.colors.primary,
+      fontWeight: "bold",
+    },
+    buttonTextFilled: {
+      fontSize: 20,
+      color: theme.colors.primary,
+    },
+    disabledText: {
+      color: theme.colors.textSecondary,
+    },
+    hintText: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      marginTop: 4,
+      fontStyle: "italic",
+    },
 
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: theme.spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.lg,
-    width: '100%',
-    maxWidth: 400,
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  modalHeader: {
-    backgroundColor: theme.colors.primary,
-    padding: theme.spacing.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalTimeDisplay: {
-    flex: 1,
-  },
-  modalTimeLabel: {
-    fontSize: 12,
-    color: '#fff',
-    opacity: 0.9,
-    marginBottom: 4,
-  },
-  modalTimeValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    letterSpacing: 2,
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: '300',
-  },
-  optionsContainer: {
-    padding: theme.spacing.lg,
-  },
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: theme.spacing.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  optionPrimary: {
-    backgroundColor: theme.colors.primary + '08',
-    borderColor: theme.colors.primary + '30',
-  },
-  optionSecondary: {
-    backgroundColor: '#4A90E2' + '08',
-    borderColor: '#4A90E2' + '30',
-  },
-  optionDanger: {
-    backgroundColor: '#FF3B30' + '08',
-    borderColor: '#FF3B30' + '30',
-  },
-  optionCancel: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    marginBottom: 0,
-  },
-  optionIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: theme.spacing.md,
-  },
-  optionIcon: {
-    fontSize: 24,
-  },
-  optionTextContainer: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  optionTitleDanger: {
-    color: '#FF3B30',
-  },
-  optionDescription: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-  },
-});
+    // Modal Styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: theme.spacing.lg,
+    },
+    modalContent: {
+      backgroundColor: theme.colors.background,
+      borderRadius: theme.borderRadius.lg,
+      width: "100%",
+      maxWidth: 400,
+      overflow: "hidden",
+      ...theme.shadows.lg,
+    },
+    modalHeader: {
+      backgroundColor: theme.colors.primary,
+      padding: theme.spacing.lg,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    modalTimeDisplay: {
+      flex: 1,
+    },
+    modalTimeLabel: {
+      ...theme.typography.caption,
+      color: theme.colors.background,
+      opacity: 0.9,
+      marginBottom: 4,
+    },
+    modalTimeValue: {
+      fontSize: 32,
+      fontWeight: "bold",
+      color: theme.colors.background,
+      letterSpacing: 2,
+    },
+    closeButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    closeButtonText: {
+      fontSize: 20,
+      color: theme.colors.background,
+      fontWeight: "300",
+    },
+    optionsContainer: {
+      padding: theme.spacing.lg,
+    },
+    optionCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      marginBottom: theme.spacing.md,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    optionPrimary: {
+      backgroundColor: theme.colors.primaryLight,
+      borderColor: hexToRgba(theme.colors.primary, 0.19),
+    },
+    optionSecondary: {
+      backgroundColor: hexToRgba(theme.colors.info, 0.03),
+      borderColor: hexToRgba(theme.colors.info, 0.19),
+    },
+    optionDanger: {
+      backgroundColor: hexToRgba(theme.colors.danger, 0.03),
+      borderColor: hexToRgba(theme.colors.danger, 0.19),
+    },
+    optionCancel: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      marginBottom: 0,
+    },
+    optionIconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.colors.surfaceElevated,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: theme.spacing.md,
+    },
+    optionIcon: {
+      fontSize: 24,
+    },
+    optionTextContainer: {
+      flex: 1,
+    },
+    optionTitle: {
+      ...theme.typography.body,
+      fontWeight: "600",
+      color: theme.colors.text,
+      marginBottom: 2,
+    },
+    optionTitleDanger: {
+      color: theme.colors.danger,
+    },
+    optionDescription: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+    },
+  });

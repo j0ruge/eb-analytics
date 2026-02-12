@@ -49,3 +49,16 @@ export function validateCpf(cpf: string): boolean {
 
   return true;
 }
+
+/**
+ * Formata CPF para exibição no padrão XXX.XXX.XXX-XX
+ * Aceita tanto CPF limpo quanto já formatado.
+ * Retorna o valor original se não contiver exatamente 11 dígitos.
+ * @param cpf - CPF formatado ou não
+ * @returns CPF formatado ou o valor original se inválido
+ */
+export function formatCpfDisplay(cpf: string): string {
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return cpf;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}

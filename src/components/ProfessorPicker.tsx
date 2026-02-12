@@ -1,9 +1,17 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import React, { useState, useMemo } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+} from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { professorService } from "../services/professorService";
 import { Professor } from "../types/professor";
-import { theme } from "../theme";
+import { useTheme } from "../hooks/useTheme";
+import { Theme } from "../theme";
 
 interface ProfessorPickerProps {
   label: string;
@@ -18,6 +26,8 @@ export function ProfessorPicker({
   onSelect,
   disabled,
 }: ProfessorPickerProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
@@ -96,79 +106,100 @@ export function ProfessorPicker({
 
       {showPicker && (
         <View style={styles.pickerContainer}>
-          {professors.map((professor) => (
-            <TouchableOpacity
-              key={professor.id}
-              style={[
-                styles.pickerItem,
-                professor.id === selectedProfessorId &&
-                  styles.pickerItemSelected,
-              ]}
-              onPress={() => handleSelect(professor)}
-            >
-              <Text style={styles.pickerItemText}>{professor.name}</Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView
+            style={styles.pickerScroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+          >
+            {professors.map((professor) => (
+              <TouchableOpacity
+                key={professor.id}
+                style={[
+                  styles.pickerItem,
+                  professor.id === selectedProfessorId &&
+                    styles.pickerItemSelected,
+                ]}
+                onPress={() => handleSelect(professor)}
+              >
+                <Text
+                  style={[
+                    styles.pickerItemText,
+                    professor.id === selectedProfessorId &&
+                      styles.pickerItemTextSelected,
+                  ]}
+                >
+                  {professor.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginVertical: theme.spacing.sm,
-  },
-  disabledContainer: {
-    opacity: 0.7,
-  },
-  label: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
-  },
-  selector: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  disabledSelector: {
-    backgroundColor: "#E5E5EA",
-  },
-  selectorText: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  placeholder: {
-    color: theme.colors.textSecondary,
-  },
-  arrow: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  pickerContainer: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    marginTop: theme.spacing.xs,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    maxHeight: 200,
-  },
-  pickerItem: {
-    padding: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  pickerItemSelected: {
-    backgroundColor: theme.colors.primary,
-  },
-  pickerItemText: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      marginVertical: theme.spacing.sm,
+    },
+    disabledContainer: {
+      opacity: 0.7,
+    },
+    label: {
+      ...theme.typography.label,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    selector: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    disabledSelector: {
+      backgroundColor: theme.colors.borderLight,
+    },
+    selectorText: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+    },
+    placeholder: {
+      color: theme.colors.textSecondary,
+    },
+    arrow: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+    },
+    pickerContainer: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.borderRadius.md,
+      marginTop: theme.spacing.xs,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: "hidden",
+    },
+    pickerScroll: {
+      maxHeight: 200,
+    },
+    pickerItem: {
+      padding: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    pickerItemSelected: {
+      backgroundColor: theme.colors.primary,
+    },
+    pickerItemText: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+    },
+    pickerItemTextSelected: {
+      color: theme.colors.background,
+    },
+  });
