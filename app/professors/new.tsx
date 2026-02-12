@@ -2,31 +2,31 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { professorService } from "../../src/services/professorService";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 
 export default function NewProfessorScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [name, setName] = useState("");
   const [cpf, setCpf] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   function formatCpfInput(text: string) {
-    // Remove tudo que não é número
     const numbers = text.replace(/\D/g, "");
-
-    // Limita a 11 dígitos
     const limited = numbers.slice(0, 11);
 
-    // Formata: 000.000.000-00
     if (limited.length <= 3) {
       return limited;
     } else if (limited.length <= 6) {
@@ -43,7 +43,6 @@ export default function NewProfessorScreen() {
   }
 
   async function handleSave() {
-    // Validações básicas
     if (!name.trim()) {
       Alert.alert("Erro", "Nome é obrigatório");
       return;
@@ -80,28 +79,36 @@ export default function NewProfessorScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.form}>
-        <Text style={styles.label}>Nome Completo *</Text>
+        <View style={styles.labelRow}>
+          <Ionicons name="person-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.label}>Nome Completo *</Text>
+        </View>
         <TextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
           placeholder="Digite o nome completo"
+          placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="words"
           editable={!loading}
         />
 
-        <Text style={styles.label}>CPF *</Text>
+        <View style={styles.labelRow}>
+          <Ionicons name="card-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.label}>CPF *</Text>
+        </View>
         <TextInput
           style={styles.input}
           value={cpf}
           onChangeText={handleCpfChange}
           placeholder="000.000.000-00"
+          placeholderTextColor={theme.colors.textSecondary}
           keyboardType="numeric"
           maxLength={14}
           editable={!loading}
         />
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSave}
           disabled={loading}
@@ -109,13 +116,13 @@ export default function NewProfessorScreen() {
           <Text style={styles.buttonText}>
             {loading ? "Salvando..." : "Salvar Professor"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -123,17 +130,22 @@ const styles = StyleSheet.create({
   form: {
     padding: theme.spacing.md,
   },
-  label: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  label: {
+    ...theme.typography.label,
+    color: theme.colors.textSecondary,
   },
   input: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.md,
     padding: theme.spacing.md,
-    fontSize: 16,
+    ...theme.typography.body,
     color: theme.colors.text,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -149,8 +161,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.textSecondary,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.background,
     fontWeight: "bold",
   },
 });

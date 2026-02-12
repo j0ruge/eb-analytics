@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
   TextInput,
-  FlatList,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
   ScrollView,
@@ -15,14 +13,22 @@ import { seriesService } from "../../src/services/seriesService";
 import { topicService } from "../../src/services/topicService";
 import { LessonSeries } from "../../src/types/lessonSeries";
 import { LessonTopic } from "../../src/types/lessonTopic";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
+import { FAB } from "../../src/components/FAB";
+import { EmptyState } from "../../src/components/EmptyState";
+import { ErrorRetry } from "../../src/components/ErrorRetry";
 
 export default function SeriesDetailScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [series, setSeries] = useState<LessonSeries | null>(null);
   const [topics, setTopics] = useState<LessonTopic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [editing, setEditing] = useState(false);
   const [editedCode, setEditedCode] = useState("");
   const [editedTitle, setEditedTitle] = useState("");
@@ -35,6 +41,7 @@ export default function SeriesDetailScreen() {
   async function loadData() {
     try {
       setLoading(true);
+      setError(null);
       const [seriesData, topicsData] = await Promise.all([
         seriesService.getSeriesById(id),
         topicService.getTopicsBySeries(id),
@@ -46,8 +53,9 @@ export default function SeriesDetailScreen() {
         setEditedTitle(seriesData.title);
         setEditedDescription(seriesData.description || "");
       }
-    } catch (error) {
-      console.error("Error loading series:", error);
+    } catch (err) {
+      console.error("Error loading series:", err);
+      setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setLoading(false);
     }
@@ -114,10 +122,18 @@ export default function SeriesDetailScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ErrorRetry onRetry={loadData} />
+      </View>
+    );
+  }
+
   if (!series) {
     return (
       <View style={styles.errorContainer}>
-        <Text>Série não encontrada.</Text>
+        <Text style={{ color: theme.colors.text }}>Série não encontrada.</Text>
       </View>
     );
   }
@@ -136,6 +152,7 @@ export default function SeriesDetailScreen() {
                 value={editedCode}
                 onChangeText={setEditedCode}
                 placeholder="Código (ex: EB354)"
+                placeholderTextColor={theme.colors.textSecondary}
                 autoCapitalize="characters"
                 maxLength={20}
               />
@@ -144,17 +161,19 @@ export default function SeriesDetailScreen() {
                 value={editedTitle}
                 onChangeText={setEditedTitle}
                 placeholder="Título"
+                placeholderTextColor={theme.colors.textSecondary}
               />
               <TextInput
                 style={[styles.input, styles.multiline]}
                 value={editedDescription}
                 onChangeText={setEditedDescription}
                 placeholder="Descrição (opcional)"
+                placeholderTextColor={theme.colors.textSecondary}
                 multiline
                 numberOfLines={3}
               />
               <View style={styles.editButtons}>
-                <TouchableOpacity
+                <AnimatedPressable
                   style={[styles.editButton, styles.cancelButton]}
                   onPress={() => {
                     setEditing(false);
@@ -164,13 +183,13 @@ export default function SeriesDetailScreen() {
                   }}
                 >
                   <Text style={styles.cancelButtonText}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AnimatedPressable>
+                <AnimatedPressable
                   style={[styles.editButton, styles.saveButton]}
                   onPress={handleSaveEdit}
                 >
                   <Text style={styles.saveButtonText}>Salvar</Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
               </View>
             </View>
           ) : (
@@ -180,13 +199,13 @@ export default function SeriesDetailScreen() {
                 <Text style={styles.description}>{series.description}</Text>
               )}
               <View style={styles.actionButtons}>
-                <TouchableOpacity
+                <AnimatedPressable
                   style={styles.textButton}
                   onPress={() => setEditing(true)}
                 >
                   <Text style={styles.textButtonLabel}>Editar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AnimatedPressable>
+                <AnimatedPressable
                   style={styles.textButton}
                   onPress={handleDelete}
                 >
@@ -198,7 +217,7 @@ export default function SeriesDetailScreen() {
                   >
                     Excluir
                   </Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
               </View>
             </View>
           )}
@@ -211,12 +230,16 @@ export default function SeriesDetailScreen() {
           </View>
 
           {topics.length === 0 ? (
-            <View style={styles.emptyTopics}>
-              <Text style={styles.emptyText}>Nenhuma lição cadastrada</Text>
-            </View>
+            <EmptyState
+              icon="list-outline"
+              title="Nenhum tópico nesta série"
+              description="Adicione tópicos para organizar as lições"
+              actionLabel="Adicionar tópico"
+              onAction={() => router.push(`/topics/new?seriesId=${id}`)}
+            />
           ) : (
             topics.map((topic) => (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={topic.id}
                 style={styles.topicCard}
                 onPress={() => router.push(`/topics/${topic.id}` as any)}
@@ -230,179 +253,143 @@ export default function SeriesDetailScreen() {
                     </Text>
                   )}
                 </View>
-              </TouchableOpacity>
+              </AnimatedPressable>
             ))
           )}
         </View>
       </ScrollView>
 
-      {/* FAB para adicionar tópico */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push(`/topics/new?seriesId=${id}`)}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      <FAB onPress={() => router.push(`/topics/new?seriesId=${id}`)} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  header: {
-    backgroundColor: theme.colors.background,
-    padding: theme.spacing.md,
-    margin: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
-  },
-  code: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.xs,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
-  },
-  description: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.sm,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    marginTop: theme.spacing.sm,
-  },
-  textButton: {
-    marginRight: theme.spacing.md,
-  },
-  textButtonLabel: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: "500",
-  },
-  editForm: {
-    marginTop: theme.spacing.sm,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginBottom: theme.spacing.sm,
-  },
-  multiline: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  editButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: theme.spacing.sm,
-  },
-  editButton: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
-  },
-  cancelButton: {
-    backgroundColor: theme.colors.surface,
-  },
-  cancelButtonText: {
-    color: theme.colors.textSecondary,
-  },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontWeight: "500",
-  },
-  topicsSection: {
-    padding: theme.spacing.md,
-    paddingTop: 0,
-  },
-  topicsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: theme.spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: theme.colors.text,
-  },
-  emptyTopics: {
-    padding: theme.spacing.xl,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  topicCard: {
-    flexDirection: "row",
-    backgroundColor: theme.colors.background,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: theme.spacing.sm,
-  },
-  topicOrder: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: theme.colors.primary,
-    width: 30,
-  },
-  topicContent: {
-    flex: 1,
-  },
-  topicTitle: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  topicDate: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  fab: {
-    position: "absolute",
-    right: theme.spacing.lg,
-    bottom: theme.spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  fabText: {
-    fontSize: 28,
-    color: "#fff",
-    fontWeight: "300",
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.surface,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    header: {
+      backgroundColor: theme.colors.background,
+      padding: theme.spacing.md,
+      margin: theme.spacing.md,
+      borderRadius: theme.borderRadius.lg,
+    },
+    code: {
+      ...theme.typography.label,
+      fontWeight: "700",
+      color: theme.colors.primary,
+      marginBottom: theme.spacing.xs,
+    },
+    title: {
+      ...theme.typography.h2,
+      color: theme.colors.text,
+      marginBottom: theme.spacing.xs,
+    },
+    description: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    actionButtons: {
+      flexDirection: "row",
+      marginTop: theme.spacing.sm,
+    },
+    textButton: {
+      marginRight: theme.spacing.md,
+    },
+    textButtonLabel: {
+      ...theme.typography.label,
+      color: theme.colors.primary,
+    },
+    editForm: {
+      marginTop: theme.spacing.sm,
+    },
+    input: {
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      ...theme.typography.body,
+      color: theme.colors.text,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginBottom: theme.spacing.sm,
+    },
+    multiline: {
+      minHeight: 80,
+      textAlignVertical: "top",
+    },
+    editButtons: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: theme.spacing.sm,
+    },
+    editButton: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+    },
+    cancelButton: {
+      backgroundColor: theme.colors.surface,
+    },
+    cancelButtonText: {
+      color: theme.colors.textSecondary,
+    },
+    saveButton: {
+      backgroundColor: theme.colors.primary,
+    },
+    saveButtonText: {
+      color: theme.colors.background,
+      fontWeight: "500",
+    },
+    topicsSection: {
+      padding: theme.spacing.md,
+      paddingTop: 0,
+    },
+    topicsHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: theme.spacing.md,
+    },
+    sectionTitle: {
+      ...theme.typography.h3,
+      color: theme.colors.text,
+    },
+    topicCard: {
+      flexDirection: "row",
+      backgroundColor: theme.colors.background,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      marginBottom: theme.spacing.sm,
+    },
+    topicOrder: {
+      ...theme.typography.body,
+      fontWeight: "700",
+      color: theme.colors.primary,
+      width: 30,
+    },
+    topicContent: {
+      flex: 1,
+    },
+    topicTitle: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+    },
+    topicDate: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+  });

@@ -1,20 +1,24 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { seriesService } from "../../src/services/seriesService";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 
 export default function NewSeriesScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
@@ -22,7 +26,6 @@ export default function NewSeriesScreen() {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    // Validações
     if (!code.trim()) {
       Alert.alert("Erro", "O código da série é obrigatório.");
       return;
@@ -54,12 +57,16 @@ export default function NewSeriesScreen() {
     >
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.field}>
-          <Text style={styles.label}>Código *</Text>
+          <View style={styles.labelRow}>
+            <Ionicons name="code-slash-outline" size={16} color={theme.colors.text} />
+            <Text style={styles.label}>Código *</Text>
+          </View>
           <TextInput
             style={styles.input}
             value={code}
             onChangeText={setCode}
             placeholder="Ex: EB354"
+            placeholderTextColor={theme.colors.textSecondary}
             autoCapitalize="characters"
             maxLength={20}
           />
@@ -69,30 +76,38 @@ export default function NewSeriesScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Título *</Text>
+          <View style={styles.labelRow}>
+            <Ionicons name="text-outline" size={16} color={theme.colors.text} />
+            <Text style={styles.label}>Título *</Text>
+          </View>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
             placeholder="Ex: Tempo de Despertar"
+            placeholderTextColor={theme.colors.textSecondary}
             maxLength={100}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Descrição</Text>
+          <View style={styles.labelRow}>
+            <Ionicons name="document-text-outline" size={16} color={theme.colors.text} />
+            <Text style={styles.label}>Descrição</Text>
+          </View>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={description}
             onChangeText={setDescription}
             placeholder="Descrição opcional da série..."
+            placeholderTextColor={theme.colors.textSecondary}
             multiline
             numberOfLines={4}
             maxLength={500}
           />
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={saving}
@@ -100,13 +115,13 @@ export default function NewSeriesScreen() {
           <Text style={styles.saveButtonText}>
             {saving ? "Salvando..." : "Criar Série"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface,
@@ -117,17 +132,22 @@ const styles = StyleSheet.create({
   field: {
     marginBottom: theme.spacing.lg,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.text,
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  label: {
+    ...theme.typography.label,
+    color: theme.colors.text,
   },
   input: {
     backgroundColor: theme.colors.background,
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.text,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -136,7 +156,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   hint: {
-    fontSize: 12,
+    ...theme.typography.caption,
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
   },
@@ -151,8 +171,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.background,
     fontWeight: "600",
   },
 });

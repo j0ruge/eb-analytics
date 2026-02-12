@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   FlatList,
   ActivityIndicator,
 } from "react-native";
-import { theme } from "../theme";
+import { useTheme } from "../hooks/useTheme";
+import { Theme } from "../theme";
 import { LessonTopic } from "../types/lessonTopic";
 import { topicService } from "../services/topicService";
 
@@ -27,8 +28,11 @@ export function TopicPicker({
   disabled = false,
   placeholder = "Selecione uma lição",
 }: TopicPickerProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [topics, setTopics] = useState<LessonTopic[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<LessonTopic | null>(null);
 
@@ -53,10 +57,14 @@ export function TopicPicker({
   const loadTopics = async (sId: string) => {
     try {
       setLoading(true);
+      setError(null);
       const data = await topicService.getTopicsBySeries(sId);
       setTopics(data);
-    } catch (error) {
-      console.error("Error loading topics:", error);
+    } catch (err: any) {
+      const message = err?.message || "Falha ao carregar lições";
+      console.error("Error loading topics:", err);
+      setError(message);
+      setTopics([]);
     } finally {
       setLoading(false);
     }
@@ -76,12 +84,33 @@ export function TopicPicker({
 
   const isDisabled = disabled || !seriesId;
 
+  const renderSeparator = useCallback(
+    () => <View style={styles.separator} />,
+    [styles.separator],
+  );
+
   if (loading) {
     return (
       <View style={styles.container}>
         <Text style={styles.label}>Lição</Text>
         <View style={[styles.picker, styles.pickerDisabled]}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.label}>Lição</Text>
+        <View style={[styles.picker, styles.pickerError]}>
+          <Text style={styles.errorText} numberOfLines={1}>
+            {error}
+          </Text>
+          <TouchableOpacity onPress={() => seriesId && loadTopics(seriesId)}>
+            <Text style={styles.retryText}>Tentar novamente</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -154,7 +183,7 @@ export function TopicPicker({
                     </View>
                   </TouchableOpacity>
                 )}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
+                ItemSeparatorComponent={renderSeparator}
               />
             )}
 
@@ -173,130 +202,143 @@ export function TopicPicker({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: theme.spacing.md,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
-  },
-  picker: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm + 4,
-  },
-  pickerDisabled: {
-    opacity: 0.6,
-  },
-  pickerText: {
-    fontSize: 16,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  placeholder: {
-    color: theme.colors.textSecondary,
-  },
-  chevron: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginLeft: theme.spacing.sm,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    maxHeight: "70%",
-    paddingBottom: theme.spacing.xl,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: theme.colors.text,
-  },
-  closeButton: {
-    fontSize: 20,
-    color: theme.colors.textSecondary,
-    padding: theme.spacing.xs,
-  },
-  listItem: {
-    padding: theme.spacing.md,
-  },
-  listItemSelected: {
-    backgroundColor: theme.colors.surface,
-  },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  itemOrder: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: theme.colors.primary,
-    width: 30,
-    marginRight: theme.spacing.sm,
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-  itemDate: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginHorizontal: theme.spacing.md,
-  },
-  emptyState: {
-    padding: theme.spacing.xl,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  clearButton: {
-    margin: theme.spacing.md,
-    padding: theme.spacing.md,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-  },
-  clearButtonText: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      marginBottom: theme.spacing.md,
+    },
+    label: {
+      ...theme.typography.label,
+      color: theme.colors.text,
+      marginBottom: theme.spacing.xs,
+    },
+    picker: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm + 4,
+    },
+    pickerDisabled: {
+      opacity: 0.6,
+    },
+    pickerText: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+      flex: 1,
+    },
+    placeholder: {
+      color: theme.colors.textSecondary,
+    },
+    chevron: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      marginLeft: theme.spacing.sm,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "flex-end",
+    },
+    modalContent: {
+      backgroundColor: theme.colors.background,
+      borderTopLeftRadius: theme.borderRadius.lg,
+      borderTopRightRadius: theme.borderRadius.lg,
+      maxHeight: "70%",
+      paddingBottom: theme.spacing.xl,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modalTitle: {
+      ...theme.typography.h3,
+      color: theme.colors.text,
+    },
+    closeButton: {
+      fontSize: 20,
+      color: theme.colors.textSecondary,
+      padding: theme.spacing.xs,
+    },
+    listItem: {
+      padding: theme.spacing.md,
+    },
+    listItemSelected: {
+      backgroundColor: theme.colors.surface,
+    },
+    itemRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+    },
+    itemOrder: {
+      ...theme.typography.label,
+      fontWeight: "700",
+      color: theme.colors.primary,
+      width: 30,
+      marginRight: theme.spacing.sm,
+    },
+    itemContent: {
+      flex: 1,
+    },
+    itemTitle: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+    },
+    itemDate: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    separator: {
+      height: 1,
+      backgroundColor: theme.colors.border,
+      marginHorizontal: theme.spacing.md,
+    },
+    emptyState: {
+      padding: theme.spacing.xl,
+      alignItems: "center",
+    },
+    emptyText: {
+      ...theme.typography.body,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    emptySubtext: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.textSecondary,
+    },
+    clearButton: {
+      margin: theme.spacing.md,
+      padding: theme.spacing.md,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.borderRadius.md,
+    },
+    clearButtonText: {
+      ...theme.typography.body,
+      color: theme.colors.textSecondary,
+    },
+    pickerError: {
+      borderColor: theme.colors.danger,
+    },
+    errorText: {
+      ...theme.typography.caption,
+      color: theme.colors.danger,
+      flex: 1,
+    },
+    retryText: {
+      ...theme.typography.caption,
+      color: theme.colors.primary,
+      fontWeight: "600",
+      marginLeft: theme.spacing.sm,
+    },
+  });

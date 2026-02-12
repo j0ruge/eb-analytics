@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { theme } from '../theme';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../hooks/useTheme';
+import { Theme } from '../theme';
+import { AnimatedPressable } from './AnimatedPressable';
 
 interface CounterStepperProps {
   label: string;
@@ -11,35 +13,38 @@ interface CounterStepperProps {
 }
 
 export function CounterStepper({ label, value, onIncrement, onDecrement, disabled }: CounterStepperProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   return (
     <View style={[styles.container, disabled && styles.disabledContainer]}>
       <Text style={styles.label}>{label}</Text>
       <View style={[styles.controls, disabled && styles.disabledControls]}>
-        <TouchableOpacity 
-          style={[styles.button, disabled && styles.disabledButton]} 
+        <AnimatedPressable
+          style={[styles.button, disabled && styles.disabledButton]}
           onPress={onDecrement}
           disabled={disabled}
         >
           <Text style={styles.buttonText}>-</Text>
-        </TouchableOpacity>
-        
+        </AnimatedPressable>
+
         <View style={styles.valueContainer}>
           <Text style={[styles.value, disabled && styles.disabledValue]}>{value}</Text>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.button, disabled && styles.disabledButton]} 
+        <AnimatedPressable
+          style={[styles.button, disabled && styles.disabledButton]}
           onPress={onIncrement}
           disabled={disabled}
         >
           <Text style={styles.buttonText}>+</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     marginVertical: theme.spacing.sm,
   },
@@ -47,7 +52,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   label: {
-    fontSize: 14,
+    ...theme.typography.label,
     color: theme.colors.textSecondary,
     marginBottom: theme.spacing.xs,
   },
@@ -59,7 +64,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xs,
   },
   disabledControls: {
-    backgroundColor: '#E5E5EA',
+    backgroundColor: theme.colors.borderLight,
   },
   button: {
     width: 44,
@@ -73,7 +78,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.textSecondary,
   },
   buttonText: {
-    color: '#fff',
+    color: theme.colors.background,
     fontSize: 24,
     fontWeight: 'bold',
   },
@@ -83,8 +88,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   value: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    ...theme.typography.h3,
     color: theme.colors.text,
   },
   disabledValue: {

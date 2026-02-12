@@ -2,7 +2,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -10,11 +9,16 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { professorService } from "../../src/services/professorService";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 
 export default function EditProfessorScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [name, setName] = useState("");
   const [cpf, setCpf] = useState("");
@@ -151,28 +155,36 @@ export default function EditProfessorScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.form}>
-        <Text style={styles.label}>Nome Completo *</Text>
+        <View style={styles.labelRow}>
+          <Ionicons name="person-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.label}>Nome Completo *</Text>
+        </View>
         <TextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
           placeholder="Digite o nome completo"
+          placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="words"
           editable={!loading}
         />
 
-        <Text style={styles.label}>CPF *</Text>
+        <View style={styles.labelRow}>
+          <Ionicons name="card-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.label}>CPF *</Text>
+        </View>
         <TextInput
           style={styles.input}
           value={cpf}
           onChangeText={handleCpfChange}
           placeholder="000.000.000-00"
+          placeholderTextColor={theme.colors.textSecondary}
           keyboardType="numeric"
           maxLength={14}
           editable={!loading}
         />
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSave}
           disabled={loading}
@@ -180,9 +192,9 @@ export default function EditProfessorScreen() {
           <Text style={styles.buttonText}>
             {loading ? "Salvando..." : "Salvar Alterações"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.deleteButton, loading && styles.buttonDisabled]}
           onPress={handleDelete}
           disabled={loading}
@@ -190,13 +202,13 @@ export default function EditProfessorScreen() {
           <Text style={styles.deleteButtonText}>
             {loading ? "Processando..." : "Excluir Professor"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -210,17 +222,22 @@ const styles = StyleSheet.create({
   form: {
     padding: theme.spacing.md,
   },
-  label: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  label: {
+    ...theme.typography.label,
+    color: theme.colors.textSecondary,
   },
   input: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.md,
     padding: theme.spacing.md,
-    fontSize: 16,
+    ...theme.typography.body,
     color: theme.colors.text,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -236,8 +253,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.textSecondary,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.background,
     fontWeight: "bold",
   },
   deleteButton: {
@@ -248,8 +265,8 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   deleteButtonText: {
-    color: "#fff",
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.background,
     fontWeight: "bold",
   },
 });

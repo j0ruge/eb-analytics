@@ -14,7 +14,20 @@
       "Bash(powershell:*)",
       "Bash(git branch:*)",
       "Bash(npx expo install:*)",
-      "Bash(npm run start)"
+      "Bash(npm run start)",
+      "Bash(git -C \"C:\\\\Users\\\\pc_admin\\\\source\\\\repos\\\\eb-analytics\" branch -a)",
+      "Bash(pwsh:*)",
+      "Bash(npx skills add:*)",
+      "Bash(findstr:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(npx tsc:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(taskkill:*)",
+      "Bash(npx expo export:*)",
+      "Bash(node -e:*)",
+      "Bash(npm ls:*)",
+      "Bash(powershell.exe -NoProfile -Command \"Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output done\")"
     ]
   }
 }

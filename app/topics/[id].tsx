@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
   ScrollView,
@@ -12,14 +11,20 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { topicService } from "../../src/services/topicService";
 import { LessonTopicWithSeries } from "../../src/types/lessonTopic";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
 import { DatePickerInput } from "../../src/components/DatePickerInput";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
+import { ErrorRetry } from "../../src/components/ErrorRetry";
 
 export default function TopicDetailScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [topic, setTopic] = useState<LessonTopicWithSeries | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [editedDate, setEditedDate] = useState("");
@@ -31,6 +36,7 @@ export default function TopicDetailScreen() {
 
   async function loadTopic() {
     try {
+      setError(false);
       setLoading(true);
       const data = await topicService.getTopicWithSeries(id);
       setTopic(data);
@@ -39,8 +45,9 @@ export default function TopicDetailScreen() {
         setEditedDate(data.suggested_date || "");
         setEditedOrder(data.sequence_order.toString());
       }
-    } catch (error) {
-      console.error("Error loading topic:", error);
+    } catch (err) {
+      console.error("Error loading topic:", err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -104,10 +111,21 @@ export default function TopicDetailScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <ErrorRetry
+          message="Não foi possível carregar a lição."
+          onRetry={loadTopic}
+        />
+      </View>
+    );
+  }
+
   if (!topic) {
     return (
       <View style={styles.errorContainer}>
-        <Text>Lição não encontrada.</Text>
+        <Text style={{ color: theme.colors.text }}>Lição não encontrada.</Text>
       </View>
     );
   }
@@ -133,6 +151,7 @@ export default function TopicDetailScreen() {
                 value={editedTitle}
                 onChangeText={setEditedTitle}
                 placeholder="Título da lição"
+                placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
@@ -143,6 +162,7 @@ export default function TopicDetailScreen() {
                 value={editedOrder}
                 onChangeText={setEditedOrder}
                 placeholder="1, 2, 3..."
+                placeholderTextColor={theme.colors.textSecondary}
                 keyboardType="number-pad"
               />
             </View>
@@ -155,7 +175,7 @@ export default function TopicDetailScreen() {
             />
 
             <View style={styles.editButtons}>
-              <TouchableOpacity
+              <AnimatedPressable
                 style={[styles.editButton, styles.cancelButton]}
                 onPress={() => {
                   setEditing(false);
@@ -165,13 +185,13 @@ export default function TopicDetailScreen() {
                 }}
               >
                 <Text style={styles.cancelButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </AnimatedPressable>
+              <AnimatedPressable
                 style={[styles.editButton, styles.saveButton]}
                 onPress={handleSaveEdit}
               >
                 <Text style={styles.saveButtonText}>Salvar</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
           </View>
         ) : (
@@ -187,13 +207,13 @@ export default function TopicDetailScreen() {
             )}
 
             <View style={styles.actionButtons}>
-              <TouchableOpacity
+              <AnimatedPressable
                 style={styles.textButton}
                 onPress={() => setEditing(true)}
               >
                 <Text style={styles.textButtonLabel}>Editar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </AnimatedPressable>
+              <AnimatedPressable
                 style={styles.textButton}
                 onPress={handleDelete}
               >
@@ -205,7 +225,7 @@ export default function TopicDetailScreen() {
                 >
                   Excluir
                 </Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
           </View>
         )}
@@ -214,121 +234,120 @@ export default function TopicDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  seriesInfo: {
-    backgroundColor: theme.colors.background,
-    padding: theme.spacing.md,
-    margin: theme.spacing.md,
-    marginBottom: 0,
-    borderRadius: theme.borderRadius.md,
-  },
-  seriesLabel: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginBottom: 2,
-  },
-  seriesName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.primary,
-  },
-  card: {
-    backgroundColor: theme.colors.background,
-    padding: theme.spacing.md,
-    margin: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
-  },
-  orderBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: theme.spacing.sm,
-  },
-  orderText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
-  },
-  date: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    marginTop: theme.spacing.md,
-  },
-  textButton: {
-    marginRight: theme.spacing.md,
-  },
-  textButtonLabel: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: "500",
-  },
-  editForm: {
-    marginTop: theme.spacing.sm,
-  },
-  field: {
-    marginBottom: theme.spacing.md,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  editButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: theme.spacing.sm,
-  },
-  editButton: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
-  },
-  cancelButton: {
-    backgroundColor: theme.colors.surface,
-  },
-  cancelButtonText: {
-    color: theme.colors.textSecondary,
-  },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontWeight: "500",
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.surface,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    seriesInfo: {
+      backgroundColor: theme.colors.background,
+      padding: theme.spacing.md,
+      margin: theme.spacing.md,
+      marginBottom: 0,
+      borderRadius: theme.borderRadius.md,
+    },
+    seriesLabel: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      marginBottom: 2,
+    },
+    seriesName: {
+      ...theme.typography.body,
+      fontWeight: "600",
+      color: theme.colors.primary,
+    },
+    card: {
+      backgroundColor: theme.colors.background,
+      padding: theme.spacing.md,
+      margin: theme.spacing.md,
+      borderRadius: theme.borderRadius.lg,
+    },
+    orderBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: theme.colors.primary,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: theme.spacing.sm,
+    },
+    orderText: {
+      ...theme.typography.label,
+      color: theme.colors.background,
+      fontWeight: "700",
+    },
+    title: {
+      ...theme.typography.h2,
+      color: theme.colors.text,
+      marginBottom: theme.spacing.xs,
+    },
+    date: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.textSecondary,
+    },
+    actionButtons: {
+      flexDirection: "row",
+      marginTop: theme.spacing.md,
+    },
+    textButton: {
+      marginRight: theme.spacing.md,
+    },
+    textButtonLabel: {
+      ...theme.typography.label,
+      color: theme.colors.primary,
+    },
+    editForm: {
+      marginTop: theme.spacing.sm,
+    },
+    field: {
+      marginBottom: theme.spacing.md,
+    },
+    label: {
+      ...theme.typography.label,
+      color: theme.colors.text,
+      marginBottom: theme.spacing.xs,
+    },
+    input: {
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      ...theme.typography.body,
+      color: theme.colors.text,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    editButtons: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: theme.spacing.sm,
+    },
+    editButton: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+    },
+    cancelButton: {
+      backgroundColor: theme.colors.surface,
+    },
+    cancelButtonText: {
+      color: theme.colors.textSecondary,
+    },
+    saveButton: {
+      backgroundColor: theme.colors.primary,
+    },
+    saveButtonText: {
+      color: theme.colors.background,
+      fontWeight: "500",
+    },
+  });

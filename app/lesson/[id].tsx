@@ -2,28 +2,31 @@ import {
   View,
   Text,
   ScrollView,
-  TextInput,
   StyleSheet,
   ActivityIndicator,
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { lessonService } from "../../src/services/lessonService";
 import { Lesson, LessonStatus } from "../../src/types/lesson";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
 import { CounterStepper } from "../../src/components/CounterStepper";
 import { TimeCaptureButton } from "../../src/components/TimeCaptureButton";
 import { ProfessorPicker } from "../../src/components/ProfessorPicker";
 import { SeriesPicker } from "../../src/components/SeriesPicker";
 import { TopicPicker } from "../../src/components/TopicPicker";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
+import { Ionicons } from "@expo/vector-icons";
 import { useDebounce } from "../../src/hooks/useDebounce";
-import { TouchableOpacity } from "react-native";
 import { LessonSeries } from "../../src/types/lessonSeries";
 import { LessonTopic } from "../../src/types/lessonTopic";
 import { topicService } from "../../src/services/topicService";
 
 export default function LessonDetailScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -31,6 +34,7 @@ export default function LessonDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const isFirstRender = useRef(true);
+  const skipAutoSaveRef = useRef(false);
 
   const debouncedLesson = useDebounce(lesson, 500);
 
@@ -45,6 +49,10 @@ export default function LessonDetailScreen() {
       isFirstRender.current = false;
       return;
     }
+    if (skipAutoSaveRef.current) {
+      skipAutoSaveRef.current = false;
+      return;
+    }
     if (debouncedLesson) {
       saveChanges(debouncedLesson);
     }
@@ -54,7 +62,6 @@ export default function LessonDetailScreen() {
     const data = await lessonService.getById(id);
     setLesson(data);
 
-    // Se tiver lesson_topic_id, buscar a series_id correspondente
     if (data?.lesson_topic_id) {
       const topic = await topicService.getTopicById(data.lesson_topic_id);
       if (topic) {
@@ -87,7 +94,10 @@ export default function LessonDetailScreen() {
     updateField(field, null);
   }
 
-  function setManualTime(field: "time_real_start" | "time_real_end", time: string) {
+  function setManualTime(
+    field: "time_real_start" | "time_real_end",
+    time: string,
+  ) {
     updateField(field, time);
   }
 
@@ -99,7 +109,6 @@ export default function LessonDetailScreen() {
   async function handleSeriesSelect(series: LessonSeries | null) {
     setSelectedSeriesId(series?.id || null);
 
-    // Quando troca a série, limpa o tópico selecionado
     if (lesson && lesson.lesson_topic_id) {
       const updates = {
         lesson_topic_id: null,
@@ -107,9 +116,9 @@ export default function LessonDetailScreen() {
         lesson_title: "",
       };
 
+      skipAutoSaveRef.current = true;
       setLesson({ ...lesson, ...updates });
 
-      // Save immediately
       try {
         await lessonService.updateLesson(lesson.id, updates);
         console.log("Series updated successfully");
@@ -124,10 +133,9 @@ export default function LessonDetailScreen() {
 
     const updates = { professor_id: professorId };
 
-    // Update local state
+    skipAutoSaveRef.current = true;
     setLesson({ ...lesson, ...updates });
 
-    // Save immediately
     try {
       await lessonService.updateLesson(lesson.id, updates);
       console.log("Professor updated successfully");
@@ -144,10 +152,9 @@ export default function LessonDetailScreen() {
       lesson_title: topic?.title || "",
     };
 
-    // Update local state
+    skipAutoSaveRef.current = true;
     setLesson({ ...lesson, ...updates });
 
-    // Save immediately (don't wait for debounce)
     try {
       await lessonService.updateLesson(lesson.id, updates);
       console.log("Topic updated successfully");
@@ -166,7 +173,7 @@ export default function LessonDetailScreen() {
           await lessonService.updateLesson(lesson.id, {
             status: LessonStatus.COMPLETED,
           });
-          router.replace("/");
+          router.replace("/" as any);
         },
       },
     ]);
@@ -184,7 +191,7 @@ export default function LessonDetailScreen() {
           style: "destructive",
           onPress: confirmDelete,
         },
-      ]
+      ],
     );
   }
 
@@ -194,12 +201,12 @@ export default function LessonDetailScreen() {
     try {
       await lessonService.deleteLesson(lesson.id);
       Alert.alert("Sucesso", "Aula excluída com sucesso", [
-        { text: "OK", onPress: () => router.replace("/") },
+        { text: "OK", onPress: () => router.replace("/" as any) },
       ]);
     } catch (error) {
       Alert.alert(
         "Erro",
-        error instanceof Error ? error.message : "Erro ao excluir aula"
+        error instanceof Error ? error.message : "Erro ao excluir aula",
       );
     } finally {
       setDeleting(false);
@@ -217,7 +224,7 @@ export default function LessonDetailScreen() {
   if (!lesson) {
     return (
       <View style={styles.errorContainer}>
-        <Text>Aula não encontrada.</Text>
+        <Text style={styles.errorText}>Aula não encontrada.</Text>
       </View>
     );
   }
@@ -242,7 +249,10 @@ export default function LessonDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Identificação</Text>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="book-outline" size={18} color={theme.colors.text} />
+          <Text style={styles.sectionTitle}>Identificação</Text>
+        </View>
         <SeriesPicker
           selectedId={selectedSeriesId}
           onSelect={handleSeriesSelect}
@@ -263,7 +273,10 @@ export default function LessonDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Horários</Text>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="time-outline" size={18} color={theme.colors.text} />
+          <Text style={styles.sectionTitle}>Horários</Text>
+        </View>
         <View style={styles.row}>
           <TimeCaptureButton
             label="Início Real"
@@ -288,7 +301,10 @@ export default function LessonDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Frequência (Attendance)</Text>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="people-outline" size={18} color={theme.colors.text} />
+          <Text style={styles.sectionTitle}>Frequência (Attendance)</Text>
+        </View>
         <CounterStepper
           label="Início da Aula"
           value={lesson.attendance_start}
@@ -348,16 +364,16 @@ export default function LessonDetailScreen() {
       </View>
 
       {lesson.status === LessonStatus.IN_PROGRESS && (
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.completeButton}
           onPress={handleComplete}
         >
           <Text style={styles.completeButtonText}>Finalizar Aula</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       )}
 
       {lesson.status === LessonStatus.IN_PROGRESS && (
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.deleteButton, deleting && styles.buttonDisabled]}
           onPress={handleDelete}
           disabled={deleting}
@@ -365,116 +381,106 @@ export default function LessonDetailScreen() {
           <Text style={styles.deleteButtonText}>
             {deleting ? "Processando..." : "Excluir Aula"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       )}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: theme.spacing.md,
-  },
-  dateText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: theme.colors.text,
-  },
-  statusBadge: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  card: {
-    backgroundColor: "#fff",
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: theme.colors.text,
-    marginBottom: theme.spacing.md,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  disabledInput: {
-    backgroundColor: "#E5E5EA",
-    color: theme.colors.textSecondary,
-  },
-  row: {
-    flexDirection: "row",
-  },
-  hint: {
-    marginTop: theme.spacing.sm,
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    fontStyle: "italic",
-  },
-  completeButton: {
-    backgroundColor: theme.colors.success,
-    marginHorizontal: theme.spacing.md,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    marginTop: theme.spacing.md,
-  },
-  completeButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  deleteButton: {
-    backgroundColor: theme.colors.danger,
-    marginHorizontal: theme.spacing.md,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    marginTop: theme.spacing.sm,
-  },
-  deleteButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  buttonDisabled: {
-    backgroundColor: theme.colors.textSecondary,
-    opacity: 0.6,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.surface,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    errorText: {
+      color: theme.colors.text,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: theme.spacing.md,
+    },
+    dateText: {
+      ...theme.typography.h3,
+      color: theme.colors.text,
+    },
+    statusBadge: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+      borderRadius: theme.borderRadius.lg,
+    },
+    statusText: {
+      ...theme.typography.caption,
+      color: theme.colors.background,
+      fontWeight: "bold",
+    },
+    card: {
+      backgroundColor: theme.colors.surfaceElevated,
+      marginHorizontal: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.lg,
+      ...theme.shadows.sm,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: theme.spacing.md,
+      gap: theme.spacing.xs,
+    },
+    sectionTitle: {
+      ...theme.typography.body,
+      fontWeight: "bold",
+      color: theme.colors.text,
+    },
+    row: {
+      flexDirection: "row",
+    },
+    hint: {
+      marginTop: theme.spacing.sm,
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      fontStyle: "italic",
+    },
+    completeButton: {
+      backgroundColor: theme.colors.success,
+      marginHorizontal: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      alignItems: "center",
+      marginTop: theme.spacing.md,
+    },
+    completeButtonText: {
+      ...theme.typography.h3,
+      color: theme.colors.background,
+    },
+    deleteButton: {
+      backgroundColor: theme.colors.danger,
+      marginHorizontal: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      alignItems: "center",
+      marginTop: theme.spacing.sm,
+    },
+    deleteButtonText: {
+      ...theme.typography.h3,
+      color: theme.colors.background,
+    },
+    buttonDisabled: {
+      backgroundColor: theme.colors.textSecondary,
+      opacity: 0.6,
+    },
+  });

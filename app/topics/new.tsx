@@ -1,23 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { topicService } from "../../src/services/topicService";
 import { seriesService } from "../../src/services/seriesService";
 import { LessonSeries } from "../../src/types/lessonSeries";
-import { theme } from "../../src/theme";
+import { useTheme } from "../../src/hooks/useTheme";
+import { Theme } from "../../src/theme";
 import { DatePickerInput } from "../../src/components/DatePickerInput";
+import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 
 export default function NewTopicScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { seriesId } = useLocalSearchParams<{ seriesId: string }>();
   const router = useRouter();
   const [series, setSeries] = useState<LessonSeries | null>(null);
@@ -86,23 +90,31 @@ export default function NewTopicScreen() {
         )}
 
         <View style={styles.field}>
-          <Text style={styles.label}>Título da Lição *</Text>
+          <View style={styles.labelRow}>
+            <Ionicons name="text-outline" size={16} color={theme.colors.text} />
+            <Text style={styles.label}>Título da Lição *</Text>
+          </View>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
             placeholder="Ex: Lição 01 - O Início"
+            placeholderTextColor={theme.colors.textSecondary}
             maxLength={150}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Ordem Sequencial</Text>
+          <View style={styles.labelRow}>
+            <Ionicons name="list-outline" size={16} color={theme.colors.text} />
+            <Text style={styles.label}>Ordem Sequencial</Text>
+          </View>
           <TextInput
             style={styles.input}
             value={sequenceOrder}
             onChangeText={setSequenceOrder}
             placeholder="Ex: 1, 2, 3..."
+            placeholderTextColor={theme.colors.textSecondary}
             keyboardType="number-pad"
             maxLength={5}
           />
@@ -121,7 +133,7 @@ export default function NewTopicScreen() {
           Data prevista na revista (apenas informativo)
         </Text>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={saving}
@@ -129,13 +141,13 @@ export default function NewTopicScreen() {
           <Text style={styles.saveButtonText}>
             {saving ? "Salvando..." : "Criar Lição"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface,
@@ -150,34 +162,39 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   seriesLabel: {
-    fontSize: 12,
+    ...theme.typography.caption,
     color: theme.colors.textSecondary,
     marginBottom: 2,
   },
   seriesName: {
-    fontSize: 16,
+    ...theme.typography.body,
     fontWeight: "600",
     color: theme.colors.primary,
   },
   field: {
     marginBottom: theme.spacing.lg,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.text,
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  label: {
+    ...theme.typography.label,
+    color: theme.colors.text,
   },
   input: {
     backgroundColor: theme.colors.background,
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.text,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
   hint: {
-    fontSize: 12,
+    ...theme.typography.caption,
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
   },
@@ -192,8 +209,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
+    ...theme.typography.body,
+    color: theme.colors.background,
     fontWeight: "600",
   },
 });
