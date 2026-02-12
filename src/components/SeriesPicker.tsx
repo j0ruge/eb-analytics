@@ -160,7 +160,8 @@ export function SeriesPicker({
                       selectedSeries?.id === item.id && styles.listItemSelected,
                     ]}
                     onPress={() => handleSelect(item)}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}                    <Text style={styles.itemCode}>{item.code}</Text>
+                  >
+                    <Text style={styles.itemCode}>{item.code}</Text>
                     <Text style={styles.itemTitle}>{item.title}</Text>
                   </TouchableOpacity>
                 )}
