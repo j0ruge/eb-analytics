@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Modal,
   Platform,
 } from "react-native";
@@ -14,7 +14,7 @@ import { parseInputDate, formatToYYYYMMMDD } from "../utils/date";
 import { AnimatedPressable } from "./AnimatedPressable";
 
 interface DatePickerInputProps {
-  label: string;
+  label?: string;
   value: string | null;
   onChange: (date: string) => void;
   disabled?: boolean;
@@ -75,7 +75,7 @@ export function DatePickerInput({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <AnimatedPressable
         style={[
           styles.button,
@@ -107,12 +107,24 @@ export function DatePickerInput({
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={handleCancel}>
+                <Pressable
+                  onPress={handleCancel}
+                  style={({ pressed }) => [
+                    styles.modalButtonBase,
+                    pressed && styles.modalButtonPressed,
+                  ]}
+                >
                   <Text style={styles.modalButtonCancel}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleConfirm}>
+                </Pressable>
+                <Pressable
+                  onPress={handleConfirm}
+                  style={({ pressed }) => [
+                    styles.modalButtonBase,
+                    pressed && styles.modalButtonPressed,
+                  ]}
+                >
                   <Text style={styles.modalButtonConfirm}>Confirmar</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <DateTimePicker
                 value={tempDate}
@@ -203,6 +215,15 @@ const createStyles = (theme: Theme) =>
       ...theme.typography.body,
       fontWeight: "600",
       color: theme.colors.primary,
+    },
+    modalButtonBase: {
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.borderRadius.sm,
+    },
+    modalButtonPressed: {
+      opacity: 0.6,
+      backgroundColor: theme.colors.borderLight,
     },
     picker: {
       height: 200,

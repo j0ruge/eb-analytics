@@ -18,6 +18,7 @@ import { ProfessorPicker } from "../../src/components/ProfessorPicker";
 import { SeriesPicker } from "../../src/components/SeriesPicker";
 import { TopicPicker } from "../../src/components/TopicPicker";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
+import { DatePickerInput } from "../../src/components/DatePickerInput";
 import { Ionicons } from "@expo/vector-icons";
 import { useDebounce } from "../../src/hooks/useDebounce";
 import { LessonSeries } from "../../src/types/lessonSeries";
@@ -237,7 +238,13 @@ export default function LessonDetailScreen() {
       contentContainerStyle={{ paddingBottom: 100 }}
     >
       <View style={styles.header}>
-        <Text style={styles.dateText}>{lesson.date}</Text>
+        <View style={styles.headerDatePicker}>
+          <DatePickerInput
+            value={lesson.date}
+            onChange={(date) => updateField("date", date)}
+            disabled={isReadOnly}
+          />
+        </View>
         <View
           style={[
             styles.statusBadge,
@@ -411,6 +418,10 @@ const createStyles = (theme: Theme) =>
       justifyContent: "space-between",
       alignItems: "center",
       padding: theme.spacing.md,
+      gap: theme.spacing.sm,
+    },
+    headerDatePicker: {
+      flex: 1,
     },
     dateText: {
       ...theme.typography.h3,
