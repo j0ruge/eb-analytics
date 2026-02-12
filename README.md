@@ -212,8 +212,8 @@ erDiagram
 ## 🚀 Como Executar
 
 ```bash
-# Instalar dependências
-npm install
+# Instalar dependências (flag --legacy-peer-deps obrigatória, ver nota abaixo)
+npm install --legacy-peer-deps
 
 # Iniciar servidor de desenvolvimento
 npm start
@@ -221,6 +221,16 @@ npm start
 # Executar testes
 npx jest
 ```
+
+> **Por que `--legacy-peer-deps`?**
+> O projeto usa React 19 (`react@19.1.0`) com Expo SDK 54, mas algumas dependências de teste ainda declaram `react@^18` como peer dependency:
+>
+> - `@testing-library/react-native@13.x` → espera `react@^18`
+> - `react-test-renderer@19.x` / `@testing-library/jest-native@5.x` → conflito indireto
+>
+> Sem a flag, npm 7+ recusa instalar por incompatibilidade de peers. A flag `--legacy-peer-deps` ignora essas checagens (comportamento do npm 6).
+>
+> **Quando remover:** Quando `@testing-library/react-native` lançar versão com suporte oficial a React 19 (acompanhar [issues do react-native-testing-library](https://github.com/callstack/react-native-testing-library/issues)).
 
 **Requisitos:**
 

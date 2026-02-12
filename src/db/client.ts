@@ -15,30 +15,25 @@ import {
   CREATE_INDEX_LESSON_TOPIC_ID,
 } from './schema';
 import { migrateLegacyData } from './migrations';
+import { DB_NAME, DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 
-const DB_NAME = 'ebd_insights.db';
-
-// UUIDs fixos para registros padrão
-export const DEFAULT_SERIES_ID = '00000000-0000-0000-0000-000000000001';
-export const DEFAULT_TOPIC_ID = '00000000-0000-0000-0000-000000000001';
+// Re-export constants for backward compatibility
+export { DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID };
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
-let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let dbInitPromise: Promise<void> | null = null;
 
+/**
+ * Returns the database connection, initializing it if needed.
+ * All callers share a single connection and wait for init to complete.
+ */
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (dbInstance) return dbInstance;
-  if (initPromise) return initPromise;
-
-  initPromise = (async () => {
-    try {
-      dbInstance = await SQLite.openDatabaseAsync(DB_NAME);
-      return dbInstance;
-    } finally {
-      initPromise = null;
-    }
-  })();
-
-  return initPromise;
+  // Trigger init on first call; subsequent calls reuse the same promise
+  if (!dbInitPromise) {
+    dbInitPromise = _doInitializeDatabase();
+  }
+  await dbInitPromise;
+  return dbInstance!;
 }
 
 async function applyMigrations(db: SQLite.SQLiteDatabase) {
@@ -198,31 +193,52 @@ async function insertDefaultRecords(db: SQLite.SQLiteDatabase) {
 }
 
 export async function initializeDatabase() {
-  const db = await getDatabase();
-  
-  await db.execAsync(CREATE_LESSONS_TABLE);
-  await db.execAsync(CREATE_INDEX_STATUS);
-  await db.execAsync(CREATE_INDEX_DATE);
-  
-  await db.execAsync(CREATE_PROFESSORS_TABLE);
-  await db.execAsync(CREATE_INDEX_PROFESSORS_DOC_ID);
-  await db.execAsync(CREATE_INDEX_PROFESSORS_NAME);
-  
-  // Create lesson_series and lesson_topics tables (003-migrate-schema-structure)
-  await db.execAsync(CREATE_LESSON_SERIES_TABLE);
-  await db.execAsync(CREATE_INDEX_SERIES_CODE);
-  await db.execAsync(CREATE_LESSON_TOPICS_TABLE);
-  await db.execAsync(CREATE_INDEX_TOPICS_SERIES_ID);
-  await db.execAsync(CREATE_INDEX_TOPICS_SEQUENCE);
-  
+  // Just call getDatabase — it triggers init if not already started
+  await getDatabase();
+}
+
+async function _doInitializeDatabase() {
+  // Close any stale connection from a previous hot-reload cycle
+  if (dbInstance) {
+    try {
+      await dbInstance.closeAsync();
+    } catch (_) {
+      // Ignore — connection may already be invalid
+    }
+    dbInstance = null;
+  }
+
+  const db = await SQLite.openDatabaseAsync(DB_NAME);
+  dbInstance = db;
+
+  // Batch all DDL into a single execAsync call to avoid multiple lock acquisitions.
+  // expo-sqlite execAsync supports semicolon-separated statements.
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+
+    ${CREATE_LESSONS_TABLE}
+    ${CREATE_INDEX_STATUS}
+    ${CREATE_INDEX_DATE}
+
+    ${CREATE_PROFESSORS_TABLE}
+    ${CREATE_INDEX_PROFESSORS_DOC_ID}
+    ${CREATE_INDEX_PROFESSORS_NAME}
+
+    ${CREATE_LESSON_SERIES_TABLE}
+    ${CREATE_INDEX_SERIES_CODE}
+    ${CREATE_LESSON_TOPICS_TABLE}
+    ${CREATE_INDEX_TOPICS_SERIES_ID}
+    ${CREATE_INDEX_TOPICS_SEQUENCE}
+  `);
+
   // Apply migrations for existing databases
   await applyMigrations(db);
-  
+
   // Insert default series and topic records
   await insertDefaultRecords(db);
-  
+
   // Migrate legacy data to normalized schema (003-migrate-schema-structure)
   await migrateLegacyData(db);
-  
+
   console.log('Database initialized successfully');
 }

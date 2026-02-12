@@ -1,11 +1,12 @@
 import React from "react";
-import { ViewStyle, StyleProp } from "react-native";
+import { ViewStyle, StyleProp, Pressable, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
-import { Pressable } from "react-native";
+
+const ReanimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface AnimatedPressableProps {
   onPress?: () => void;
@@ -26,8 +27,14 @@ export function AnimatedPressable({
 }: AnimatedPressableProps) {
   const scale = useSharedValue(1);
 
+  // Flatten on the JS thread — not available in worklets
+  const flat = StyleSheet.flatten(style) as ViewStyle | undefined;
+  const consumerTransforms = Array.isArray(flat?.transform)
+    ? flat.transform
+    : [];
+
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.value }, ...consumerTransforms],
   }));
 
   const handlePressIn = () => {
@@ -38,18 +45,25 @@ export function AnimatedPressable({
     scale.value = withSpring(1, { damping: 15, stiffness: 300 });
   };
 
+  // Strip transform from consumer style to avoid duplication —
+  // transforms are already merged inside animatedStyle.
+  const baseStyle = React.useMemo(() => {
+    if (!flat?.transform) return style;
+    const { transform: _t, ...rest } = flat;
+    return rest as ViewStyle;
+  }, [style, flat]);
+
   return (
-    <Pressable
+    <ReanimatedPressable
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={delayLongPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
+      style={[baseStyle, animatedStyle]}
     >
-      <Animated.View style={[style, animatedStyle]}>
-        {children}
-      </Animated.View>
-    </Pressable>
+      {children}
+    </ReanimatedPressable>
   );
 }

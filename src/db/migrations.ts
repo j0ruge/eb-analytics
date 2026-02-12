@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './client';
+import { DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 import { normalizeText, extractSeriesCode, extractSeriesTitle } from '../utils/text';
 
 const MIGRATION_FLAG_KEY = '003_schema_migration_complete';

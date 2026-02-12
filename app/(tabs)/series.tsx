@@ -108,7 +108,7 @@ export default function SeriesListScreen() {
         }
       />
 
-      <FAB onPress={() => router.push("/series/new")} />
+      <FAB onPress={() => router.push("/series/new")} label="Nova Série" />
     </View>
   );
 }

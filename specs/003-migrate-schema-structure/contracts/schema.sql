@@ -7,7 +7,9 @@
 --------------------------------------------------------------------------------
 
 -- Tabela de Séries de Lições
-CREATE TABLE IF NOT EXISTS lesson_series (
+CREATE TABLE
+IF NOT EXISTS lesson_series
+(
     id TEXT PRIMARY KEY NOT NULL,
     code TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
@@ -16,22 +18,32 @@ CREATE TABLE IF NOT EXISTS lesson_series (
 );
 
 -- Índice para busca por código
-CREATE INDEX IF NOT EXISTS idx_lesson_series_code ON lesson_series(code);
+CREATE INDEX
+IF NOT EXISTS idx_lesson_series_code ON lesson_series
+(code);
 
 -- Tabela de Tópicos de Lições
-CREATE TABLE IF NOT EXISTS lesson_topics (
+CREATE TABLE
+IF NOT EXISTS lesson_topics
+(
     id TEXT PRIMARY KEY NOT NULL,
     series_id TEXT NOT NULL,
     title TEXT NOT NULL,
     suggested_date TEXT,
     sequence_order INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (series_id) REFERENCES lesson_series(id)
+    FOREIGN KEY
+(series_id) REFERENCES lesson_series
+(id)
 );
 
 -- Índices para tópicos
-CREATE INDEX IF NOT EXISTS idx_lesson_topics_series_id ON lesson_topics(series_id);
-CREATE INDEX IF NOT EXISTS idx_lesson_topics_sequence ON lesson_topics(series_id, sequence_order);
+CREATE INDEX
+IF NOT EXISTS idx_lesson_topics_series_id ON lesson_topics
+(series_id);
+CREATE INDEX
+IF NOT EXISTS idx_lesson_topics_sequence ON lesson_topics
+(series_id, sequence_order);
 
 --------------------------------------------------------------------------------
 -- PHASE 2: ADD FOREIGN KEY TO lessons_data
@@ -41,7 +53,9 @@ CREATE INDEX IF NOT EXISTS idx_lesson_topics_sequence ON lesson_topics(series_id
 ALTER TABLE lessons_data ADD COLUMN lesson_topic_id TEXT;
 
 -- Índice para foreign key
-CREATE INDEX IF NOT EXISTS idx_lessons_topic_id ON lessons_data(lesson_topic_id);
+CREATE INDEX
+IF NOT EXISTS idx_lessons_topic_id ON lessons_data
+(lesson_topic_id);
 
 --------------------------------------------------------------------------------
 -- PHASE 3: DATA MIGRATION (executado via código TypeScript)
@@ -83,12 +97,16 @@ CREATE INDEX IF NOT EXISTS idx_lessons_topic_id ON lessons_data(lesson_topic_id)
 --------------------------------------------------------------------------------
 
 -- Série padrão para registros sem série
-INSERT OR IGNORE INTO lesson_series (id, code, title, description)
-VALUES ('00000000-0000-0000-0000-000000000001', 'SEM-SERIE', 'Sem Série', 'Série padrão para registros migrados sem informação');
+INSERT OR
+IGNORE INTO lesson_series (id, code, title, description)
+VALUES
+    ('00000000-0000-0000-0000-000000000001', 'SEM-SERIE', 'Sem Série', 'Série padrão para registros migrados sem informação');
 
 -- Tópico padrão para registros sem tópico
-INSERT OR IGNORE INTO lesson_topics (id, series_id, title, sequence_order)
-VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Sem Tópico', 1);
+INSERT OR
+IGNORE INTO lesson_topics (id, series_id, title, sequence_order)
+VALUES
+    ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'Sem Tópico', 1);
 
 --------------------------------------------------------------------------------
 -- ROLLBACK SCRIPT (se necessário)

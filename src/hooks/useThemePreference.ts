@@ -6,7 +6,7 @@ export type ThemePreference = 'light' | 'dark' | 'system';
 const STORAGE_KEY = '@eb-insights/theme-preference';
 
 export function useThemePreference() {
-  const [preference, setPreferenceState] = useState<ThemePreference>('system');
+  const [preference, setPreferenceState] = useState<ThemePreference>('light');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
