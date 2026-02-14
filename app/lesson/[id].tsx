@@ -25,26 +25,22 @@ import { LessonSeries } from "../../src/types/lessonSeries";
 import { LessonTopic } from "../../src/types/lessonTopic";
 import { topicService } from "../../src/services/topicService";
 
-const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  IN_PROGRESS: "pencil-outline",
-  COMPLETED: "checkmark-circle-outline",
-  EXPORTED: "cloud-upload-outline",
-  SYNCED: "sync-outline",
+const STATUS_ICONS: Record<LessonStatus, keyof typeof Ionicons.glyphMap> = {
+  [LessonStatus.IN_PROGRESS]: "pencil-outline",
+  [LessonStatus.COMPLETED]: "checkmark-circle-outline",
+  [LessonStatus.EXPORTED]: "cloud-upload-outline",
+  [LessonStatus.SYNCED]: "sync-outline",
 };
 
-function getStatusColor(status: string, theme: Theme) {
-  switch (status) {
-    case "IN_PROGRESS":
-      return theme.colors.primary;
-    case "COMPLETED":
-      return theme.colors.success;
-    case "EXPORTED":
-      return theme.colors.warning;
-    case "SYNCED":
-      return theme.colors.info;
-    default:
-      return theme.colors.textSecondary;
-  }
+const STATUS_COLORS: Record<LessonStatus, keyof Theme["colors"]> = {
+  [LessonStatus.IN_PROGRESS]: "primary",
+  [LessonStatus.COMPLETED]: "success",
+  [LessonStatus.EXPORTED]: "warning",
+  [LessonStatus.SYNCED]: "info",
+};
+
+function getStatusColor(status: LessonStatus, theme: Theme): string {
+  return theme.colors[STATUS_COLORS[status]] ?? theme.colors.textSecondary;
 }
 
 export default function LessonDetailScreen() {
@@ -450,9 +446,7 @@ const createStyles = (theme: Theme) =>
       padding: theme.spacing.md,
       gap: theme.spacing.sm,
     },
-    headerDatePicker: {
-      flex: 1,
-    },
+    headerDatePicker: {},
     dateText: {
       ...theme.typography.h3,
       color: theme.colors.text,

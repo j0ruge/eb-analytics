@@ -3,7 +3,11 @@ import { useRouter, useFocusEffect } from "expo-router";
 import React, { useState, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { lessonService } from "../../src/services/lessonService";
-import { LessonWithDetails, LessonStatus, STATUS_LABELS } from "../../src/types/lesson";
+import {
+  LessonWithDetails,
+  LessonStatus,
+  STATUS_LABELS,
+} from "../../src/types/lesson";
 import { useTheme } from "../../src/hooks/useTheme";
 import { Theme } from "../../src/theme";
 import { StatusFilterBar } from "../../src/components/StatusFilterBar";
@@ -13,11 +17,11 @@ import { EmptyState } from "../../src/components/EmptyState";
 import { SkeletonLoader } from "../../src/components/SkeletonLoader";
 import { ErrorRetry } from "../../src/components/ErrorRetry";
 
-const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  IN_PROGRESS: "pencil-outline",
-  COMPLETED: "checkmark-circle-outline",
-  EXPORTED: "cloud-upload-outline",
-  SYNCED: "sync-outline",
+const STATUS_ICONS: Record<LessonStatus, keyof typeof Ionicons.glyphMap> = {
+  [LessonStatus.IN_PROGRESS]: "pencil-outline",
+  [LessonStatus.COMPLETED]: "checkmark-circle-outline",
+  [LessonStatus.EXPORTED]: "cloud-upload-outline",
+  [LessonStatus.SYNCED]: "sync-outline",
 };
 
 export default function HomeScreen() {
@@ -58,23 +62,19 @@ export default function HomeScreen() {
           activeFilters.includes(lesson.status as LessonStatus),
         );
 
-  function getStatusLabel(status: string): string {
-    return STATUS_LABELS[status as LessonStatus] ?? status;
+  function getStatusLabel(status: LessonStatus): string {
+    return STATUS_LABELS[status] ?? status;
   }
 
-  function getStatusColor(status: string) {
-    switch (status) {
-      case "IN_PROGRESS":
-        return theme.colors.primary;
-      case "COMPLETED":
-        return theme.colors.success;
-      case "EXPORTED":
-        return theme.colors.warning;
-      case "SYNCED":
-        return theme.colors.info;
-      default:
-        return theme.colors.textSecondary;
-    }
+  const STATUS_COLORS: Record<LessonStatus, keyof Theme["colors"]> = {
+    [LessonStatus.IN_PROGRESS]: "primary",
+    [LessonStatus.COMPLETED]: "success",
+    [LessonStatus.EXPORTED]: "warning",
+    [LessonStatus.SYNCED]: "info",
+  };
+
+  function getStatusColor(status: LessonStatus): string {
+    return theme.colors[STATUS_COLORS[status]] ?? theme.colors.textSecondary;
   }
 
   const renderItem = ({ item }: { item: LessonWithDetails }) => (
