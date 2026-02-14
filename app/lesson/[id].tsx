@@ -9,7 +9,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { lessonService } from "../../src/services/lessonService";
-import { Lesson, LessonStatus } from "../../src/types/lesson";
+import { Lesson, LessonStatus, STATUS_LABELS } from "../../src/types/lesson";
 import { useTheme } from "../../src/hooks/useTheme";
 import { Theme } from "../../src/theme";
 import { CounterStepper } from "../../src/components/CounterStepper";
@@ -24,6 +24,28 @@ import { useDebounce } from "../../src/hooks/useDebounce";
 import { LessonSeries } from "../../src/types/lessonSeries";
 import { LessonTopic } from "../../src/types/lessonTopic";
 import { topicService } from "../../src/services/topicService";
+
+const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  IN_PROGRESS: "pencil-outline",
+  COMPLETED: "checkmark-circle-outline",
+  EXPORTED: "cloud-upload-outline",
+  SYNCED: "sync-outline",
+};
+
+function getStatusColor(status: string, theme: Theme) {
+  switch (status) {
+    case "IN_PROGRESS":
+      return theme.colors.primary;
+    case "COMPLETED":
+      return theme.colors.success;
+    case "EXPORTED":
+      return theme.colors.warning;
+    case "SYNCED":
+      return theme.colors.info;
+    default:
+      return theme.colors.textSecondary;
+  }
+}
 
 export default function LessonDetailScreen() {
   const { theme } = useTheme();
@@ -248,10 +270,18 @@ export default function LessonDetailScreen() {
         <View
           style={[
             styles.statusBadge,
-            isReadOnly && { backgroundColor: theme.colors.success },
+            { backgroundColor: getStatusColor(lesson.status, theme) },
           ]}
         >
-          <Text style={styles.statusText}>{lesson.status}</Text>
+          <Ionicons
+            name={STATUS_ICONS[lesson.status] || "ellipse-outline"}
+            size={12}
+            color={theme.colors.background}
+            style={styles.statusIconSpacer}
+          />
+          <Text style={styles.statusText}>
+            {STATUS_LABELS[lesson.status] ?? lesson.status}
+          </Text>
         </View>
       </View>
 
@@ -428,10 +458,15 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.text,
     },
     statusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
       backgroundColor: theme.colors.primary,
       paddingHorizontal: theme.spacing.sm,
-      paddingVertical: theme.spacing.xs,
-      borderRadius: theme.borderRadius.lg,
+      paddingVertical: 2,
+      borderRadius: theme.borderRadius.sm,
+    },
+    statusIconSpacer: {
+      marginRight: 4,
     },
     statusText: {
       ...theme.typography.caption,
