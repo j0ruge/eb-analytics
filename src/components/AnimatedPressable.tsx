@@ -1,5 +1,11 @@
 import React from "react";
-import { ViewStyle, StyleProp, Pressable, StyleSheet } from "react-native";
+import {
+  ViewStyle,
+  StyleProp,
+  Pressable,
+  PressableProps,
+  StyleSheet,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,12 +14,8 @@ import Animated, {
 
 const ReanimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-interface AnimatedPressableProps {
-  onPress?: () => void;
-  onLongPress?: () => void;
-  delayLongPress?: number;
+export interface AnimatedPressableProps extends Omit<PressableProps, "style"> {
   style?: StyleProp<ViewStyle>;
-  disabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -24,6 +26,7 @@ export function AnimatedPressable({
   style,
   disabled,
   children,
+  ...rest
 }: AnimatedPressableProps) {
   const scale = useSharedValue(1);
 
@@ -62,6 +65,7 @@ export function AnimatedPressable({
       onPressOut={handlePressOut}
       disabled={disabled}
       style={[baseStyle, animatedStyle]}
+      {...rest}
     >
       {children}
     </ReanimatedPressable>

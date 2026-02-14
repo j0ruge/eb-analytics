@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { seriesService } from "../../src/services/seriesService";
 import { topicService } from "../../src/services/topicService";
 import { LessonSeries } from "../../src/types/lessonSeries";
@@ -34,9 +34,11 @@ export default function SeriesDetailScreen() {
   const [editedTitle, setEditedTitle] = useState("");
   const [editedDescription, setEditedDescription] = useState("");
 
-  useEffect(() => {
-    loadData();
-  }, [id]);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [id]),
+  );
 
   async function loadData() {
     try {
