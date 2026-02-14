@@ -52,8 +52,8 @@ export function AnimatedPressable({
   // transforms are already merged inside animatedStyle.
   const baseStyle = React.useMemo(() => {
     if (!flat?.transform) return style;
-    const { transform: _t, ...rest } = flat;
-    return rest as ViewStyle;
+    const { transform: _t, ...restStyle } = flat;
+    return restStyle as ViewStyle;
   }, [style, flat]);
 
   return (

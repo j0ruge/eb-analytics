@@ -83,7 +83,7 @@ export default function SeriesListScreen() {
             <View style={styles.cardHeader}>
               <Text style={styles.code}>{item.code}</Text>
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{item.topicCount} tópicos</Text>
+                <Text style={styles.badgeText}>{item.topicCount} {item.topicCount === 1 ? "tópico" : "tópicos"}</Text>
               </View>
             </View>
             <Text style={styles.title}>{item.title}</Text>
