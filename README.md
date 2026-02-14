@@ -37,51 +37,71 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 - Proteção contra exclusão de séries com aulas vinculadas
 - Campos legados preservados para compatibilidade
 
-### ✅ Filtros de Status (Feature 004)
+### ✅ Design e Experiência do Usuário (Feature 004)
 
-- Barra de filtros horizontais no topo da listagem principal
-- Filtros multi-select por status: Em Andamento, Completa, Exportada, Sincronizada
-- Padrão: apenas aulas "Em Andamento" visíveis (reduz poluição visual)
-- Labels traduzidos em português com cores distintas por status
-- Filtragem instantânea client-side
+- Navegação por abas (Bottom Tabs): Aulas, Séries, Professores, Exportar
+- Sistema de temas com suporte a modo claro, escuro e automático (segue o sistema)
+- Barra de filtros horizontais com multi-select por status na listagem de aulas
+- Badges de status com ícones e cores distintas (Em Andamento, Completa, Exportada, Sincronizada)
+- Componentes animados (AnimatedPressable com feedback tátil via Reanimated)
+- Skeleton loaders para estados de carregamento
+- Empty states e telas de erro com retry
+- Floating Action Button (FAB) para criação rápida
+- Date Picker nativo integrado ao formulário de aulas
+- Tela de configurações com seleção de tema
 
 ---
 
 ## 📱 Telas do Aplicativo
 
+### Abas Principais (Bottom Tabs)
+
 | Tela | Descrição |
-|------|-----------|
-| `/` | Lista de aulas com filtros de status, série e professor |
+| ------ | ----------- |
+| `/(tabs)/` | Lista de aulas com filtros de status, badges com ícones e cores |
+| `/(tabs)/series` | Lista de séries de lições com contagem de tópicos |
+| `/(tabs)/professors` | Lista de professores cadastrados |
+| `/(tabs)/sync` | Exportar dados (JSON) |
+
+### Telas de Detalhe e Criação
+
+| Tela | Descrição |
+| ------ | ----------- |
 | `/lesson/new` | Criar nova aula (com seleção de série/tópico) |
 | `/lesson/[id]` | Formulário de coleta (3 momentos) + Finalizar/Excluir aula |
-| `/professors` | Lista de professores cadastrados |
 | `/professors/new` | Cadastrar novo professor |
-| `/series` | Lista de séries de lições |
+| `/professors/[id]` | Editar professor |
 | `/series/new` | Cadastrar nova série |
 | `/series/[id]` | Detalhes da série com tópicos |
 | `/topics/new` | Cadastrar novo tópico |
 | `/topics/[id]` | Detalhes/edição do tópico |
-| `/sync` | Exportar dados (JSON) |
+| `/settings` | Configurações do app (seleção de tema) |
 
 ---
 
 ## 🏗️ Arquitetura
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Expo Router (app/)                   │
-├─────────────────────────────────────────────────────────┤
-│  Screens        │  Components        │  Services        │
-│  - index.tsx    │  - CounterStepper  │  - lessonService │
-│  - lesson/[id]  │  - TimeCaptureBtn  │  - professorSvc  │
-│  - professors/  │  - ProfessorPicker │  - seriesService │
-│  - series/      │  - SeriesPicker    │  - topicService  │
-│  - topics/      │  - TopicPicker     │  - exportService │
-│                 │  - StatusFilterBar │                  │
-├─────────────────────────────────────────────────────────┤
-│                    SQLite (expo-sqlite)                 │
-│                   📱 Local-First Storage                │
-└─────────────────────────────────────────────────────────┘
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                ThemeProvider (Light / Dark / System)          │
+├──────────────────────────────────────────────────────────────┤
+│              Expo Router (app/) + Bottom Tabs                │
+├──────────────────────────────────────────────────────────────┤
+│  Screens         │  Components          │  Services          │
+│  - (tabs)/       │  - CounterStepper    │  - lessonService   │
+│  - lesson/[id]   │  - TimeCaptureBtn    │  - professorSvc    │
+│  - professors/   │  - ProfessorPicker   │  - seriesService   │
+│  - series/       │  - SeriesPicker      │  - topicService    │
+│  - topics/       │  - TopicPicker       │  - exportService   │
+│  - settings      │  - StatusFilterBar   │                    │
+│                  │  - DatePickerInput   │                    │
+│                  │  - AnimatedPressable │                    │
+│                  │  - FAB / EmptyState  │                    │
+│                  │  - SkeletonLoader    │                    │
+├──────────────────────────────────────────────────────────────┤
+│                     SQLite (expo-sqlite)                      │
+│                    📱 Local-First Storage                     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **Princípios:**
@@ -90,6 +110,7 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 - **Zero-Friction UX**: Steppers e Pickers ao invés de teclado
 - **Auto-Save**: Mudanças salvas automaticamente (debounce 500ms)
 - **Fail-Safe**: Estado recuperável após fechar o app
+- **Theming**: Suporte nativo a modo claro/escuro com tokens de design
 
 ---
 
@@ -98,7 +119,7 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 ### Tabela `lesson_series`
 
 | Campo | Tipo | Descrição |
-|-------|------|-----------|
+| ------- | ------ | ----------- |
 | `id` | TEXT (UUID) | Identificador único |
 | `code` | TEXT (UNIQUE) | Código da série (ex: EB354) |
 | `title` | TEXT | Título da série |
@@ -108,7 +129,7 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 ### Tabela `lesson_topics`
 
 | Campo | Tipo | Descrição |
-|-------|------|-----------|
+| ------- | ------ | ----------- |
 | `id` | TEXT (UUID) | Identificador único |
 | `series_id` | TEXT (FK) | Referência à série |
 | `title` | TEXT | Título do tópico |
@@ -119,11 +140,12 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 ### Tabela `lessons_data`
 
 | Campo | Tipo | Descrição |
-|-------|------|-----------|
+| ------- | ------ | ----------- |
 | `id` | TEXT (UUID) | Identificador único |
 | `date` | TEXT | Data da aula (YYYY-MM-DD) |
 | `lesson_topic_id` | TEXT (FK) | Referência ao tópico |
 | `professor_id` | TEXT (FK) | Referência ao professor |
+| `coordinator_name` | TEXT | Nome do coordenador |
 | `series_name` | TEXT | (Legado) Série de lições |
 | `lesson_title` | TEXT | (Legado) Título da lição |
 | `time_expected_start` | TEXT | Horário previsto início (10:00) |
@@ -135,11 +157,12 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 | `attendance_end` | INTEGER | Frequência no fim |
 | `unique_participants` | INTEGER | Participantes únicos |
 | `status` | TEXT | IN_PROGRESS / COMPLETED / EXPORTED / SYNCED |
+| `created_at` | TEXT | Data de criação (ISO 8601) |
 
 ### Tabela `professors`
 
 | Campo | Tipo | Descrição |
-|-------|------|-----------|
+| ------- | ------ | ----------- |
 | `id` | TEXT (UUID) | Identificador único |
 | `doc_id` | TEXT (UNIQUE) | CPF validado (11 dígitos) |
 | `name` | TEXT | Nome completo |
@@ -201,11 +224,15 @@ erDiagram
 
 ## 🛠️ Tecnologias
 
-- **React Native** + **Expo SDK 54**
-- **Expo Router** (File-based routing)
-- **TypeScript** (Strict mode)
-- **SQLite** (`expo-sqlite`)
-- **Jest** (Testes unitários)
+- **React Native** 0.81.5 + **Expo SDK 54**
+- **React** 19.1.0
+- **Expo Router** 6.x (File-based routing com Bottom Tabs)
+- **TypeScript** 5.9 (Strict mode)
+- **SQLite** (`expo-sqlite` 16.x) — Local-first storage
+- **React Native Reanimated** 4.x (Animações performáticas)
+- **AsyncStorage** (`@react-native-async-storage`) — Preferências do usuário
+- **DateTimePicker** (`@react-native-community/datetimepicker`) — Seleção de datas nativa
+- **Jest** + **Testing Library** (Testes unitários)
 
 ---
 
@@ -312,22 +339,31 @@ Configurados em `eas.json`:
 
 ## 📁 Estrutura do Projeto
 
-```
+```text
 app/                    # Telas (Expo Router)
-├── index.tsx           # Home - Lista de aulas
+├── _layout.tsx         # Root layout (DB init, ThemeProvider)
+├── (tabs)/             # Bottom Tab Navigator
+│   ├── _layout.tsx     # Configuração das abas
+│   ├── index.tsx       # Aba Aulas - Lista com filtros
+│   ├── series.tsx      # Aba Séries - Lista de séries
+│   ├── professors.tsx  # Aba Professores - Lista
+│   └── sync.tsx        # Aba Exportar - JSON export
 ├── lesson/             # Formulário de coleta
 ├── professors/         # CRUD de professores
 ├── series/             # CRUD de séries de lições
 ├── topics/             # CRUD de tópicos
-└── sync/               # Exportação de dados
+└── settings.tsx        # Configurações (tema)
 
 src/
-├── components/         # CounterStepper, TimeCaptureButton, Pickers, StatusFilterBar
+├── components/         # CounterStepper, TimeCaptureButton, Pickers,
+│                       # StatusFilterBar, AnimatedPressable, FAB,
+│                       # DatePickerInput, SkeletonLoader, EmptyState, ErrorRetry
 ├── db/                 # Schema, migrations, cliente SQLite
-├── services/           # Lógica de negócio (lesson, professor, series, topic)
-├── types/              # Interfaces TypeScript
-├── hooks/              # useDebounce
-└── utils/              # Validação de CPF, normalização de texto
+├── services/           # Lógica de negócio (lesson, professor, series, topic, export)
+├── theme/              # Tokens de design, cores, tipografia, ThemeProvider
+├── types/              # Interfaces TypeScript (Lesson, Professor, Series, Topic)
+├── hooks/              # useDebounce, useTheme, useThemePreference
+└── utils/              # Validação de CPF, normalização de texto, datas, cores
 
 specs/                  # Especificações (Spec-Driven Dev)
 tests/                  # Testes unitários
@@ -340,7 +376,7 @@ tests/                  # Testes unitários
 - [x] **Feature 001**: Coleta de dados (formulário 3 momentos)
 - [x] **Feature 002**: Cadastro de professores com CPF
 - [x] **Feature 003**: Migração para schema normalizado (lesson_series/lesson_topics)
-- [x] **Feature 004**: Filtros de status na listagem de aulas
+- [x] **Feature 004**: Design e experiência do usuário (temas, tabs, animações, filtros)
 - [ ] **Feature 005**: Dashboard local com métricas
 - [ ] **Feature 006**: Sincronização com API na nuvem
 - [ ] **Feature 007**: Relatórios PDF/Excel
@@ -350,7 +386,7 @@ tests/                  # Testes unitários
 ## 📖 Histórias de Usuário
 
 | ID | Persona | Desejo | Status |
-|----|---------|--------|--------|
+| ---- | --------- | -------- | -------- |
 | US01 | Coordenador | Preencher dados da aula em formulário mobile | ✅ Implementado |
 | US02 | Coordenador | Visualizar variação de público (Início/Meio/Fim) | ✅ Implementado |
 | US03 | Diretor | Contar participantes únicos (engajamento) | ✅ Implementado |
@@ -360,6 +396,7 @@ tests/                  # Testes unitários
 | US07 | Admin | Gerenciar séries e tópicos de lições | ✅ Implementado |
 | US08 | Coordenador | Excluir aulas criadas por engano (apenas IN_PROGRESS) | ✅ Implementado |
 | US09 | Coordenador | Filtrar aulas por status para reduzir poluição visual | ✅ Implementado |
+| US10 | Coordenador | Navegar pelo app com visual moderno e suporte a modo escuro | ✅ Implementado |
 
 ---
 
