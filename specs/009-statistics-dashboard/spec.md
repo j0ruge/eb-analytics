@@ -5,6 +5,21 @@
 **Status**: Draft
 **Input**: Roadmap addition — "Dashboard com dados estatísticos coletados até o momento, serve como estímulo para quem coleta o dado possa ver sentido no que está fazendo. Exemplo: índice de chegada tardia."
 
+## Clarifications
+
+### Session 2026-04-11
+
+- Q: How should the late-arrival chart handle lessons with `attendance_end = 0`, null, or any missing count field needed by a chart? → A: Exclude the lesson silently from that chart; show a footnote with the count of excluded lessons. Applies per-chart (a lesson missing only `time_real_start` is excluded from the punctuality chart but still counts in the late-arrival chart if the counts are valid).
+- Q: What is the maximum number of lessons each time-series chart should render, to stay ergonomic on mobile as the dataset grows? → A: Late Arrival (FR-030), Punctuality (FR-033), and Engagement (FR-034) show the **12 most recent** lessons (same limit as the Attendance Curve, FR-031). The Attendance Trend (FR-032) shows up to **26 most recent** lessons (~6 months) so the trend line remains readable over a longer horizon. Older lessons are simply not rendered in MVP.
+- Q: What interaction model should tapping a bar/point use across the dashboard? → A: Inline tooltip popover for every chart. The tooltip shows the raw numbers (e.g., `Início: 7, Fim: 25, Atrasaram: 18`) and a discreet "Ver aula" link that navigates to the lesson detail screen for users who want to drill further. Tapping outside the tooltip dismisses it. This is the single, canonical interaction pattern — no bottom sheets, no direct navigation on tap.
+- Q: Which lesson statuses contribute to the dashboard datasets? → A: All terminal statuses — `COMPLETED`, `EXPORTED`, and `SYNCED`. Only `IN_PROGRESS` is excluded. The collector sees their work reflected immediately after finishing a session, without needing to export first. Export and sync are orthogonal signals, not gates on visibility.
+
+### Session 2026-04-11 (round 2, post-plan)
+
+- Q: How should the dashboard screen handle failure of one chart's data query while others succeed? → A: Each chart card owns its own loading/data/error state. The screen loads all datasets in parallel with `Promise.allSettled` semantics: a rejection of one query shows an inline "Erro ao carregar este gráfico" with a retry button **only inside the affected card**; the other cards continue to render their data normally. The screen MUST NOT show a single global error state that hides all charts.
+- Q: How should the dashboard communicate to users that each card shows only the 12 (or 26) most recent lessons, not the full history? → A: The subtitle of every card MUST begin with `Últimas N aulas — …` where N is the actual number of lessons being rendered (capped at 12 for time-series cards, 26 for the trend card). When the device has fewer lessons than the cap, N is the real count. This makes the window visible at a glance and leaves no room for the "cadê as outras" question.
+- Q: For FR-034 (Engagement Rate), should the chart be a vertical bar chart or a single "big number" summary? → A: Vertical bar chart, one bar per lesson, same visual pattern as FR-030 and FR-033. The "big number" alternative is dropped from the spec. Consistency across cards beats novelty, the bar form preserves per-lesson variation that motivates the collector, and it removes a second component pattern (`BigNumberCard`) that would otherwise need to be built.
+
 ## Context
 
 The collectors are putting real effort into counting people, timing classes, and recording who interacts. Today that data leaves the app as a JSON file and disappears into a spreadsheet that only the coordinator looks at. This is demotivating — the collector never sees the fruit of their work. This spec adds an in-app **Statistics Dashboard** that turns the collected data into simple, meaningful charts visible to every user. The goal is purely motivational: "look what you're measuring — it matters".
@@ -89,7 +104,7 @@ As a Collector, I want to see the percentage of the final audience that interact
 
 **Acceptance Scenarios**:
 
-1. **Given** the metric, **Then** it is shown as a bar chart over time or as a single "big number" summary on the dashboard header.
+1. **Given** the metric, **Then** it is shown as a vertical bar chart over time (one bar per lesson, last 12).
 2. **Given** a lesson has `unique_participants = 0`, **Then** the bar shows 0% (not missing).
 
 ---
@@ -142,11 +157,12 @@ As a Coordinator, I want to see whether specific professors correlate with highe
 ### Edge Cases
 
 - **EC-001 (Empty State)**: With 0 or 1 completed lessons, the dashboard shows a friendly empty state with tips: "Coleta pelo menos 2 aulas para ver seu primeiro gráfico".
-- **EC-002 (Missing Fields)**: Lessons with missing `time_real_start`, `time_real_end`, or `unique_participants` are excluded from the charts that need those fields. A footnote explains the exclusion.
+- **EC-002 (Missing or Zero Fields)**: A lesson is excluded from any chart whose formula needs a field that is null, missing, or — for denominator fields like `attendance_end` in the late-arrival and engagement formulas — equal to zero. Exclusion is per-chart: a lesson missing only `time_real_start` is excluded from the punctuality chart but still contributes to the late-arrival chart (provided its counts are valid). Each affected card shows a footnote like "N aulas excluídas por dados incompletos".
 - **EC-003 (Outliers)**: A lesson with unusually high/low numbers (e.g., a special event with 100 people) is still shown but the chart's y-axis auto-scales. No automatic outlier removal — the data tells its own story.
 - **EC-004 (Local-Only vs Server Data)**: In the pre-backend state, the dashboard shows data from local SQLite only. After backend ships, it CAN optionally pull aggregated data from `GET /instances` — but only if the user is logged in AND is a coordinator. For collectors, even after backend, the dashboard stays local.
-- **EC-005 (Data from Multiple Users on Same Device)**: If the device has lessons from several users (per spec 006), the dashboard filters by the currently-logged-in user (if logged in) or shows all (if anonymous). Same filter as the Home list.
+- **EC-005 (Data from Multiple Users on Same Device)**: If and only if spec 006 (auth) has already shipped, the dashboard filters by the currently-logged-in user when logged in, and shows all local lessons when anonymous — same filter as the Home list. If spec 006 has **not** shipped at the time this feature is released, the dashboard simply shows all lessons present on the device (no user filter at all). This feature MUST NOT create a blocking dependency on 006.
 - **EC-006 (Date Format)**: Dates on the X axis are in the format `DD/MM` (compact) to save screen space on mobile. Full date appears on tooltip tap.
+- **EC-007 (Inconsistent Counts)**: If a lesson has `attendance_end < attendance_start` (data-entry error — people can't un-arrive), the late-arrival percentage is clamped to `0%` and the lesson is flagged in its tooltip with "⚠ Contagem inconsistente — verifique a aula". The lesson still appears on the chart so the collector notices the discrepancy and can fix it.
 
 ## Requirements *(mandatory)*
 
@@ -154,31 +170,31 @@ As a Coordinator, I want to see whether specific professors correlate with highe
 
 #### Navigation & Layout
 
-- **FR-001**: A new screen `app/dashboard.tsx` MUST exist, reachable via a new tab in the bottom navigator OR a button on the Home screen. The exact entry point will be decided during implementation; both are valid.
+- **FR-001**: The dashboard MUST be reachable from the main navigation of the app (exact entry point — new tab or Home button — decided during planning).
 - **FR-002**: The dashboard MUST be accessible to ALL users (logged in or not) — it's a motivational feature, not gated by auth.
-- **FR-003**: The dashboard MUST work 100% offline using local SQLite data.
+- **FR-003**: The dashboard MUST work 100% offline using only data already on the device.
 - **FR-004**: The screen MUST be scrollable, with each chart in its own card. Cards are stacked vertically for mobile ergonomics.
-- **FR-005**: Each card MUST have a title, a brief explanatory subtitle, and the chart. Example: "Índice de Chegada Tardia — % de pessoas que chegaram depois do início".
+- **FR-005**: Each card MUST have a title, a brief explanatory subtitle, and the chart. The subtitle MUST begin with `Últimas N aulas — ` where N is the actual number of lessons being rendered (capped at 12 for time-series cards, 26 for the trend card; lower when the device has fewer lessons available). Example: "Últimas 12 aulas — % de pessoas que chegaram depois do início".
 
-#### Chart Library
+#### Visual Consistency
 
-- **FR-010**: Use `victory-native` as the chart library. Rationale: mature, well-documented, works with Reanimated 3, SVG-based (theme-friendly), actively maintained.
-- **FR-011**: All charts MUST respect the existing theme (`useTheme()`) — colors, spacing, typography from `@/theme`.
-- **FR-012**: All chart colors MUST be added as semantic tokens to `ColorTokens` in `src/theme/colors.ts` (e.g., `chartPrimary`, `chartWarning`, `chartNeutral`, `chartAxis`, `chartGrid`, `chartReferenceLine`).
-- **FR-013**: All charts MUST be responsive — width adapts to screen width minus padding, height fixed per card.
+- **FR-011**: All charts MUST respect the app's existing theme — colors, spacing, typography come from the central design system, and chart colors are semantic tokens (not hardcoded). Dark and light themes MUST render correctly.
+- **FR-013**: All charts MUST be responsive — width adapts to the available screen width; height is fixed per card to preserve vertical rhythm.
 
-#### Data & Service
+#### Interaction
 
-- **FR-020**: A new service `src/services/dashboardService.ts` (object literal pattern per CLAUDE.md section 5) MUST expose pure async functions to compute each chart's dataset from local SQLite:
-  - `async getLateArrivalIndex(filters?: DashboardFilters): Promise<LateArrivalDatum[]>`
-  - `async getAttendanceCurves(filters?): Promise<AttendanceCurveDatum[]>`
-  - `async getAttendanceTrend(filters?): Promise<TrendDatum[]>`
-  - `async getPunctuality(filters?): Promise<PunctualityDatum[]>`
-  - `async getEngagementRate(filters?): Promise<EngagementDatum[]>`
-  - (more as features ship)
-- **FR-021**: `DashboardFilters` is an optional object for future extensibility. MVP supports at minimum `{ from?: Date, to?: Date, currentUserId?: string }`.
-- **FR-022**: All queries MUST exclude lessons where `status = 'IN_PROGRESS'` — only completed/exported/synced count.
-- **FR-023**: When the logged-in user's `collector_user_id` is known (from spec 006), the queries filter by it. Otherwise show all local data.
+- **FR-015**: Every chart MUST use the same tap-interaction pattern: tapping a bar or data point opens an **inline tooltip popover** anchored to that element. The tooltip shows the raw numbers behind the visualization (e.g., `Início: 7, Fim: 25, Atrasaram: 18`) plus a discreet "Ver aula" link that navigates to the lesson detail screen. Tapping outside the tooltip dismisses it. No bottom sheets, no direct navigation on tap, no full-screen modals for single-lesson detail.
+
+#### Resilience
+
+- **FR-016**: Each chart card MUST own its own loading / data / error state, independent of the other cards. The dashboard screen MUST load chart datasets in parallel using `Promise.allSettled` semantics (or equivalent), so that a failure of one query affects only its own card and does not cascade. A failed card renders an inline "Erro ao carregar este gráfico" message with a retry button; the retry re-invokes only that card's data function. The screen MUST NOT surface a single global error state that hides all charts when only one dataset failed.
+
+#### Data & Computation
+
+- **FR-020**: The dashboard MUST compute its datasets via a dedicated data layer that reads from the local database. Screens MUST NOT contain SQL or aggregation logic; they only consume prepared datasets. Each chart has its own computation function, keeping charts independently testable and removable.
+- **FR-021**: The data layer MUST accept an optional filter object supporting at minimum: date range (`from`, `to`) and current user id. MVP may ignore date range (see Out of Scope) but the parameter shape must be in place for future extensibility.
+- **FR-022**: All queries MUST include lessons in any terminal status — `COMPLETED`, `EXPORTED`, and `SYNCED` — and MUST exclude only `IN_PROGRESS`. Export and sync are not prerequisites for dashboard visibility; the moment a collector finishes a session and marks it complete, the data feeds the charts.
+- **FR-023**: When the logged-in user is known (spec 006 shipped and user authenticated), queries filter to that user's own lessons. When spec 006 has not shipped, or the user is anonymous, the dashboard shows all lessons present on the device, same as the Home list.
 
 #### Charts Specifications
 
@@ -190,6 +206,7 @@ As a Coordinator, I want to see whether specific professors correlate with highe
   - Horizontal dashed reference line at 50%, labeled "50% de atraso"
   - Value label above each bar (e.g., "72.0%")
   - Formula: `((end - start) / end) * 100`
+  - **Limit**: shows at most the **12 most recent** lessons.
 
 - **FR-031** (Attendance Curve — P1):
   - Type: horizontal scrollable row of small line charts, one per lesson
@@ -197,13 +214,15 @@ As a Coordinator, I want to see whether specific professors correlate with highe
   - X axis: categorical (Início, Meio, Fim) — not time
   - Y axis: attendance count
   - Below each mini-chart, the lesson date and topic title
-  - Tap opens full-size detail view
+  - Tap on any point follows the global tooltip pattern defined in FR-015 (inline tooltip with raw counts + "Ver aula" link).
+  - **Limit**: the row shows at most the **12 most recent** lessons. Older lessons are not rendered in this card to keep the list ergonomic on mobile. A "Ver todas" affordance is out of scope for MVP.
 
 - **FR-032** (Attendance Trend — P2):
   - Type: line chart
   - X axis: dates
   - Y axis: `attendance_end`
   - Optional trend indicator: simple linear slope sign (`+` or `-`) with % change over the period
+  - **Limit**: shows at most the **26 most recent** lessons (~6 months), preserving readability over a longer horizon than the other time-series charts.
 
 - **FR-033** (Punctuality — P2):
   - Type: vertical bar chart
@@ -211,11 +230,14 @@ As a Coordinator, I want to see whether specific professors correlate with highe
   - Y axis: minutes late (positive = late, 0 = on time, negative shown as "earlier")
   - Reference line at 5 minutes
   - Formula: `(time_real_start as minutes) - (time_expected_start as minutes)`
+  - **Limit**: shows at most the **12 most recent** lessons.
 
 - **FR-034** (Engagement Rate — P2):
-  - Type: vertical bar chart OR single "big number" summary
+  - Type: vertical bar chart, one bar per lesson. (Clarified 2026-04-11 round 2 — the previously-listed "big number" alternative is dropped.)
+  - X axis: lesson dates (DD/MM format)
   - Y axis: percentage (0–100)
   - Formula: `unique_participants / attendance_end * 100`
+  - **Limit**: shows at most the **12 most recent** lessons.
 
 - **FR-035** (Coverage Calendar — P3):
   - Type: horizontal row of square cells (12–16 cells for last 3–4 months)
@@ -235,39 +257,39 @@ As a Coordinator, I want to see whether specific professors correlate with highe
   - X axis: `avg(attendance_end for prof) − avg(attendance_end overall)`
   - Bar color: green for positive delta, red for negative, muted/striped for `n < 3` lessons
   - Annotation on each bar: `Δ +3.2 (n=5)` format
-  - Header toggles: (a) "Incluir eventos especiais" (default off), (b) "Mostrar engajamento ao invés de presença" (default off — toggles to `unique_participants / attendance_end` delta)
+  - Header toggles: (a) "Incluir eventos especiais" (default off), (b) "Mostrar engajamento ao invés de presença" (default off — toggles to engagement rate delta)
   - Banner when insufficient data: "Dados insuficientes — colete pelo menos 3 aulas por professor para análise confiável"
-  - Service function: `async getProfessorInfluence(opts?: { includeSpecialEvents?: boolean, metric?: 'attendance' | 'engagement' }): Promise<ProfessorInfluenceDatum[]>`
-  - Special-event detection: case-insensitive regex match on `notes` field against `\b(cerim[ôo]nia|posse|batismo|especial|feriado)\b`
-  - Correlation is NOT causation: the spec explicitly documents this in a small info icon next to the chart title. Tapping the icon opens a brief explainer modal.
+  - The dashboard data layer MUST expose a dedicated function for this analysis, accepting options to include/exclude special events and to switch between attendance and engagement metrics.
+  - Special-event detection: case-insensitive substring match on the lesson notes field against the words `cerimônia`, `posse`, `batismo`, `especial`, `feriado` (matching whole words, accent-tolerant).
+  - Correlation is NOT causation: the chart displays an info icon next to the title. Tapping the icon opens a brief explainer modal with this caveat.
 
 ### Key Entities *(include if feature involves data)*
 
-Pure in-memory types, no new DB tables:
+These are derived, in-memory concepts computed from existing lesson data. No new database tables are introduced.
 
-- **LateArrivalDatum**: `{ date: string, percent: number, attendanceStart: number, attendanceEnd: number, lessonId: string }`
-- **AttendanceCurveDatum**: `{ date: string, lessonId: string, topicTitle: string, start: number, mid: number, end: number }`
-- **TrendDatum**: `{ date: string, attendanceEnd: number, lessonId: string }`
-- **PunctualityDatum**: `{ date: string, minutesLate: number, lessonId: string }`
-- **EngagementDatum**: `{ date: string, rate: number, uniqueParticipants: number, attendanceEnd: number }`
-- **ProfessorInfluenceDatum**: `{ professorId: string, professorName: string, lessonCount: number, avgAttendance: number, deltaFromBaseline: number, isLowSample: boolean, lessonDates: string[] }`
-- **DashboardFilters**: `{ from?: Date, to?: Date, currentUserId?: string }`
+- **Late Arrival Datum** — one per lesson: lesson date, percentage of the final audience that arrived late, raw start and end counts, and a handle back to the source lesson (for tooltip drill-down).
+- **Attendance Curve Datum** — one per lesson: lesson date, topic, and the three count points (start, middle, end).
+- **Trend Datum** — one per lesson: lesson date and the final attendance count.
+- **Punctuality Datum** — one per lesson: lesson date and the signed minute delta between the real and expected start times.
+- **Engagement Datum** — one per lesson: lesson date, engagement rate, and the raw counts that produced it.
+- **Professor Influence Datum** — one per professor: professor identity, number of lessons taught, average final attendance, delta from the overall baseline, a low-sample flag (`n < 3`), and the list of lesson dates included in the calculation.
+- **Dashboard Filters** — an optional filter object with a date range (`from`, `to`) and a current user id. Used by all data-layer functions for future extensibility.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: **First Chart Visible in < 1 Second**: Opening the dashboard with 10 local lessons renders the late-arrival chart in under 1 second on a mid-range device.
-- **SC-002**: **Zero Crashes on Empty Data**: With 0 lessons, the dashboard shows empty states and does not crash or throw.
-- **SC-003**: **Motivational Intent**: Verified qualitatively — at least 3 collectors (users) report that seeing a chart of their work made them feel more engaged in measuring accurately. Not a hard test, but a go/no-go for the feature review.
-- **SC-004**: **Theme Consistency**: All chart colors are theme tokens. Zero hardcoded hex values in the dashboard screen or service. Verified by grep.
+- **SC-001**: **Immediate Feedback**: Opening the dashboard on a device with a typical dataset (10 lessons) shows the first chart without any visible loading spinner — users perceive the screen as "already there".
+- **SC-002**: **Zero Crashes on Empty Data**: With 0 lessons, the dashboard shows empty states and does not crash or throw. Verified by opening the app on a fresh install and navigating to the dashboard.
+- **SC-003**: **Motivational Intent (qualitative signal)**: In an informal review with at least 3 collectors, the majority report that the charts helped them understand the value of their collection work. This is a qualitative signal, not a ship blocker.
+- **SC-004**: **Theme Consistency**: The dashboard renders correctly in both light and dark mode with no hardcoded colors. Switching themes while the dashboard is open updates all chart colors immediately.
 - **SC-005**: **Local-First**: The dashboard works offline, with or without login, without errors. Verified by enabling airplane mode and opening the screen.
-- **SC-006**: **Incremental Rollout**: Ships P1 (late arrival + curve) standalone without requiring P2 or P3 charts. Each chart is independently implementable and testable.
+- **SC-006**: **Incremental Rollout**: P1 (late arrival + attendance curve) can ship on its own without P2 or P3 charts. Each chart is independently implementable, testable, and removable.
 
 ## Assumptions
 
-- `victory-native` is compatible with the current Expo SDK 54 + React Native 0.81 + Reanimated 4.1 setup. If it is not (breaking change), spec falls back to `react-native-gifted-charts` or `react-native-svg` with manual drawing. Verified during plan phase.
-- The dashboard does NOT require the backend (007/008) to ship. It is a pure local feature of the client. Backend-powered aggregate views are a future extension (marked as such in FR-ED-004).
+- A chart-rendering library compatible with the current mobile stack is available. Library selection is a planning-phase concern, not a spec concern; the spec only requires that whatever is chosen supports theming, responsive sizing, and the chart types listed in FR-030..037.
+- The dashboard does NOT require the backend (007/008) to ship. It is a pure local feature of the client. Backend-powered aggregate views are a future extension (see EC-004).
 - The existing lesson schema already carries all the data needed for P1 and P2 charts. No migration is required.
 - Users understand percentage math. Tooltips show absolute numbers for those who prefer raw counts.
 - Motivation is best achieved by keeping the dashboard simple and fast to load. Avoid info overload — show 3–5 charts max on MVP, not 20.
