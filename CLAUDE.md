@@ -421,3 +421,11 @@ tests/                  # Unit and integration tests
 - Keep commits atomic — one logical change per commit
 - Never commit `.env`, credentials, or database files
 - Always test before committing: `npm test`
+
+---
+
+## 17. Operational Runbooks
+
+Procedimentos operacionais recorrentes têm runbooks detalhados em `.claude/rules/`. Leia o arquivo correspondente antes de executar.
+
+- **Sincronização com Google Sheets** (`.claude/rules/google-sheets-sync.md`) — atualizar a planilha `eb_insights` com novas coletas do `EB-Insights.md` (Obsidian). Cobre credenciais OAuth, estilo de consolidação do dono da planilha, e fluxo dry-run → apply.
