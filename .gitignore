@@ -46,3 +46,10 @@ expo-env.d.ts
 
 #claude
 nul
+
+# Secrets — OAuth, tokens, service account keys
+.secrets/
+google-client*.json
+google-token*.json
+*credentials*.json
+client_secret*.json
