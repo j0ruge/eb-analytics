@@ -1,0 +1,283 @@
+{
+  "schema_version": "2.0",
+  "generated_at": "2026-04-11T00:00:00Z",
+  "source": "google-sheets:1HXTD-hO1N1xsLV2_LuSxS_4Hhn6Z_HY-Zkx0Vr5Umws#dados",
+  "notes": "Snapshot das 12 coletas de jan/24 a abr/11 2026, no estilo de consolidação da planilha (sem descontar professor, anotado em notes quando relevante).",
+
+  "catalog": {
+    "series": [
+      { "id": "seed-srs-eb354", "code": "Eb354", "title": "Série EB354", "description": null },
+      { "id": "seed-srs-eb355", "code": "Eb355", "title": "A Luta Contra o Pecado", "description": null },
+      { "id": "seed-srs-eb356", "code": "Eb356", "title": "Série EB356", "description": null }
+    ],
+
+    "topics": [
+      { "id": "seed-top-354-01", "series_id": "seed-srs-eb354", "title": "O Senhor da História",            "sequence_order": 1,  "suggested_date": "2026-01-24" },
+      { "id": "seed-top-354-02", "series_id": "seed-srs-eb354", "title": "Convite ao Arrependimento",       "sequence_order": 2,  "suggested_date": "2026-01-31" },
+      { "id": "seed-top-354-03", "series_id": "seed-srs-eb354", "title": "O Deus que Encoraja",             "sequence_order": 3,  "suggested_date": "2026-02-07" },
+      { "id": "seed-top-354-04", "series_id": "seed-srs-eb354", "title": "Espiritualidade e Tradições",     "sequence_order": 4,  "suggested_date": "2026-02-14" },
+      { "id": "seed-top-354-05", "series_id": "seed-srs-eb354", "title": "Um Rei num Jumentinho?",          "sequence_order": 5,  "suggested_date": "2026-02-21" },
+      { "id": "seed-top-354-06", "series_id": "seed-srs-eb354", "title": "A Chegada do Reino",              "sequence_order": 6,  "suggested_date": "2026-02-28" },
+      { "id": "seed-top-354-07", "series_id": "seed-srs-eb354", "title": "O Imerecido Amor de Deus",        "sequence_order": 7,  "suggested_date": "2026-03-07" },
+      { "id": "seed-top-354-08", "series_id": "seed-srs-eb354", "title": "Deus Aceita Qualquer Culto?",     "sequence_order": 8,  "suggested_date": "2026-03-14" },
+      { "id": "seed-top-354-09", "series_id": "seed-srs-eb354", "title": "Promessas Quebradas",             "sequence_order": 9,  "suggested_date": "2026-03-21" },
+      { "id": "seed-top-354-10", "series_id": "seed-srs-eb354", "title": "O Maravilhoso Dia do Senhor",     "sequence_order": 10, "suggested_date": "2026-03-28" },
+      { "id": "seed-top-355-01", "series_id": "seed-srs-eb355", "title": "Soberba — Brincando de Ser Rei",  "sequence_order": 1,  "suggested_date": "2026-04-04" },
+      { "id": "seed-top-356-01", "series_id": "seed-srs-eb356", "title": "Inveja",                          "sequence_order": 1,  "suggested_date": "2026-04-11" }
+    ],
+
+    "professors": [
+      { "id": "seed-prof-alex",      "doc_id": "seed-doc-alex",      "name": "Alex Tolomei" },
+      { "id": "seed-prof-jorge",     "doc_id": "seed-doc-jorge",     "name": "Jorge Ferrari" },
+      { "id": "seed-prof-augusto",   "doc_id": "seed-doc-augusto",   "name": "Augusto César" },
+      { "id": "seed-prof-abimael",   "doc_id": "seed-doc-abimael",   "name": "Abimael Rocha" },
+      { "id": "seed-prof-paulo",     "doc_id": "seed-doc-paulo",     "name": "Paulo Amaral" },
+      { "id": "seed-prof-jefferson", "doc_id": "seed-doc-jefferson", "name": "Jefferson Pedro" }
+    ]
+  },
+
+  "collector": null,
+
+  "collections": [
+    {
+      "id": "seed-col-2026-01-24",
+      "client_created_at": "2026-01-24T10:00:00-03:00",
+      "client_updated_at": "2026-01-24T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-01-24",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-01",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-alex",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:07", "real_end": "11:01" },
+      "attendance": { "start": 7, "mid": 19, "end": 25, "includes_professor": false },
+      "unique_participants": 8,
+      "weather": null,
+      "notes": null
+    },
+    {
+      "id": "seed-col-2026-01-31",
+      "client_created_at": "2026-01-31T10:00:00-03:00",
+      "client_updated_at": "2026-01-31T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-01-31",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-02",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-jorge",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:00", "real_end": "10:59" },
+      "attendance": { "start": 10, "mid": 24, "end": 28, "includes_professor": false },
+      "unique_participants": 5,
+      "weather": "Ensolarado",
+      "notes": null
+    },
+    {
+      "id": "seed-col-2026-02-07",
+      "client_created_at": "2026-02-07T10:00:00-03:00",
+      "client_updated_at": "2026-02-07T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-02-07",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-03",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-alex",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:02", "real_end": "11:00" },
+      "attendance": { "start": 16, "mid": 20, "end": 26, "includes_professor": false },
+      "unique_participants": 7,
+      "weather": "Nublado",
+      "notes": null
+    },
+    {
+      "id": "seed-col-2026-02-14",
+      "client_created_at": "2026-02-14T10:00:00-03:00",
+      "client_updated_at": "2026-02-14T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-02-14",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-04",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-augusto",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:00", "real_end": "10:59" },
+      "attendance": { "start": 4, "mid": 19, "end": 24, "includes_professor": false },
+      "unique_participants": 6,
+      "weather": "Ensolarado",
+      "notes": "Carnaval"
+    },
+    {
+      "id": "seed-col-2026-02-21",
+      "client_created_at": "2026-02-21T10:00:00-03:00",
+      "client_updated_at": "2026-02-21T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-02-21",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-05",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-alex",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:02", "real_end": "11:02" },
+      "attendance": { "start": 15, "mid": 22, "end": 27, "includes_professor": false },
+      "unique_participants": 5,
+      "weather": "Ensolarado",
+      "notes": null
+    },
+    {
+      "id": "seed-col-2026-02-28",
+      "client_created_at": "2026-02-28T10:00:00-03:00",
+      "client_updated_at": "2026-02-28T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-02-28",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-06",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-abimael",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:04", "real_end": "10:40" },
+      "attendance": { "start": 20, "mid": 31, "end": 35, "includes_professor": true },
+      "unique_participants": 10,
+      "weather": "Nublado 26°C",
+      "notes": "Cerimônia de Posse do Pr. Jefferson. Contagem incluindo o professor."
+    },
+    {
+      "id": "seed-col-2026-03-07",
+      "client_created_at": "2026-03-07T10:00:00-03:00",
+      "client_updated_at": "2026-03-07T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-03-07",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-07",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-paulo",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:03", "real_end": "10:59" },
+      "attendance": { "start": 15, "mid": 23, "end": 28, "includes_professor": true },
+      "unique_participants": 6,
+      "weather": "Ensolarado",
+      "notes": "Problemas no som. Contagem incluindo o professor."
+    },
+    {
+      "id": "seed-col-2026-03-14",
+      "client_created_at": "2026-03-14T10:00:00-03:00",
+      "client_updated_at": "2026-03-14T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-03-14",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-08",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-alex",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:03", "real_end": "11:04" },
+      "attendance": { "start": 16, "mid": 25, "end": 26, "includes_professor": false },
+      "unique_participants": 7,
+      "weather": "28°C sol entre nuvens",
+      "notes": "2 coletores (Abimael + Jeff); Jeff contando com professor — divergência no meio (22 vs 28)."
+    },
+    {
+      "id": "seed-col-2026-03-21",
+      "client_created_at": "2026-03-21T10:00:00-03:00",
+      "client_updated_at": "2026-03-21T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-03-21",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-09",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-augusto",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:04", "real_end": "11:02" },
+      "attendance": { "start": 11, "mid": 21, "end": 28, "includes_professor": false },
+      "unique_participants": 6,
+      "weather": "Ensolarado",
+      "notes": "Augusto foi coletor e também professor."
+    },
+    {
+      "id": "seed-col-2026-03-28",
+      "client_created_at": "2026-03-28T10:00:00-03:00",
+      "client_updated_at": "2026-03-28T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-03-28",
+        "series_id": "seed-srs-eb354",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-354-10",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-alex",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:06", "real_end": "10:58" },
+      "attendance": { "start": 16, "mid": 25, "end": 31, "includes_professor": false },
+      "unique_participants": 5,
+      "weather": "Bom / céu azul 30°C",
+      "notes": "3 coletores (Paulo, Augusto, Jeff); fim variou 29–35; Jeff contando com professor."
+    },
+    {
+      "id": "seed-col-2026-04-04",
+      "client_created_at": "2026-04-04T10:00:00-03:00",
+      "client_updated_at": "2026-04-04T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-04-04",
+        "series_id": "seed-srs-eb355",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-355-01",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-jefferson",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:05", "real_end": "11:01" },
+      "attendance": { "start": 14, "mid": 24, "end": 27, "includes_professor": false },
+      "unique_participants": 5,
+      "weather": "Bom. Céu claro. 30°C",
+      "notes": "2 coletores; Jefferson registrou o título da série (A Luta Contra o Pecado) no lugar do tema da lição."
+    },
+    {
+      "id": "seed-col-2026-04-11",
+      "client_created_at": "2026-04-11T10:00:00-03:00",
+      "client_updated_at": "2026-04-11T11:05:00-03:00",
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-04-11",
+        "series_id": "seed-srs-eb356",
+        "series_code_fallback": null,
+        "topic_id": "seed-top-356-01",
+        "topic_title_fallback": null,
+        "professor_id": "seed-prof-augusto",
+        "professor_name_fallback": null
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": "10:07", "real_end": "10:59" },
+      "attendance": { "start": 26, "mid": 27, "end": 28, "includes_professor": false },
+      "unique_participants": 5,
+      "weather": "Bom/nublado",
+      "notes": "1 coletor (Paulo)."
+    }
+  ]
+}

@@ -1,10 +1,11 @@
-import { View, Text, StyleSheet } from "react-native";
-import { useMemo } from "react";
+import { View, Text, StyleSheet, Alert, ScrollView } from "react-native";
+import { useMemo, useState } from "react";
 import { useTheme } from "../src/hooks/useTheme";
 import { Theme } from "../src/theme";
 import { ThemePreference } from "../src/hooks/useThemePreference";
 import { Ionicons } from "@expo/vector-icons";
 import { AnimatedPressable } from "../src/components/AnimatedPressable";
+import { seedService } from "../src/services/seedService";
 
 const THEME_OPTIONS: {
   value: ThemePreference;
@@ -16,12 +17,67 @@ const THEME_OPTIONS: {
   { value: "system", label: "Sistema", icon: "phone-portrait-outline" },
 ];
 
+const extractMessage = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
+
 export default function SettingsScreen() {
   const { theme, themePreference, setThemePreference } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const [seedLoading, setSeedLoading] = useState(false);
+
+  const handleSeed = async () => {
+    if (seedLoading) return;
+    setSeedLoading(true);
+    try {
+      const result = await seedService.seed();
+      if (result.skipped) {
+        Alert.alert("Seed já aplicado", result.reason ?? "Nada a fazer.");
+      } else {
+        Alert.alert(
+          "Dados de exemplo carregados",
+          `Séries: ${result.series}\nTópicos: ${result.topics}\nProfessores: ${result.professors}\nAulas: ${result.lessons}`,
+        );
+      }
+    } catch (err) {
+      console.error("Seed error:", err);
+      Alert.alert("Erro ao carregar", extractMessage(err));
+    } finally {
+      setSeedLoading(false);
+    }
+  };
+
+  const handleClearSeed = () => {
+    Alert.alert(
+      "Remover dados de exemplo?",
+      "Isso apaga apenas as entradas com prefixo seed-*. Dados criados por você não são afetados.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await seedService.clearSeed();
+              Alert.alert(
+                "Seed removido",
+                `Aulas: ${result.lessons}\nTópicos: ${result.topics}\nSéries: ${result.series}\nProfessores: ${result.professors}`,
+              );
+            } catch (err) {
+              console.error("Clear seed error:", err);
+              Alert.alert("Erro", extractMessage(err));
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Aparência</Text>
         <Text style={styles.sectionDescription}>
@@ -79,7 +135,56 @@ export default function SettingsScreen() {
           })}
         </View>
       </View>
-    </View>
+
+      {__DEV__ && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Desenvolvimento</Text>
+          <Text style={styles.sectionDescription}>
+            Ferramentas para popular o banco com dados reais coletados até agora
+          </Text>
+
+          <View style={styles.devActions}>
+            <AnimatedPressable
+              style={[styles.devButton, seedLoading && styles.devButtonDisabled]}
+              onPress={handleSeed}
+              disabled={seedLoading}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Carregar dados de exemplo"
+              accessibilityHint="Toque para popular o banco com dados de exemplo"
+              accessibilityState={{ disabled: seedLoading }}
+            >
+              <Ionicons
+                name={seedLoading ? "hourglass-outline" : "download-outline"}
+                size={22}
+                color={theme.colors.primary}
+              />
+              <Text style={styles.devButtonLabel}>
+                {seedLoading ? "Carregando..." : "Carregar dados de exemplo"}
+              </Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={[styles.devButton, styles.devButtonDanger]}
+              onPress={handleClearSeed}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Remover dados de exemplo"
+              accessibilityHint="Toque para remover os dados de exemplo do banco"
+            >
+              <Ionicons
+                name="trash-outline"
+                size={22}
+                color={theme.colors.danger}
+              />
+              <Text style={[styles.devButtonLabel, styles.devButtonLabelDanger]}>
+                Remover dados de exemplo
+              </Text>
+            </AnimatedPressable>
+          </View>
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
@@ -88,12 +193,42 @@ const createStyles = (theme: Theme) =>
     container: {
       flex: 1,
       backgroundColor: theme.colors.surface,
+    },
+    contentContainer: {
       padding: theme.spacing.md,
+      gap: theme.spacing.md,
     },
     section: {
       backgroundColor: theme.colors.background,
       borderRadius: theme.borderRadius.lg,
       padding: theme.spacing.lg,
+    },
+    devActions: {
+      gap: theme.spacing.sm,
+    },
+    devButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    devButtonDanger: {
+      borderColor: theme.colors.danger,
+    },
+    devButtonDisabled: {
+      opacity: 0.5,
+    },
+    devButtonLabel: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+      flex: 1,
+    },
+    devButtonLabelDanger: {
+      color: theme.colors.danger,
     },
     sectionTitle: {
       ...theme.typography.h3,
