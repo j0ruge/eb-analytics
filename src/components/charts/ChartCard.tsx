@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Theme } from '../../theme';
 import { ChartCardStatus } from '../../types/dashboard';
+import { SkeletonLoader } from '../SkeletonLoader';
 
 interface ChartCardProps {
   title: string;
@@ -45,8 +46,8 @@ export function ChartCard({
       <Text style={styles.subtitle}>{subtitle}</Text>
 
       {status === 'loading' && (
-        <View style={styles.stateSlot}>
-          <ActivityIndicator size="small" color={theme.colors.primary} />
+        <View style={styles.skeletonSlot}>
+          <SkeletonLoader count={1} />
         </View>
       )}
 
@@ -106,6 +107,10 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: theme.spacing.lg,
+    },
+    skeletonSlot: {
+      minHeight: 160,
+      justifyContent: 'center',
     },
     errorText: {
       ...theme.typography.body,

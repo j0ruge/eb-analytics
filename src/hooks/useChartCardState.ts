@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ChartCardStatus, DashboardResult } from '../types/dashboard';
 
 interface ChartCardState<T> {
@@ -14,9 +14,10 @@ interface ChartCardState<T> {
  *
  * Each chart card calls this hook with its own loader so that loading/error
  * states are isolated: one failing query shows a retry button inside its own
- * card without hiding the other charts. The dashboard screen invokes all
- * hooks on mount so the loaders run in parallel (Promise.allSettled semantics
- * emerge naturally from independent effects).
+ * card without hiding the other charts. The hook itself does NOT auto-fetch
+ * on mount — the caller (typically the dashboard screen via useFocusEffect)
+ * drives loading by calling `reload()`. This avoids duplicated initial
+ * fetches when both mount effects and focus effects fire on first render.
  */
 export function useChartCardState<T>(
   loader: () => Promise<DashboardResult<T>>,
@@ -45,10 +46,6 @@ export function useChartCardState<T>(
       setStatus('error');
     }
   }, []);
-
-  useEffect(() => {
-    run();
-  }, [run]);
 
   return { status, data, excludedCount, errorMessage, reload: run };
 }

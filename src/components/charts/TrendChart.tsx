@@ -8,10 +8,7 @@ import { parseInputDate } from '../../utils/date';
 
 interface TrendChartProps {
   data: TrendDatum[];
-  onPointPress?: (
-    datum: TrendDatum,
-    position: { x: number; y: number },
-  ) => void;
+  onPointPress?: (datum: TrendDatum) => void;
 }
 
 function formatDayMonth(raw: string): string {
@@ -31,8 +28,8 @@ export function TrendChart({ data, onPointPress }: TrendChartProps) {
       data.map((datum, idx) => ({
         value: datum.attendanceEnd,
         label: idx % 4 === 0 ? formatDayMonth(datum.date) : '',
-        onPress: (_item: unknown, _idx: number, x: number, y: number) => {
-          onPointPress?.(datum, { x, y });
+        onPress: () => {
+          onPointPress?.(datum);
         },
       })),
     [data, onPointPress],

@@ -8,11 +8,7 @@ import { parseInputDate } from '../../utils/date';
 
 interface AttendanceCurveRowProps {
   data: AttendanceCurveDatum[];
-  onPointPress?: (
-    datum: AttendanceCurveDatum,
-    pointIndex: 0 | 1 | 2,
-    position: { x: number; y: number },
-  ) => void;
+  onPointPress?: (datum: AttendanceCurveDatum, pointIndex: 0 | 1 | 2) => void;
 }
 
 function formatDayMonth(raw: string): string {
@@ -54,8 +50,8 @@ export function AttendanceCurveRow({
         const chartData = points.map((p) => ({
           value: p.value,
           label: p.label,
-          onPress: (_item: unknown, _idx: number, x: number, y: number) => {
-            onPointPress?.(datum, p.index, { x, y });
+          onPress: () => {
+            onPointPress?.(datum, p.index);
           },
         }));
 

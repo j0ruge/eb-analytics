@@ -149,6 +149,17 @@ describe('dashboardService', () => {
       const result = await dashboardService.getLateArrivalIndex();
       expect(result).toEqual({ data: [], excludedCount: 0 });
     });
+
+    it('excluded count SQL matches rows with null start, null end, or end=0', async () => {
+      mockDb.getAllAsync.mockResolvedValueOnce([]);
+      mockDb.getFirstAsync.mockResolvedValueOnce({ n: 0 });
+
+      await dashboardService.getLateArrivalIndex();
+      const excludedSql = mockDb.getFirstAsync.mock.calls[0][0] as string;
+      expect(excludedSql).toMatch(/attendance_start IS NULL/);
+      expect(excludedSql).toMatch(/attendance_end IS NULL/);
+      expect(excludedSql).toMatch(/attendance_end = 0/);
+    });
   });
 
   // ------------------------------------------------------------------
@@ -276,6 +287,21 @@ describe('dashboardService', () => {
       expect(result.data.map((d) => d.minutesLate)).toEqual([7, 0, 2, 10]);
     });
 
+    it('falls back to 10:00 when time_expected_start is null', async () => {
+      mockDb.getAllAsync.mockResolvedValueOnce([
+        {
+          id: 'l1',
+          date: '2026-01-01',
+          time_expected_start: null,
+          time_real_start: '10:07',
+        },
+      ]);
+      mockDb.getFirstAsync.mockResolvedValueOnce({ n: 0 });
+
+      const result = await dashboardService.getPunctuality();
+      expect(result.data[0].minutesLate).toBe(7);
+    });
+
     it('preserves negative (early) values', async () => {
       mockDb.getAllAsync.mockResolvedValueOnce([
         {
@@ -323,6 +349,22 @@ describe('dashboardService', () => {
 
       const result = await dashboardService.getEngagementRate();
       expect(result.data[0].rate).toBeCloseTo(20.0, 1);
+    });
+
+    it('treats null unique_participants as 0', async () => {
+      mockDb.getAllAsync.mockResolvedValueOnce([
+        {
+          id: 'l1',
+          date: '2026-01-01',
+          unique_participants: null,
+          attendance_end: 20,
+        },
+      ]);
+      mockDb.getFirstAsync.mockResolvedValueOnce({ n: 0 });
+
+      const result = await dashboardService.getEngagementRate();
+      expect(result.data[0].rate).toBe(0);
+      expect(result.data[0].uniqueParticipants).toBe(0);
     });
 
     it('includes rows with unique_participants = 0', async () => {

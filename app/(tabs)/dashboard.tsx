@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 
@@ -19,6 +19,8 @@ import { parseInputDate } from '../../src/utils/date';
 interface TooltipState {
   lessonId: string;
   lines: string[];
+  anchorX: number;
+  anchorY: number;
 }
 
 function formatDayMonth(raw: string): string {
@@ -57,6 +59,12 @@ export default function DashboardScreen() {
 
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
+  const lateArrivalChartRef = useRef<View>(null);
+  const curvesChartRef = useRef<View>(null);
+  const trendChartRef = useRef<View>(null);
+  const punctualityChartRef = useRef<View>(null);
+  const engagementChartRef = useRef<View>(null);
+
   useFocusEffect(
     useCallback(() => {
       lateArrival.reload();
@@ -71,6 +79,24 @@ export default function DashboardScreen() {
       punctuality.reload,
       engagement.reload,
     ]),
+  );
+
+  const openTooltip = useCallback(
+    (
+      ref: React.RefObject<View | null>,
+      lessonId: string,
+      lines: string[],
+    ) => {
+      ref.current?.measureInWindow((x, y, width) => {
+        setTooltip({
+          lessonId,
+          lines,
+          anchorX: x + width / 2,
+          anchorY: y + 24,
+        });
+      });
+    },
+    [],
   );
 
   const closeTooltip = useCallback(() => setTooltip(null), []);
@@ -161,20 +187,19 @@ export default function DashboardScreen() {
           accessibilityLabel={lateArrivalAccessibility}
         >
           {lateArrival.data.length >= 2 ? (
-            <LateArrivalChart
-              data={lateArrival.data}
-              onBarPress={(datum) =>
-                setTooltip({
-                  lessonId: datum.lessonId,
-                  lines: [
+            <View ref={lateArrivalChartRef} collapsable={false}>
+              <LateArrivalChart
+                data={lateArrival.data}
+                onBarPress={(datum) =>
+                  openTooltip(lateArrivalChartRef, datum.lessonId, [
                     formatDayMonth(datum.date),
                     `Início: ${datum.attendanceStart}`,
                     `Fim: ${datum.attendanceEnd}`,
                     `Atrasaram: ${datum.lateCount} (${datum.percent.toFixed(1)}%)`,
-                  ],
-                })
-              }
-            />
+                  ])
+                }
+              />
+            </View>
           ) : (
             <DashboardEmptyState message="Coleta pelo menos 2 aulas para ver seu primeiro gráfico" />
           )}
@@ -190,21 +215,20 @@ export default function DashboardScreen() {
           accessibilityLabel={curvesAccessibility}
         >
           {curves.data.length >= 1 ? (
-            <AttendanceCurveRow
-              data={curves.data}
-              onPointPress={(datum, pointIndex) => {
-                const labels = ['Início', 'Meio', 'Fim'] as const;
-                const values = [datum.start, datum.mid, datum.end];
-                setTooltip({
-                  lessonId: datum.lessonId,
-                  lines: [
+            <View ref={curvesChartRef} collapsable={false}>
+              <AttendanceCurveRow
+                data={curves.data}
+                onPointPress={(datum, pointIndex) => {
+                  const labels = ['Início', 'Meio', 'Fim'] as const;
+                  const values = [datum.start, datum.mid, datum.end];
+                  openTooltip(curvesChartRef, datum.lessonId, [
                     formatDayMonth(datum.date),
                     datum.topicTitle ?? 'Sem tópico',
                     `${labels[pointIndex]}: ${values[pointIndex] ?? '—'}`,
-                  ],
-                });
-              }}
-            />
+                  ]);
+                }}
+              />
+            </View>
           ) : (
             <DashboardEmptyState message="Nenhuma aula com contagens suficientes ainda" />
           )}
@@ -220,18 +244,17 @@ export default function DashboardScreen() {
           accessibilityLabel={trendAccessibility}
         >
           {trend.data.length >= 2 ? (
-            <TrendChart
-              data={trend.data}
-              onPointPress={(datum) =>
-                setTooltip({
-                  lessonId: datum.lessonId,
-                  lines: [
+            <View ref={trendChartRef} collapsable={false}>
+              <TrendChart
+                data={trend.data}
+                onPointPress={(datum) =>
+                  openTooltip(trendChartRef, datum.lessonId, [
                     formatDayMonth(datum.date),
                     `Presença final: ${datum.attendanceEnd}`,
-                  ],
-                })
-              }
-            />
+                  ])
+                }
+              />
+            </View>
           ) : (
             <DashboardEmptyState message="Coleta pelo menos 2 aulas para ver a tendência" />
           )}
@@ -247,18 +270,17 @@ export default function DashboardScreen() {
           accessibilityLabel={punctualityAccessibility}
         >
           {punctuality.data.length >= 2 ? (
-            <PunctualityChart
-              data={punctuality.data}
-              onBarPress={(datum) =>
-                setTooltip({
-                  lessonId: datum.lessonId,
-                  lines: [
+            <View ref={punctualityChartRef} collapsable={false}>
+              <PunctualityChart
+                data={punctuality.data}
+                onBarPress={(datum) =>
+                  openTooltip(punctualityChartRef, datum.lessonId, [
                     formatDayMonth(datum.date),
                     `Atraso: ${datum.minutesLate} min`,
-                  ],
-                })
-              }
-            />
+                  ])
+                }
+              />
+            </View>
           ) : (
             <DashboardEmptyState message="Coleta pelo menos 2 aulas para ver a pontualidade" />
           )}
@@ -274,20 +296,19 @@ export default function DashboardScreen() {
           accessibilityLabel={engagementAccessibility}
         >
           {engagement.data.length >= 1 ? (
-            <EngagementChart
-              data={engagement.data}
-              onBarPress={(datum) =>
-                setTooltip({
-                  lessonId: datum.lessonId,
-                  lines: [
+            <View ref={engagementChartRef} collapsable={false}>
+              <EngagementChart
+                data={engagement.data}
+                onBarPress={(datum) =>
+                  openTooltip(engagementChartRef, datum.lessonId, [
                     formatDayMonth(datum.date),
                     `Participantes únicos: ${datum.uniqueParticipants}`,
                     `Presença final: ${datum.attendanceEnd}`,
                     `Engajamento: ${datum.rate.toFixed(1)}%`,
-                  ],
-                })
-              }
-            />
+                  ])
+                }
+              />
+            </View>
           ) : (
             <DashboardEmptyState message="Nenhuma aula com engajamento ainda" />
           )}
@@ -296,6 +317,8 @@ export default function DashboardScreen() {
 
       <ChartTooltip
         visible={tooltip !== null}
+        anchorX={tooltip?.anchorX ?? 0}
+        anchorY={tooltip?.anchorY ?? 0}
         lines={tooltip?.lines ?? []}
         onDismiss={closeTooltip}
         onViewLesson={openLesson}

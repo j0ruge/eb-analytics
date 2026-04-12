@@ -5,12 +5,6 @@ export const DASHBOARD_LIMITS = {
 
 export type ChartCardStatus = 'loading' | 'success' | 'error';
 
-export interface DashboardFilters {
-  from?: Date;
-  to?: Date;
-  currentUserId?: string;
-}
-
 export interface DashboardResult<T> {
   data: T[];
   excludedCount: number;

@@ -1,17 +1,24 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Theme } from '../../theme';
 
 interface ChartTooltipProps {
   visible: boolean;
+  anchorX: number;
+  anchorY: number;
   lines: string[];
   onViewLesson: () => void;
   onDismiss: () => void;
 }
 
+const TOOLTIP_WIDTH = 240;
+const HORIZONTAL_MARGIN = 12;
+
 export function ChartTooltip({
   visible,
+  anchorX,
+  anchorY,
   lines,
   onViewLesson,
   onDismiss,
@@ -21,6 +28,13 @@ export function ChartTooltip({
 
   if (!visible) return null;
 
+  const screenWidth = Dimensions.get('window').width;
+  const halfWidth = TOOLTIP_WIDTH / 2;
+  const clampedLeft = Math.max(
+    HORIZONTAL_MARGIN,
+    Math.min(screenWidth - TOOLTIP_WIDTH - HORIZONTAL_MARGIN, anchorX - halfWidth),
+  );
+
   return (
     <>
       <Pressable
@@ -29,7 +43,13 @@ export function ChartTooltip({
         accessibilityRole="button"
         accessibilityLabel="Fechar tooltip"
       />
-      <View style={styles.tooltip} accessibilityRole="alert">
+      <View
+        style={[
+          styles.tooltip,
+          { top: anchorY, left: clampedLeft, width: TOOLTIP_WIDTH },
+        ]}
+        accessibilityRole="alert"
+      >
         {lines.map((line, idx) => (
           <Text key={idx} style={styles.line}>
             {line}
@@ -60,9 +80,6 @@ const createStyles = (theme: Theme) =>
     },
     tooltip: {
       position: 'absolute',
-      top: '30%',
-      left: '10%',
-      right: '10%',
       backgroundColor: theme.colors.chartTooltipBackground,
       borderColor: theme.colors.chartTooltipBorder,
       borderWidth: 1,

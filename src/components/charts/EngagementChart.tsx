@@ -8,10 +8,7 @@ import { parseInputDate } from '../../utils/date';
 
 interface EngagementChartProps {
   data: EngagementDatum[];
-  onBarPress?: (
-    datum: EngagementDatum,
-    position: { x: number; y: number },
-  ) => void;
+  onBarPress?: (datum: EngagementDatum) => void;
 }
 
 function formatDayMonth(raw: string): string {
@@ -35,8 +32,8 @@ export function EngagementChart({ data, onBarPress }: EngagementChartProps) {
         topLabelComponent: () => (
           <Text style={styles.valueLabel}>{datum.rate.toFixed(1)}%</Text>
         ),
-        onPress: (_item: unknown, _idx: number, x: number, y: number) => {
-          onBarPress?.(datum, { x, y });
+        onPress: () => {
+          onBarPress?.(datum);
         },
       })),
     [data, theme, styles.valueLabel, onBarPress],

@@ -12,9 +12,9 @@
  *   4. Exclusion counts are authoritative and returned alongside data.
  */
 import { getDatabase } from '../db/client';
+import { LessonStatus } from '../types/lesson';
 import {
   DASHBOARD_LIMITS,
-  DashboardFilters,
   DashboardResult,
   LateArrivalDatum,
   AttendanceCurveDatum,
@@ -23,7 +23,7 @@ import {
   EngagementDatum,
 } from '../types/dashboard';
 
-const STATUS_FILTER_SQL = `status IN ('COMPLETED', 'EXPORTED', 'SYNCED')`;
+const STATUS_FILTER_SQL = `status IN ('${LessonStatus.COMPLETED}', '${LessonStatus.EXPORTED}', '${LessonStatus.SYNCED}')`;
 
 function parseHMM(hhmm: string | null): number | null {
   if (!hhmm) return null;
@@ -36,9 +36,7 @@ function parseHMM(hhmm: string | null): number | null {
 }
 
 export const dashboardService = {
-  async getLateArrivalIndex(
-    _filters?: DashboardFilters,
-  ): Promise<DashboardResult<LateArrivalDatum>> {
+  async getLateArrivalIndex(): Promise<DashboardResult<LateArrivalDatum>> {
     const db = await getDatabase();
 
     const rows = await db.getAllAsync<{
@@ -92,9 +90,7 @@ export const dashboardService = {
     return { data, excludedCount: excludedRow?.n ?? 0 };
   },
 
-  async getAttendanceCurves(
-    _filters?: DashboardFilters,
-  ): Promise<DashboardResult<AttendanceCurveDatum>> {
+  async getAttendanceCurves(): Promise<DashboardResult<AttendanceCurveDatum>> {
     const db = await getDatabase();
 
     const rows = await db.getAllAsync<{
@@ -142,9 +138,7 @@ export const dashboardService = {
     return { data, excludedCount: excludedRow?.n ?? 0 };
   },
 
-  async getAttendanceTrend(
-    _filters?: DashboardFilters,
-  ): Promise<DashboardResult<TrendDatum>> {
+  async getAttendanceTrend(): Promise<DashboardResult<TrendDatum>> {
     const db = await getDatabase();
 
     const rows = await db.getAllAsync<{
@@ -180,9 +174,7 @@ export const dashboardService = {
     return { data, excludedCount: excludedRow?.n ?? 0 };
   },
 
-  async getPunctuality(
-    _filters?: DashboardFilters,
-  ): Promise<DashboardResult<PunctualityDatum>> {
+  async getPunctuality(): Promise<DashboardResult<PunctualityDatum>> {
     const db = await getDatabase();
 
     const rows = await db.getAllAsync<{
@@ -225,9 +217,7 @@ export const dashboardService = {
     return { data, excludedCount: excludedRow?.n ?? 0 };
   },
 
-  async getEngagementRate(
-    _filters?: DashboardFilters,
-  ): Promise<DashboardResult<EngagementDatum>> {
+  async getEngagementRate(): Promise<DashboardResult<EngagementDatum>> {
     const db = await getDatabase();
 
     const rows = await db.getAllAsync<{

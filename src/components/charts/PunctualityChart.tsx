@@ -8,10 +8,7 @@ import { parseInputDate } from '../../utils/date';
 
 interface PunctualityChartProps {
   data: PunctualityDatum[];
-  onBarPress?: (
-    datum: PunctualityDatum,
-    position: { x: number; y: number },
-  ) => void;
+  onBarPress?: (datum: PunctualityDatum) => void;
 }
 
 function formatDayMonth(raw: string): string {
@@ -44,8 +41,8 @@ export function PunctualityChart({
         topLabelComponent: () => (
           <Text style={styles.valueLabel}>{`${datum.minutesLate}`}</Text>
         ),
-        onPress: (_item: unknown, _idx: number, x: number, y: number) => {
-          onBarPress?.(datum, { x, y });
+        onPress: () => {
+          onBarPress?.(datum);
         },
       })),
     [data, theme, styles.valueLabel, onBarPress],

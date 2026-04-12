@@ -8,10 +8,7 @@ import { parseInputDate } from '../../utils/date';
 
 interface LateArrivalChartProps {
   data: LateArrivalDatum[];
-  onBarPress?: (
-    datum: LateArrivalDatum,
-    position: { x: number; y: number },
-  ) => void;
+  onBarPress?: (datum: LateArrivalDatum) => void;
 }
 
 function formatDayMonth(raw: string): string {
@@ -42,8 +39,8 @@ export function LateArrivalChart({ data, onBarPress }: LateArrivalChartProps) {
         topLabelComponent: () => (
           <Text style={styles.valueLabel}>{datum.percent.toFixed(1)}%</Text>
         ),
-        onPress: (_item: unknown, _idx: number, x: number, y: number) => {
-          onBarPress?.(datum, { x, y });
+        onPress: () => {
+          onBarPress?.(datum);
         },
       })),
     [data, theme, styles.valueLabel, onBarPress],
