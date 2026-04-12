@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS lessons_data (
     coordinator_name TEXT DEFAULT '',
     professor_name TEXT DEFAULT '',
     professor_id TEXT,
+    lesson_topic_id TEXT,
     series_name TEXT DEFAULT '',
     lesson_title TEXT DEFAULT '',
     time_expected_start TEXT DEFAULT '10:00',
@@ -16,7 +17,11 @@ CREATE TABLE IF NOT EXISTS lessons_data (
     attendance_end INTEGER DEFAULT 0,
     unique_participants INTEGER DEFAULT 0,
     status TEXT CHECK(status IN ('IN_PROGRESS', 'COMPLETED', 'EXPORTED', 'SYNCED')) DEFAULT 'IN_PROGRESS',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    client_updated_at TEXT,
+    includes_professor INTEGER NOT NULL DEFAULT 0,
+    weather TEXT,
+    notes TEXT
 );
 `;
 

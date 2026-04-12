@@ -36,7 +36,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return dbInstance!;
 }
 
-async function applyMigrations(db: SQLite.SQLiteDatabase) {
+export async function applyMigrations(db: SQLite.SQLiteDatabase) {
   // Check if professor_id column exists in lessons_data
   const tableInfo = await db.getAllAsync<{ name: string }>(
     "PRAGMA table_info(lessons_data)"
@@ -66,6 +66,42 @@ async function applyMigrations(db: SQLite.SQLiteDatabase) {
   if (needsStatusMigration) {
     console.log('Applying migration: Adding EXPORTED to status CHECK constraint');
     await migrateStatusConstraint(db);
+  }
+
+  // Spec 005: add client_updated_at, includes_professor, weather, notes to lessons_data.
+  // Re-fetch table info because migrateStatusConstraint may have rebuilt the table.
+  const tableInfoAfter = await db.getAllAsync<{ name: string }>(
+    "PRAGMA table_info(lessons_data)"
+  );
+
+  const hasClientUpdatedAt = tableInfoAfter.some(col => col.name === 'client_updated_at');
+  if (!hasClientUpdatedAt) {
+    console.log('Applying migration: Adding client_updated_at column to lessons_data (spec 005)');
+    await db.execAsync('ALTER TABLE lessons_data ADD COLUMN client_updated_at TEXT;');
+    // Backfill existing rows so every row has a valid timestamp post-migration.
+    await db.execAsync(
+      'UPDATE lessons_data SET client_updated_at = created_at WHERE client_updated_at IS NULL;'
+    );
+  }
+
+  const hasIncludesProfessor = tableInfoAfter.some(col => col.name === 'includes_professor');
+  if (!hasIncludesProfessor) {
+    console.log('Applying migration: Adding includes_professor column to lessons_data (spec 005)');
+    await db.execAsync(
+      'ALTER TABLE lessons_data ADD COLUMN includes_professor INTEGER NOT NULL DEFAULT 0;'
+    );
+  }
+
+  const hasWeather = tableInfoAfter.some(col => col.name === 'weather');
+  if (!hasWeather) {
+    console.log('Applying migration: Adding weather column to lessons_data (spec 005)');
+    await db.execAsync('ALTER TABLE lessons_data ADD COLUMN weather TEXT;');
+  }
+
+  const hasNotes = tableInfoAfter.some(col => col.name === 'notes');
+  if (!hasNotes) {
+    console.log('Applying migration: Adding notes column to lessons_data (spec 005)');
+    await db.execAsync('ALTER TABLE lessons_data ADD COLUMN notes TEXT;');
   }
 }
 
