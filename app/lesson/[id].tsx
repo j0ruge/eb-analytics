@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Switch,
+  TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState, useRef, useMemo } from "react";
@@ -394,6 +396,45 @@ export default function LessonDetailScreen() {
           }
           disabled={isReadOnly}
         />
+
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Contei o professor nestas contagens</Text>
+          <Switch
+            value={!!lesson.includes_professor}
+            onValueChange={(next) => updateField("includes_professor", next)}
+            disabled={isReadOnly}
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={theme.colors.surface}
+          />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="document-text-outline" size={18} color={theme.colors.text} />
+          <Text style={styles.sectionTitle}>Observações</Text>
+        </View>
+        <Text style={styles.inputLabel}>Clima</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Ex: Ensolarado 28°C"
+          placeholderTextColor={theme.colors.textSecondary}
+          value={lesson.weather ?? ""}
+          onChangeText={(text) => updateField("weather", text.length > 0 ? text : null)}
+          editable={!isReadOnly}
+        />
+        <Text style={styles.inputLabel}>Notas</Text>
+        <TextInput
+          style={[styles.textInput, styles.textInputMultiline]}
+          placeholder="Observações livres sobre a aula"
+          placeholderTextColor={theme.colors.textSecondary}
+          value={lesson.notes ?? ""}
+          onChangeText={(text) => updateField("notes", text.length > 0 ? text : null)}
+          editable={!isReadOnly}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
       </View>
 
       {lesson.status === LessonStatus.IN_PROGRESS && (
@@ -494,6 +535,40 @@ const createStyles = (theme: Theme) =>
       ...theme.typography.caption,
       color: theme.colors.textSecondary,
       fontStyle: "italic",
+    },
+    toggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: theme.spacing.sm,
+      paddingTop: theme.spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    toggleLabel: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+      flex: 1,
+      marginRight: theme.spacing.sm,
+    },
+    inputLabel: {
+      ...theme.typography.caption,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.xs,
+    },
+    textInput: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
+    },
+    textInputMultiline: {
+      minHeight: 96,
     },
     completeButton: {
       backgroundColor: theme.colors.success,

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, Switch } from "react-native";
 import { useMemo, useState } from "react";
 import { useTheme } from "../src/hooks/useTheme";
 import { Theme } from "../src/theme";
@@ -6,6 +6,7 @@ import { ThemePreference } from "../src/hooks/useThemePreference";
 import { Ionicons } from "@expo/vector-icons";
 import { AnimatedPressable } from "../src/components/AnimatedPressable";
 import { seedService } from "../src/services/seedService";
+import { useIncludesProfessorDefault } from "../src/hooks/useIncludesProfessorDefault";
 
 const THEME_OPTIONS: {
   value: ThemePreference;
@@ -24,6 +25,10 @@ export default function SettingsScreen() {
   const { theme, themePreference, setThemePreference } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [seedLoading, setSeedLoading] = useState(false);
+  const {
+    value: includesProfessorDefault,
+    setValue: setIncludesProfessorDefault,
+  } = useIncludesProfessorDefault();
 
   const handleSeed = async () => {
     if (seedLoading) return;
@@ -133,6 +138,26 @@ export default function SettingsScreen() {
               </AnimatedPressable>
             );
           })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Padrões</Text>
+        <Text style={styles.sectionDescription}>
+          Valores iniciais aplicados a cada nova aula criada
+        </Text>
+        <View style={styles.defaultRow}>
+          <Text style={styles.defaultLabel}>
+            Incluir professor nas contagens por padrão
+          </Text>
+          <Switch
+            value={includesProfessorDefault}
+            onValueChange={setIncludesProfessorDefault}
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={theme.colors.surface}
+            accessibilityRole="switch"
+            accessibilityLabel="Incluir professor nas contagens por padrão"
+          />
         </View>
       </View>
 
@@ -268,5 +293,21 @@ const createStyles = (theme: Theme) =>
     },
     checkIcon: {
       marginLeft: theme.spacing.sm,
+    },
+    defaultRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    defaultLabel: {
+      ...theme.typography.body,
+      color: theme.colors.text,
+      flex: 1,
+      marginRight: theme.spacing.sm,
     },
   });
