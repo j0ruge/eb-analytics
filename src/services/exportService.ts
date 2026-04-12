@@ -163,7 +163,8 @@ export const exportService = {
     try {
       const envelope = await buildEnvelope();
 
-      const fileName = `EBD_Export_${new Date().toISOString().split('T')[0]}.json`;
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').split('Z')[0];
+      const fileName = `EBD_Export_${ts}.json`;
       const file = new File(Paths.cache, fileName);
       file.write(JSON.stringify(envelope, null, 2));
 

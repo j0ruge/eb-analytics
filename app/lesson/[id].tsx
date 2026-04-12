@@ -405,6 +405,8 @@ export default function LessonDetailScreen() {
             disabled={isReadOnly}
             trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
             thumbColor={theme.colors.surface}
+            accessibilityRole="switch"
+            accessibilityLabel="Contei o professor nestas contagens"
           />
         </View>
       </View>
@@ -422,6 +424,7 @@ export default function LessonDetailScreen() {
           value={lesson.weather ?? ""}
           onChangeText={(text) => updateField("weather", text.length > 0 ? text : null)}
           editable={!isReadOnly}
+          accessibilityLabel="Clima"
         />
         <Text style={styles.inputLabel}>Notas</Text>
         <TextInput
@@ -434,6 +437,7 @@ export default function LessonDetailScreen() {
           multiline
           numberOfLines={4}
           textAlignVertical="top"
+          accessibilityLabel="Observações"
         />
       </View>
 

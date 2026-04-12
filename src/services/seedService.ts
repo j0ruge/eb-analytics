@@ -138,19 +138,11 @@ export const seedService = {
         if (res.changes > 0) profsCount++;
       }
 
-      const profIdToName = new Map(payload.catalog.professors.map((p) => [p.id, p.name]));
-      const seriesIdToCode = new Map(payload.catalog.series.map((s) => [s.id, s.code]));
-      const topicIdToTitle = new Map(payload.catalog.topics.map((t) => [t.id, t.title]));
-
       // FR-017: seed rows use the catalog-only path. Legacy free-text columns
       // (`professor_name`, `series_name`, `lesson_title`) stay empty so the export
       // layer's XOR resolution emits `*_id` with `*_fallback: null` for every row.
-      // The `profIdToName` / `seriesIdToCode` / `topicIdToTitle` maps are kept unused
-      // here intentionally — they are referenced implicitly by the LEFT JOINs at
-      // export time via `lessonService.getAllLessonsWithDetails()`.
-      void profIdToName;
-      void seriesIdToCode;
-      void topicIdToTitle;
+      // The catalog names are resolved at export time via LEFT JOINs in
+      // `lessonService.getAllLessonsWithDetails()` — no local lookup maps needed.
 
       for (const c of payload.collections) {
         const inst = c.lesson_instance;

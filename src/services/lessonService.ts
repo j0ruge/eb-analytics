@@ -43,6 +43,19 @@ function applyWritePathXor<T extends LessonUpdates>(updates: T): T {
   return next;
 }
 
+// SQLite stores includes_professor as INTEGER 0/1. Normalize to a proper
+// boolean on every read so callers can safely use `=== true` / `=== false`.
+function normalizeLesson<T extends Lesson>(row: T): T {
+  return {
+    ...row,
+    includes_professor: !!row.includes_professor,
+  };
+}
+
+function normalizeLessons<T extends Lesson>(rows: T[]): T[] {
+  return rows.map(normalizeLesson);
+}
+
 export const lessonService = {
   async createLesson(partialLesson?: Partial<Lesson>): Promise<Lesson> {
     const db = await getDatabase();
@@ -123,7 +136,7 @@ export const lessonService = {
     const result = await db.getFirstAsync<Lesson>(
       'SELECT * FROM lessons_data ORDER BY created_at DESC LIMIT 1'
     );
-    return result;
+    return result ? normalizeLesson(result) : null;
   },
 
   async getById(id: string): Promise<Lesson | null> {
@@ -132,7 +145,7 @@ export const lessonService = {
       'SELECT * FROM lessons_data WHERE id = ?',
       [id]
     );
-    return result;
+    return result ? normalizeLesson(result) : null;
   },
 
   async getAllLessons(): Promise<Lesson[]> {
@@ -140,7 +153,7 @@ export const lessonService = {
     const results = await db.getAllAsync<Lesson>(
       'SELECT * FROM lessons_data ORDER BY date DESC, created_at DESC'
     );
-    return results;
+    return normalizeLessons(results);
   },
 
   async updateLesson(id: string, updates: Partial<Lesson>): Promise<void> {
@@ -181,7 +194,7 @@ export const lessonService = {
       'SELECT * FROM lessons_data WHERE status = ?',
       [LessonStatus.COMPLETED]
     );
-    return results;
+    return normalizeLessons(results);
   },
 
   /**
@@ -208,7 +221,7 @@ export const lessonService = {
       'SELECT * FROM lessons_data WHERE status = ?',
       [LessonStatus.EXPORTED]
     );
-    return results;
+    return normalizeLessons(results);
   },
 
   async getByIdWithDetails(id: string): Promise<LessonWithDetails | null> {
@@ -228,7 +241,7 @@ export const lessonService = {
        WHERE ld.id = ?`,
       [id]
     );
-    return result;
+    return result ? normalizeLesson(result) : null;
   },
 
   async getAllLessonsWithDetails(): Promise<LessonWithDetails[]> {
@@ -247,7 +260,7 @@ export const lessonService = {
        LEFT JOIN professors p ON ld.professor_id = p.id
        ORDER BY ld.date DESC, ld.created_at DESC`
     );
-    return results;
+    return normalizeLessons(results);
   },
 
   async deleteLesson(id: string): Promise<void> {

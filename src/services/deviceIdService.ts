@@ -4,24 +4,24 @@ import { v4 as uuidv4 } from 'uuid';
 
 const STORAGE_KEY = '@eb-insights/device-id';
 
-let cached: string | null = null;
+let pendingPromise: Promise<string> | null = null;
 
 export async function getDeviceId(): Promise<string> {
-  if (cached) return cached;
+  if (pendingPromise) return pendingPromise;
 
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    cached = stored;
-    return stored;
-  }
+  pendingPromise = (async () => {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (stored) return stored;
 
-  const generated = uuidv4();
-  await AsyncStorage.setItem(STORAGE_KEY, generated);
-  cached = generated;
-  return generated;
+    const generated = uuidv4();
+    await AsyncStorage.setItem(STORAGE_KEY, generated);
+    return generated;
+  })();
+
+  const result = await pendingPromise;
+  return result;
 }
 
-// Exposed only for tests — lets a suite reset the in-memory cache between cases.
 export function __resetDeviceIdCache() {
-  cached = null;
+  pendingPromise = null;
 }
