@@ -333,12 +333,20 @@ try {
 
 ## 12. Testing
 
+### Unit Tests
 - Test files go in `tests/unit/` directory with `.test.ts` or `.test.tsx` extension
 - Test service logic and utility functions (pure functions first)
 - Use `@testing-library/react-native` for component tests
 - Mock `expo-sqlite` in service tests
 - Run tests with `npm test` or `npx jest`
 - Follow Arrange-Act-Assert pattern
+
+### E2E Tests (Playwright)
+- **After implementing any feature that modifies UI screens** (new fields, toggles, cards, navigation changes), create or update Playwright E2E tests in `tests/e2e/`. Use the `expo-e2e-playwright` skill (`.claude/skills/expo-e2e-playwright/SKILL.md`) for patterns, anti-patterns, and the Expo web compatibility matrix.
+- E2E tests run against the Expo web build (`npx expo start --web --port 8082`) using `@playwright/test`
+- Run E2E tests with `npm run test:e2e`
+- E2E tests cover: screen rendering, form persistence (debounced autosave round-trips), settings preference propagation, empty states and guard conditions
+- E2E tests do NOT cover: `expo-file-system`, `expo-sharing`, `expo-secure-store` — these native-only APIs crash on web. Use unit tests for code paths that touch them.
 
 ---
 
