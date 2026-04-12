@@ -48,7 +48,7 @@ export default function SyncScreen() {
       await exportService.exportData();
       Alert.alert(
         "Sucesso",
-        `${completedCount} aula(s) exportada(s) com sucesso! O status foi atualizado para EXPORTED.`,
+        `${completedCount} aula(s) exportada(s) com sucesso!`,
       );
       await loadStats();
     } catch (err: any) {

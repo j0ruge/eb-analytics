@@ -89,6 +89,42 @@ describe('Seed Service', () => {
       expect(mockDb.runAsync).toHaveBeenCalledTimes(4);
     });
 
+    it('writes includes_professor, notes, client_updated_at and respects XOR for legacy columns', async () => {
+      mockDb.getFirstAsync.mockResolvedValue({ count: 0 });
+
+      await seedService.seed();
+
+      // Find the lesson INSERT call (it's the 4th runAsync call: 1 series + 1 topic + 1 professor + 1 lesson)
+      const insertCalls = (mockDb.runAsync as jest.Mock).mock.calls;
+      const lessonInsert = insertCalls.find(
+        (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT OR IGNORE INTO lessons_data')
+      );
+      expect(lessonInsert).toBeDefined();
+
+      const params = lessonInsert![1] as unknown[];
+      // Column order in the INSERT:
+      //   0:id, 1:date, 2:coordinator_name, 3:professor_name, 4:professor_id, 5:lesson_topic_id,
+      //   6:series_name, 7:lesson_title, 8:time_expected_start, 9:time_real_start,
+      //   10:time_expected_end, 11:time_real_end, 12:attendance_start, 13:attendance_mid,
+      //   14:attendance_end, 15:unique_participants, 16:status, 17:created_at,
+      //   18:client_updated_at, 19:includes_professor, 20:weather, 21:notes
+
+      // FR-017 XOR: catalog professor path → professor_name must be empty
+      expect(params[3]).toBe('');     // professor_name cleared (professor_id = 'seed-prof-1')
+      expect(params[4]).toBe('seed-prof-1');
+
+      // FR-017 XOR: catalog topic path → lesson_title and series_name must be empty
+      expect(params[6]).toBe('');     // series_name cleared
+      expect(params[7]).toBe('');     // lesson_title cleared
+      expect(params[5]).toBe('seed-top-1');
+
+      // New 005 columns persisted from seed JSON
+      expect(params[18]).toBe('2026-01-01T11:00:00Z');  // client_updated_at from JSON
+      expect(params[19]).toBe(0);                        // includes_professor: false → 0
+      expect(params[20]).toBeNull();                     // weather: null in fixture
+      expect(params[21]).toBeNull();                     // notes: null in fixture
+    });
+
     it('is idempotent when seed rows already exist', async () => {
       mockDb.getFirstAsync.mockResolvedValue({ count: 12 });
 

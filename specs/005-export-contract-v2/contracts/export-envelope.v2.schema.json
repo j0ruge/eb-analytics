@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eb-insights.local/contracts/export-envelope.v2.schema.json",
+  "title": "EB Insights Export Envelope v2",
+  "description": "Contract for the JSON payload produced by exportService.exportData() in spec 005. Downstream specs 007 (backend) and 008 (sync client) consume this shape. This schema is authoritative — if the implementation disagrees, the schema wins.",
+  "type": "object",
+  "required": ["schema_version", "client", "collector", "exported_at", "collections"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0",
+      "description": "Frozen at 2.0 for this spec. Future versions bump this and may require migration logic on both client and server."
+    },
+    "client": {
+      "$ref": "#/$defs/ClientInfo"
+    },
+    "collector": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/CollectorInfo" }
+      ],
+      "description": "Always null in spec 005. Spec 006 will populate it with a CollectorInfo object without changing schema_version."
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC, millisecond precision. Distinct from any individual collection timestamp."
+    },
+    "collections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/CollectionSubmission" },
+      "description": "One entry per completed lesson on the device. Can be empty only if the exporter was invoked despite the empty-guard — in practice never empty in production."
+    }
+  },
+  "$defs": {
+    "ClientInfo": {
+      "type": "object",
+      "required": ["app_version", "device_id"],
+      "additionalProperties": false,
+      "properties": {
+        "app_version": {
+          "type": "string",
+          "description": "Read from Constants.expoConfig?.version ?? 'unknown'. Reflects app.json at build/release time."
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 generated on first export and persisted in AsyncStorage under @eb-insights/device-id. Stable across app sessions on the same installation."
+        }
+      }
+    },
+    "CollectorInfo": {
+      "type": "object",
+      "required": ["user_id", "display_name"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid" },
+        "display_name": { "type": "string", "minLength": 1 }
+      },
+      "description": "Populated by spec 006 only. Not emitted by 005."
+    },
+    "CollectionSubmission": {
+      "type": "object",
+      "required": [
+        "id",
+        "client_created_at",
+        "client_updated_at",
+        "status",
+        "lesson_instance",
+        "times",
+        "attendance",
+        "unique_participants",
+        "weather",
+        "notes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Reused directly from lessons_data.id. Stable across re-exports of the same underlying lesson record (SC-006)."
+        },
+        "client_created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC, never rewritten after creation."
+        },
+        "client_updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC, millisecond precision. Touched on every lessonService.updateLesson() call."
+        },
+        "status": {
+          "type": "string",
+          "const": "COMPLETED",
+          "description": "Only COMPLETED lessons are exportable (FR-005). The legacy EXPORTED state is never emitted by 005."
+        },
+        "lesson_instance": { "$ref": "#/$defs/LessonInstanceRef" },
+        "times": { "$ref": "#/$defs/TimesBlock" },
+        "attendance": { "$ref": "#/$defs/AttendanceBlock" },
+        "unique_participants": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weather": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ],
+          "description": "Free-text weather note. Empty string coerced to null."
+        },
+        "notes": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ],
+          "description": "Free-text general notes. Empty string coerced to null."
+        }
+      }
+    },
+    "LessonInstanceRef": {
+      "type": "object",
+      "required": [
+        "date",
+        "series_id",
+        "series_code_fallback",
+        "topic_id",
+        "topic_title_fallback",
+        "professor_id",
+        "professor_name_fallback"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "ISO YYYY-MM-DD, the lesson occurrence date."
+        },
+        "series_id": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "format": "uuid" }],
+          "description": "Resolved via LEFT JOIN lessons_data.lesson_topic_id → lesson_topics.series_id → lesson_series.id."
+        },
+        "series_code_fallback": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }],
+          "description": "Free-text fallback (e.g. 'Eb334') populated from legacy lessons_data.series_name when lesson_topic_id is null."
+        },
+        "topic_id": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "format": "uuid" }]
+        },
+        "topic_title_fallback": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }]
+        },
+        "professor_id": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "format": "uuid" }]
+        },
+        "professor_name_fallback": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }]
+        }
+      },
+      "allOf": [
+        {
+          "description": "XOR invariant: exactly one of series_id and series_code_fallback is non-null.",
+          "oneOf": [
+            {
+              "properties": {
+                "series_id": { "type": "string" },
+                "series_code_fallback": { "type": "null" }
+              },
+              "required": ["series_id"]
+            },
+            {
+              "properties": {
+                "series_id": { "type": "null" },
+                "series_code_fallback": { "type": "string" }
+              },
+              "required": ["series_code_fallback"]
+            },
+            {
+              "properties": {
+                "series_id": { "type": "null" },
+                "series_code_fallback": { "type": "null" }
+              },
+              "description": "Both null is tolerated only for pathological pre-005 rows where neither a topic nor a free-text series was ever entered."
+            }
+          ]
+        },
+        {
+          "description": "XOR invariant: exactly one of topic_id and topic_title_fallback is non-null.",
+          "oneOf": [
+            {
+              "properties": {
+                "topic_id": { "type": "string" },
+                "topic_title_fallback": { "type": "null" }
+              },
+              "required": ["topic_id"]
+            },
+            {
+              "properties": {
+                "topic_id": { "type": "null" },
+                "topic_title_fallback": { "type": "string" }
+              },
+              "required": ["topic_title_fallback"]
+            },
+            {
+              "properties": {
+                "topic_id": { "type": "null" },
+                "topic_title_fallback": { "type": "null" }
+              }
+            }
+          ]
+        },
+        {
+          "description": "XOR invariant: exactly one of professor_id and professor_name_fallback is non-null.",
+          "oneOf": [
+            {
+              "properties": {
+                "professor_id": { "type": "string" },
+                "professor_name_fallback": { "type": "null" }
+              },
+              "required": ["professor_id"]
+            },
+            {
+              "properties": {
+                "professor_id": { "type": "null" },
+                "professor_name_fallback": { "type": "string" }
+              },
+              "required": ["professor_name_fallback"]
+            },
+            {
+              "properties": {
+                "professor_id": { "type": "null" },
+                "professor_name_fallback": { "type": "null" }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "TimesBlock": {
+      "type": "object",
+      "required": ["expected_start", "expected_end", "real_start", "real_end"],
+      "additionalProperties": false,
+      "properties": {
+        "expected_start": {
+          "type": "string",
+          "pattern": "^[0-9]{2}:[0-9]{2}$"
+        },
+        "expected_end": {
+          "type": "string",
+          "pattern": "^[0-9]{2}:[0-9]{2}$"
+        },
+        "real_start": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9]{2}:[0-9]{2}$" }
+          ]
+        },
+        "real_end": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9]{2}:[0-9]{2}$" }
+          ]
+        }
+      }
+    },
+    "AttendanceBlock": {
+      "type": "object",
+      "required": ["start", "mid", "end", "includes_professor"],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 is ambiguous (EC-007): means either 'counted, zero people present' or 'did not count this window'. Treat as 'uncertain' unless cross-referenced with notes."
+        },
+        "mid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "includes_professor": {
+          "type": "boolean",
+          "description": "True means the professor is counted in start/mid/end. False means the professor is excluded. Default false on migrated pre-005 rows."
+        }
+      }
+    }
+  }
+}

@@ -26,6 +26,7 @@ interface SeedCatalog {
 interface SeedCollection {
   id: string;
   client_created_at: string;
+  client_updated_at?: string | null;
   status: string;
   lesson_instance: {
     date: string;
@@ -46,6 +47,7 @@ interface SeedCollection {
     includes_professor: boolean;
   };
   unique_participants: number;
+  weather?: string | null;
   notes: string | null;
 }
 
@@ -136,19 +138,15 @@ export const seedService = {
         if (res.changes > 0) profsCount++;
       }
 
-      const profIdToName = new Map(payload.catalog.professors.map((p) => [p.id, p.name]));
-      const seriesIdToCode = new Map(payload.catalog.series.map((s) => [s.id, s.code]));
-      const topicIdToTitle = new Map(payload.catalog.topics.map((t) => [t.id, t.title]));
+      // FR-017: seed rows use the catalog-only path. Legacy free-text columns
+      // (`professor_name`, `series_name`, `lesson_title`) stay empty so the export
+      // layer's XOR resolution emits `*_id` with `*_fallback: null` for every row.
+      // The catalog names are resolved at export time via LEFT JOINs in
+      // `lessonService.getAllLessonsWithDetails()` — no local lookup maps needed.
 
       for (const c of payload.collections) {
         const inst = c.lesson_instance;
-        const professorName = inst.professor_id ? profIdToName.get(inst.professor_id) ?? '' : '';
-        const seriesCode = inst.series_id ? seriesIdToCode.get(inst.series_id) ?? '' : '';
-        const topicTitle = inst.topic_id ? topicIdToTitle.get(inst.topic_id) ?? '' : '';
-
-        const lessonTitle = c.attendance.includes_professor
-          ? `${topicTitle} [inclui prof]`
-          : topicTitle;
+        const clientUpdatedAt = c.client_updated_at ?? c.client_created_at;
 
         const res = await db.runAsync(
           `INSERT OR IGNORE INTO lessons_data (
@@ -156,17 +154,17 @@ export const seedService = {
             series_name, lesson_title,
             time_expected_start, time_real_start, time_expected_end, time_real_end,
             attendance_start, attendance_mid, attendance_end, unique_participants,
-            status, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            status, created_at, client_updated_at, includes_professor, weather, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             c.id,
             inst.date,
             '',
-            professorName,
+            '',
             inst.professor_id,
             inst.topic_id,
-            seriesCode,
-            lessonTitle,
+            '',
+            '',
             c.times.expected_start,
             c.times.real_start,
             c.times.expected_end,
@@ -177,6 +175,10 @@ export const seedService = {
             c.unique_participants,
             LessonStatus.COMPLETED,
             c.client_created_at,
+            clientUpdatedAt,
+            c.attendance.includes_professor ? 1 : 0,
+            c.weather ?? null,
+            c.notes ?? null,
           ],
         );
         if (res.changes > 0) lessonsCount++;

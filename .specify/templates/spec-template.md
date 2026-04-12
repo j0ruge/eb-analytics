@@ -75,6 +75,47 @@
 - What happens when [boundary condition]?
 - How does system handle [error scenario]?
 
+### Write-Path Impact Checklist *(mandatory when feature adds or modifies entity fields)*
+
+<!--
+  Lessons learned from spec 005: three bugs that reached implementation could have
+  been caught at spec time by answering these questions upfront. Each question maps
+  to a real failure mode discovered during the 005 implementation cycle.
+
+  Fill this section out ONLY when the feature adds new columns, changes field
+  semantics, or introduces new invariants on an existing entity. Delete it entirely
+  if the feature is purely UI or does not touch the data model.
+-->
+
+For each new or modified field, answer:
+
+1. **Smart-defaults exception?** — Does this field behave DIFFERENTLY from existing
+   fields in the `createLesson` (or equivalent) smart-defaults chain? If the project
+   inherits field values from the last record (e.g., professor, series, times), and
+   this new field should NOT be inherited (e.g., it is a personal preference, not a
+   per-record carry-forward), document the exception explicitly in the FR. Without
+   this, the implementer will extend the existing pattern by inertia.
+   *(Origin: spec 005 — `includes_professor` was inherited from the last lesson
+   instead of reading the user's Settings preference, causing a bug found via E2E.)*
+
+2. **All write-paths covered?** — List every function/method that INSERTs or UPDATEs
+   the entity: `createX`, `updateX`, `seedService`, migration backfill. Verify that
+   every invariant (XOR, NOT NULL, default value, normalization) is enforced in ALL
+   of them, not just CREATE. If the spec says "field A and field B are mutually
+   exclusive", both the INSERT and UPDATE paths must enforce the exclusion.
+   *(Origin: spec 005 — FR-017 XOR was initially specified only for `createLesson`;
+   `updateLesson` was missed, caught by `/speckit.analyze`.)*
+
+3. **Write-path efficiency?** — If the project uses auto-save (debounced writes), does
+   the UPDATE send only changed fields or the entire entity? Adding N new columns
+   means the auto-save UPDATE grows by N SET clauses per save. Under rapid saves +
+   concurrent reads, this can overwhelm the database driver (especially expo-sqlite
+   on Android). If the entity gains 3+ new fields, consider whether the UPDATE path
+   should filter out immutable fields (id, created_at, status) to keep the SET clause
+   lean.
+   *(Origin: spec 005 — 4 new columns + `client_updated_at` injection caused
+   expo-sqlite Android to crash under 14 rapid concurrent saves.)*
+
 ## Requirements *(mandatory)*
 
 <!--
