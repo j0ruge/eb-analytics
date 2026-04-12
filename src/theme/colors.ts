@@ -1,3 +1,5 @@
+import { hexToRgba } from '../utils/color';
+
 export interface ColorTokens {
   primary: string;
   primaryLight: string;
@@ -20,9 +22,20 @@ export interface ColorTokens {
   skeleton: string;
   skeletonHighlight: string;
   overlay: string;
+
+  // Chart tokens (009-statistics-dashboard)
+  chartPrimary: string;
+  chartWarning: string;
+  chartNeutral: string;
+  chartMuted: string;
+  chartAxis: string;
+  chartGrid: string;
+  chartReferenceLine: string;
+  chartTooltipBackground: string;
+  chartTooltipBorder: string;
 }
 
-export const lightColors: ColorTokens = {
+const lightBase = {
   primary: '#007AFF',
   primaryLight: '#E5F0FF',
   background: '#FFFFFF',
@@ -46,7 +59,7 @@ export const lightColors: ColorTokens = {
   overlay: 'rgba(0,0,0,0.4)',
 };
 
-export const darkColors: ColorTokens = {
+const darkBase = {
   primary: '#0A84FF',
   primaryLight: '#0A3D6B',
   background: '#000000',
@@ -68,4 +81,30 @@ export const darkColors: ColorTokens = {
   skeleton: '#2C2C2E',
   skeletonHighlight: '#3A3A3C',
   overlay: 'rgba(0,0,0,0.6)',
+};
+
+export const lightColors: ColorTokens = {
+  ...lightBase,
+  chartPrimary: lightBase.primary,
+  chartWarning: lightBase.danger,
+  chartNeutral: lightBase.success,
+  chartMuted: lightBase.textTertiary,
+  chartAxis: lightBase.textSecondary,
+  chartGrid: lightBase.borderLight,
+  chartReferenceLine: hexToRgba(lightBase.textSecondary, 0.6),
+  chartTooltipBackground: lightBase.surfaceElevated,
+  chartTooltipBorder: lightBase.border,
+};
+
+export const darkColors: ColorTokens = {
+  ...darkBase,
+  chartPrimary: darkBase.primary,
+  chartWarning: darkBase.danger,
+  chartNeutral: darkBase.success,
+  chartMuted: darkBase.textTertiary,
+  chartAxis: darkBase.textSecondary,
+  chartGrid: darkBase.borderLight,
+  chartReferenceLine: hexToRgba(darkBase.textSecondary, 0.6),
+  chartTooltipBackground: darkBase.surfaceElevated,
+  chartTooltipBorder: darkBase.border,
 };
