@@ -64,12 +64,13 @@ export const lessonService = {
     const lastLesson = await this.getLastLesson();
     const now = new Date().toISOString();
 
-    // Resolve initial includes_professor: caller wins → last lesson → user preference
+    // Resolve initial includes_professor: caller wins → user preference → false.
+    // Unlike professor/series/times, includes_professor is NOT inherited from the
+    // last lesson — it reflects the collector's personal habit (Settings toggle),
+    // not a per-lesson carry-forward.
     let includesProfessor: boolean;
     if (typeof partialLesson?.includes_professor === 'boolean') {
       includesProfessor = partialLesson.includes_professor;
-    } else if (typeof lastLesson?.includes_professor === 'boolean') {
-      includesProfessor = lastLesson.includes_professor;
     } else {
       includesProfessor = await getIncludesProfessorDefault();
     }
