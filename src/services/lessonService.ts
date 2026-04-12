@@ -169,8 +169,14 @@ export const lessonService = {
       client_updated_at: new Date().toISOString(),
     };
 
-    // Filter out ID and ensure we have valid keys
-    const entries = Object.entries(withTimestamp).filter(([key]) => key !== 'id');
+    // Filter out immutable fields that the caller may pass (e.g., when the
+    // debounced auto-save sends the entire lesson object). Keeping the SET
+    // clause small avoids flooding expo-sqlite's native prepared-statement
+    // pool on Android, which can crash under rapid concurrent queries.
+    const SKIP_FIELDS = new Set(['id', 'created_at', 'status']);
+    const entries = Object.entries(withTimestamp).filter(
+      ([key]) => !SKIP_FIELDS.has(key),
+    );
 
     if (entries.length === 0) return;
 
