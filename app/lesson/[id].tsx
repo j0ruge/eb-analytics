@@ -96,7 +96,6 @@ export default function LessonDetailScreen() {
   async function saveChanges(updatedLesson: Lesson) {
     try {
       await lessonService.updateLesson(updatedLesson.id, updatedLesson);
-      console.log("Auto-saved successfully");
     } catch (error) {
       console.error("Auto-save failed:", error);
     }
@@ -142,7 +141,6 @@ export default function LessonDetailScreen() {
 
       try {
         await lessonService.updateLesson(lesson.id, updates);
-        console.log("Series updated successfully");
       } catch (error) {
         console.error("Failed to update series:", error);
       }
@@ -159,7 +157,6 @@ export default function LessonDetailScreen() {
 
     try {
       await lessonService.updateLesson(lesson.id, updates);
-      console.log("Professor updated successfully");
     } catch (error) {
       console.error("Failed to update professor:", error);
     }
@@ -178,7 +175,6 @@ export default function LessonDetailScreen() {
 
     try {
       await lessonService.updateLesson(lesson.id, updates);
-      console.log("Topic updated successfully");
     } catch (error) {
       console.error("Failed to update topic:", error);
     }
