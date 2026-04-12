@@ -12,5 +12,5 @@ module.exports = {
     "!**/jest.config.js",
   ],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
-  setupFilesAfterEnv: ["@testing-library/jest-native/extend-expect"],
+  setupFilesAfterEnv: ["./tests/jest-setup.ts"],
 };
