@@ -12,22 +12,16 @@ test.describe('Test C — Seed data and lesson detail UI (§1 partial)', () => {
 
     // Step 2: load seed data
     await page.getByRole('button', { name: 'Carregar dados de exemplo' }).click();
-    await page.waitForTimeout(2000);
+    await expect(page.getByText('Aulas')).toBeVisible({ timeout: 5000 });
 
     // Step 3: navigate to home and filter for completed lessons
     await page.goto('/');
     await page.getByText('Completa').click();
-    await page.waitForTimeout(1000);
+    await expect(page.getByText(/Eb\d{3}/)).toBeVisible({ timeout: 3000 });
 
     // Step 4: open the first lesson
-    const firstLesson = page.locator('[role="generic"][tabindex][data-focusable="true"]').first();
-    if (await firstLesson.isVisible()) {
-      await firstLesson.click();
-    } else {
-      // Fallback: click any clickable element in the lesson list
-      await page.getByText(/Eb\d{3}/).first().click();
-    }
-    await page.waitForTimeout(500);
+    await page.getByText(/Eb\d{3}/).first().click();
+    await expect(page.getByText('Contei o professor nestas contagens')).toBeVisible({ timeout: 3000 });
 
     // Step 5: verify new UI fields exist in lesson detail
     await expect(page.getByText('Contei o professor nestas contagens')).toBeVisible();

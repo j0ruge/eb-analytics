@@ -16,7 +16,10 @@ export async function getDeviceId(): Promise<string> {
     const generated = uuidv4();
     await AsyncStorage.setItem(STORAGE_KEY, generated);
     return generated;
-  })();
+  })().catch((err) => {
+    pendingPromise = null;
+    throw err;
+  });
 
   const result = await pendingPromise;
   return result;

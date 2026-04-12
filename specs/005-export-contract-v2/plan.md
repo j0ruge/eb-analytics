@@ -97,7 +97,7 @@ src/
 ├── hooks/
 │   └── useIncludesProfessorDefault.ts  # NEW: AsyncStorage-backed boolean preference (useThemePreference pattern)
 └── components/
-    └── (no new components)             # Uses React Native's built-in Switch inline; no wrapper needed
+    └── (no new components for 005)      # Dashboard components below belong to spec 009
 
 tests/
 └── unit/

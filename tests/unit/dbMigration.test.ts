@@ -23,6 +23,12 @@ import { applyMigrations } from '../../src/db/client';
 type ColumnDef = { name: string; value: unknown; notNull?: boolean; defaultValue?: unknown };
 type Row = Record<string, unknown>;
 
+interface MigrationDb {
+  execAsync: (sql: string) => Promise<void>;
+  getAllAsync: <T>(sql: string) => Promise<T[]>;
+  getFirstAsync: <T>(sql: string) => Promise<T | null>;
+}
+
 function makeFakeDb(initialColumns: ColumnDef[], initialRows: Row[]) {
   const columns: ColumnDef[] = initialColumns.map((c) => ({ ...c }));
   const rows: Row[] = initialRows.map((r) => ({ ...r }));
@@ -107,7 +113,7 @@ function makeFakeDb(initialColumns: ColumnDef[], initialRows: Row[]) {
   }
 
   return {
-    db: { execAsync, getAllAsync, getFirstAsync } as any,
+    db: { execAsync, getAllAsync, getFirstAsync } as MigrationDb,
     columns,
     rows,
     log,

@@ -18,7 +18,7 @@ export function DashboardEmptyState({
 
   return (
     <View style={styles.container}>
-      <Ionicons name={icon} size={40} color={theme.colors.textTertiary} />
+      <Ionicons name={icon} size={theme.spacing.xxl} color={theme.colors.textTertiary} />
       <Text style={styles.message}>{message}</Text>
     </View>
   );
@@ -27,7 +27,7 @@ export function DashboardEmptyState({
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: {
-      minHeight: 160,
+      minHeight: theme.spacing.xxl * 3 + theme.spacing.md,
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: theme.spacing.lg,

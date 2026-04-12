@@ -14,21 +14,13 @@ import { AttendanceCurveRow } from '../../src/components/charts/AttendanceCurveR
 import { TrendChart } from '../../src/components/charts/TrendChart';
 import { PunctualityChart } from '../../src/components/charts/PunctualityChart';
 import { EngagementChart } from '../../src/components/charts/EngagementChart';
-import { parseInputDate } from '../../src/utils/date';
+import { formatDayMonth } from '../../src/utils/date';
 
 interface TooltipState {
   lessonId: string;
   lines: string[];
   anchorX: number;
   anchorY: number;
-}
-
-function formatDayMonth(raw: string): string {
-  const d = parseInputDate(raw);
-  if (!d) return raw;
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}`;
 }
 
 function pluralExcluded(count: number): string {

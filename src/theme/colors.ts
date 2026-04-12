@@ -35,7 +35,7 @@ export interface ColorTokens {
   chartTooltipBorder: string;
 }
 
-const lightBase = {
+const LIGHT_BASE = {
   primary: '#007AFF',
   primaryLight: '#E5F0FF',
   background: '#FFFFFF',
@@ -59,7 +59,7 @@ const lightBase = {
   overlay: 'rgba(0,0,0,0.4)',
 };
 
-const darkBase = {
+const DARK_BASE = {
   primary: '#0A84FF',
   primaryLight: '#0A3D6B',
   background: '#000000',
@@ -84,27 +84,27 @@ const darkBase = {
 };
 
 export const lightColors: ColorTokens = {
-  ...lightBase,
-  chartPrimary: lightBase.primary,
-  chartWarning: lightBase.danger,
-  chartNeutral: lightBase.success,
-  chartMuted: lightBase.textTertiary,
-  chartAxis: lightBase.textSecondary,
-  chartGrid: lightBase.borderLight,
-  chartReferenceLine: hexToRgba(lightBase.textSecondary, 0.6),
-  chartTooltipBackground: lightBase.surfaceElevated,
-  chartTooltipBorder: lightBase.border,
+  ...LIGHT_BASE,
+  chartPrimary: LIGHT_BASE.primary,
+  chartWarning: LIGHT_BASE.danger,
+  chartNeutral: LIGHT_BASE.success,
+  chartMuted: LIGHT_BASE.textTertiary,
+  chartAxis: LIGHT_BASE.textSecondary,
+  chartGrid: LIGHT_BASE.borderLight,
+  chartReferenceLine: hexToRgba(LIGHT_BASE.textSecondary, 0.6),
+  chartTooltipBackground: LIGHT_BASE.surfaceElevated,
+  chartTooltipBorder: LIGHT_BASE.border,
 };
 
 export const darkColors: ColorTokens = {
-  ...darkBase,
-  chartPrimary: darkBase.primary,
-  chartWarning: darkBase.danger,
-  chartNeutral: darkBase.success,
-  chartMuted: darkBase.textTertiary,
-  chartAxis: darkBase.textSecondary,
-  chartGrid: darkBase.borderLight,
-  chartReferenceLine: hexToRgba(darkBase.textSecondary, 0.6),
-  chartTooltipBackground: darkBase.surfaceElevated,
-  chartTooltipBorder: darkBase.border,
+  ...DARK_BASE,
+  chartPrimary: DARK_BASE.primary,
+  chartWarning: DARK_BASE.danger,
+  chartNeutral: DARK_BASE.success,
+  chartMuted: DARK_BASE.textTertiary,
+  chartAxis: DARK_BASE.textSecondary,
+  chartGrid: DARK_BASE.borderLight,
+  chartReferenceLine: hexToRgba(DARK_BASE.textSecondary, 0.6),
+  chartTooltipBackground: DARK_BASE.surfaceElevated,
+  chartTooltipBorder: DARK_BASE.border,
 };

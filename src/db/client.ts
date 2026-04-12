@@ -78,11 +78,12 @@ export async function applyMigrations(db: SQLite.SQLiteDatabase) {
   if (!hasClientUpdatedAt) {
     console.log('Applying migration: Adding client_updated_at column to lessons_data (spec 005)');
     await db.execAsync('ALTER TABLE lessons_data ADD COLUMN client_updated_at TEXT;');
-    // Backfill existing rows so every row has a valid timestamp post-migration.
-    await db.execAsync(
-      'UPDATE lessons_data SET client_updated_at = created_at WHERE client_updated_at IS NULL;'
-    );
   }
+  // Backfill unconditionally — idempotent and crash-safe. If the app crashed
+  // between ALTER and UPDATE on a previous launch, this catches the orphaned NULLs.
+  await db.execAsync(
+    'UPDATE lessons_data SET client_updated_at = created_at WHERE client_updated_at IS NULL;'
+  );
 
   const hasIncludesProfessor = tableInfoAfter.some(col => col.name === 'includes_professor');
   if (!hasIncludesProfessor) {

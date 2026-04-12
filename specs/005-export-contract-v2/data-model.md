@@ -70,7 +70,7 @@ IF NOT EXISTS column 'notes':
 
 No change in 005. The existing transitions are:
 
-```
+```text
 IN_PROGRESS ──(complete)──► COMPLETED
    │                          │
    └──(delete)──► [gone]      └──(legacy v1 export)──► EXPORTED [no longer written in 005]

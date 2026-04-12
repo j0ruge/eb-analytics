@@ -110,3 +110,15 @@ export function formatToYYYYMMMDD(date: Date): string {
 
   return `${year}-${monthAbbr}-${dayStr}`;
 }
+
+/**
+ * Formata uma data (string YYYY-MM-DD ou YYYY-MMM-DD) para DD/MM.
+ * Retorna a string original se o parse falha.
+ */
+export function formatDayMonth(raw: string): string {
+  const d = parseInputDate(raw);
+  if (!d) return raw;
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}`;
+}

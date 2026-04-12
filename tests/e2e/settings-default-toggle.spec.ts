@@ -22,9 +22,7 @@ test.describe('Test D — Settings default toggle (§7)', () => {
     await page.waitForTimeout(1000);
 
     // Step 3: verify the includes_professor checkbox is checked on the new lesson
-    const lessonSwitch = page.locator(
-      'input[role="switch"][aria-label="Contei o professor nestas contagens"]',
-    );
+    const lessonSwitch = page.getByRole('switch', { name: 'Contei o professor nestas contagens' });
     await expect(lessonSwitch).toBeChecked();
   });
 });

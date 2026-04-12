@@ -1,5 +1,7 @@
-import { View, Text, StyleSheet, Alert, ScrollView, Switch } from "react-native";
 import { useMemo, useState } from "react";
+
+import { View, Text, StyleSheet, Alert, ScrollView, Switch } from "react-native";
+
 import { useTheme } from "../src/hooks/useTheme";
 import { Theme } from "../src/theme";
 import { ThemePreference } from "../src/hooks/useThemePreference";

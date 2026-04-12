@@ -169,7 +169,7 @@ export const exportService = {
       file.write(JSON.stringify(envelope, null, 2));
 
       if (!(await isAvailableAsync())) {
-        throw new Error('Sharing is not available on this device.');
+        throw new Error('O compartilhamento não está disponível neste dispositivo.');
       }
 
       await shareAsync(file.uri);

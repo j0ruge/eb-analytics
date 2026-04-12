@@ -28,12 +28,19 @@ export function ChartTooltip({
 
   if (!visible) return null;
 
-  const screenWidth = Dimensions.get('window').width;
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const halfWidth = TOOLTIP_WIDTH / 2;
   const clampedLeft = Math.max(
     HORIZONTAL_MARGIN,
     Math.min(screenWidth - TOOLTIP_WIDTH - HORIZONTAL_MARGIN, anchorX - halfWidth),
   );
+
+  // Estimate tooltip height: each line ~20px + link row ~40px + padding 32px
+  const estimatedHeight = lines.length * 20 + 40 + 32;
+  const VERTICAL_MARGIN = 12;
+  const clampedTop = anchorY + estimatedHeight + VERTICAL_MARGIN > screenHeight
+    ? Math.max(VERTICAL_MARGIN, anchorY - estimatedHeight - VERTICAL_MARGIN)
+    : anchorY;
 
   return (
     <>
@@ -46,7 +53,7 @@ export function ChartTooltip({
       <View
         style={[
           styles.tooltip,
-          { top: anchorY, left: clampedLeft, width: TOOLTIP_WIDTH },
+          { top: clampedTop, left: clampedLeft, width: TOOLTIP_WIDTH },
         ]}
         accessibilityRole="alert"
       >

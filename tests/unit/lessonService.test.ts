@@ -24,8 +24,14 @@ import { getIncludesProfessorDefault } from '../../src/hooks/useIncludesProfesso
 
 type RunAsyncCall = { sql: string; params: unknown[] };
 
+interface MockDb {
+  runAsync: jest.Mock;
+  getFirstAsync: jest.Mock;
+  getAllAsync: jest.Mock;
+}
+
 describe('lessonService', () => {
-  let mockDb: any;
+  let mockDb: MockDb;
   let runAsyncCalls: RunAsyncCall[];
 
   beforeEach(() => {

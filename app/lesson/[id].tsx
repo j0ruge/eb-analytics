@@ -426,7 +426,7 @@ export default function LessonDetailScreen() {
           editable={!isReadOnly}
           accessibilityLabel="Clima"
         />
-        <Text style={styles.inputLabel}>Notas</Text>
+        <Text style={styles.inputLabel}>Observações</Text>
         <TextInput
           style={[styles.textInput, styles.textInputMultiline]}
           placeholder="Observações livres sobre a aula"

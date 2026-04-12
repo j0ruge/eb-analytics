@@ -4,19 +4,11 @@ import { BarChart } from 'react-native-gifted-charts';
 import { useTheme } from '../../hooks/useTheme';
 import { Theme } from '../../theme';
 import { EngagementDatum } from '../../types/dashboard';
-import { parseInputDate } from '../../utils/date';
+import { formatDayMonth } from '../../utils/date';
 
 interface EngagementChartProps {
   data: EngagementDatum[];
   onBarPress?: (datum: EngagementDatum) => void;
-}
-
-function formatDayMonth(raw: string): string {
-  const d = parseInputDate(raw);
-  if (!d) return raw;
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}`;
 }
 
 export function EngagementChart({ data, onBarPress }: EngagementChartProps) {

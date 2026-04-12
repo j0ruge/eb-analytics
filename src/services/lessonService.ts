@@ -93,12 +93,13 @@ export const lessonService = {
       attendance_end: 0,
       unique_participants: 0,
       status: LessonStatus.IN_PROGRESS,
-      created_at: now,
-      client_updated_at: now,
-      includes_professor: includesProfessor,
       weather: null,
       notes: null,
       ...partialLesson,
+      // Service-computed fields AFTER spread so callers cannot override them.
+      created_at: now,
+      client_updated_at: now,
+      includes_professor: includesProfessor,
     };
 
     // FR-017: enforce XOR invariant defensively — catalog id wins, legacy field cleared.
@@ -173,7 +174,8 @@ export const lessonService = {
     // debounced auto-save sends the entire lesson object). Keeping the SET
     // clause small avoids flooding expo-sqlite's native prepared-statement
     // pool on Android, which can crash under rapid concurrent queries.
-    const SKIP_FIELDS = new Set(['id', 'created_at', 'status']);
+    // Note: `status` is NOT skipped — it must pass through for handleComplete().
+    const SKIP_FIELDS = new Set(['id', 'created_at']);
     const entries = Object.entries(withTimestamp).filter(
       ([key]) => !SKIP_FIELDS.has(key),
     );
