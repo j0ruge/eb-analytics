@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const AUTH_JWT_KEY = 'eb:auth:jwt';
+const AUTH_JWT_KEY = 'eb.auth.jwt';
 const ASYNC_JWT_KEY = '@eb-insights/auth-jwt';
 
 const BASE_URL: string =
