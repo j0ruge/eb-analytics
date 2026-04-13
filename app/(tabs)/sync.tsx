@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { lessonService } from "../../src/services/lessonService";
 import { exportService } from "../../src/services/exportService";
 import { useTheme } from "../../src/hooks/useTheme";
+import { useAuth } from "../../src/hooks/useAuth";
 import { Theme } from "../../src/theme";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 import { SkeletonLoader } from "../../src/components/SkeletonLoader";
@@ -10,6 +12,7 @@ import { ErrorRetry } from "../../src/components/ErrorRetry";
 
 export default function SyncScreen() {
   const { theme } = useTheme();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [completedCount, setCompletedCount] = useState(0);
   const [exportedCount, setExportedCount] = useState(0);
@@ -51,8 +54,8 @@ export default function SyncScreen() {
         `${completedCount} aula(s) exportada(s) com sucesso!`,
       );
       await loadStats();
-    } catch (err: any) {
-      Alert.alert("Erro na Exportação", err.message);
+    } catch (err: unknown) {
+      Alert.alert("Erro na Exportação", err instanceof Error ? err.message : String(err));
     } finally {
       setExporting(false);
     }
@@ -108,6 +111,25 @@ export default function SyncScreen() {
           <Text style={styles.exportButtonText}>Exportar Dados (JSON)</Text>
         )}
       </AnimatedPressable>
+
+      {!authLoading && !isAuthenticated && (
+        <View
+          style={styles.syncNotice}
+          accessible={true}
+          accessibilityLabel="Faça login para sincronizar com a nuvem"
+        >
+          <Ionicons
+            name="cloud-offline-outline"
+            size={20}
+            color={theme.colors.textSecondary}
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <Text style={styles.syncNoticeText}>
+            Faça login para sincronizar com a nuvem
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -165,5 +187,21 @@ const createStyles = (theme: Theme) =>
     exportButtonText: {
       ...theme.typography.h3,
       color: theme.colors.background,
+    },
+    syncNotice: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    syncNoticeText: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.textSecondary,
+      flex: 1,
     },
   });

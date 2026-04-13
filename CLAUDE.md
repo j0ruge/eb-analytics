@@ -2,8 +2,9 @@
 
 ## Project Overview
 
-- **Stack**: React Native 0.81 + Expo SDK 54 + Expo Router 6 + TypeScript 5.9 (strict) + SQLite (expo-sqlite 16)
+- **Stack (Mobile)**: React Native 0.81 + Expo SDK 54 + Expo Router 6 + TypeScript 5.9 (strict) + SQLite (expo-sqlite 16)
 - **Architecture**: Local-first, offline-first mobile app
+- **Backend**: Node 22 + Fastify 5 + Prisma 7 + PostgreSQL 16 — lives in `server/` with its own rules → see [`server/CLAUDE.md`](server/CLAUDE.md)
 - **Language**: UI text and error messages in Brazilian Portuguese (pt-BR)
 - **Path Alias**: Use `@/` for imports from `src/` (e.g., `@/hooks/useTheme`)
 
@@ -18,6 +19,7 @@
 ## 1. TypeScript & Type Safety
 
 - **Strict mode is mandatory** — never use `any` unless absolutely unavoidable (and add a `// TODO` explaining why)
+- **Never use `as unknown as T`** — it defeats the type system. If a value can be null, type the return as `T | null`
 - Prefer `interface` for object shapes, `type` for unions and intersections
 - Use `enum` for finite sets of values (e.g., `LessonStatus`). Always use UPPERCASE_SNAKE_CASE for enum values
 - Use `Record<K, V>` for typed key-value mappings instead of plain objects
@@ -298,6 +300,9 @@ if (data.length === 0) return <EmptyState title="Nenhum item" />;
 - Use `Alert.alert()` for user-facing error messages
 - Always reset loading state in `finally` block
 - Validate at boundaries: user input in services, not in screens
+- **Every async call must have error handling** — no fire-and-forget promises. Use `.catch()` on Promise chains or `try/catch` on `await`
+- **Every catch block must log the error** — `catch (err) { console.error('Context:', err); }`, never bare `catch {}`
+- **Contexts with `isLoading`** — screens that consume a context with loading state MUST guard renders on `!isLoading` to avoid flash of incorrect content (FOIC)
 
 ```typescript
 // Service — validates and throws
@@ -346,6 +351,7 @@ try {
 - E2E tests run against the Expo web build (`npx expo start --web --port 8082`) using `@playwright/test`
 - Run E2E tests with `npm run test:e2e`
 - E2E tests cover: screen rendering, form persistence (debounced autosave round-trips), settings preference propagation, empty states and guard conditions
+- **Never use `waitForTimeout`** in E2E tests — use deterministic waits: `await expect(page).toHaveURL(...)`, `await page.getByRole(...).waitFor()`, or `await page.waitForLoadState('networkidle')`
 - E2E tests do NOT cover: `expo-file-system`, `expo-sharing`, `expo-secure-store` — these native-only APIs crash on web. Use unit tests for code paths that touch them.
 
 ---
@@ -406,8 +412,9 @@ src/
 ├── types/              # TypeScript interfaces, enums, constants
 └── utils/              # Pure utility functions
 
+server/                 # Backend API (see server/CLAUDE.md for rules)
 specs/                  # Feature specifications (Spec-Driven Dev)
-tests/                  # Unit and integration tests
+tests/                  # Mobile unit and E2E tests
 ```
 
 ### Organization Rules
@@ -420,6 +427,7 @@ tests/                  # Unit and integration tests
 - New components go in `src/components/`
 - New types go in `src/types/`
 - New hooks go in `src/hooks/`
+- Never import from `server/` in mobile code or vice-versa — they are independent packages
 
 ---
 
