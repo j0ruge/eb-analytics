@@ -14,7 +14,7 @@ import {
   CREATE_INDEX_TOPICS_SEQUENCE,
   CREATE_INDEX_LESSON_TOPIC_ID,
 } from './schema';
-import { migrateLegacyData } from './migrations';
+import { migrateLegacyData, migrateAddAuthIdentity } from './migrations';
 import { DB_NAME, DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 
 // Re-export constants for backward compatibility
@@ -276,6 +276,9 @@ async function _doInitializeDatabase() {
 
   // Migrate legacy data to normalized schema (003-migrate-schema-structure)
   await migrateLegacyData(db);
+
+  // Add auth identity support (006-auth-identity)
+  await migrateAddAuthIdentity(db);
 
   console.log('Database initialized successfully');
 }

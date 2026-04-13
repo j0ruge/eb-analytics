@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 
 import { View, Text, StyleSheet, Alert, ScrollView, Switch } from "react-native";
+import { useRouter } from "expo-router";
 
 import { useTheme } from "../src/hooks/useTheme";
+import { useAuth } from "../src/hooks/useAuth";
 import { Theme } from "../src/theme";
 import { ThemePreference } from "../src/hooks/useThemePreference";
 import { Ionicons } from "@expo/vector-icons";
 import { AnimatedPressable } from "../src/components/AnimatedPressable";
 import { seedService } from "../src/services/seedService";
 import { useIncludesProfessorDefault } from "../src/hooks/useIncludesProfessorDefault";
+import { Role } from "../src/types/auth";
 
 const THEME_OPTIONS: {
   value: ThemePreference;
@@ -24,13 +27,28 @@ const extractMessage = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { theme, themePreference, setThemePreference } = useTheme();
+  const { user, isAuthenticated, isCoordinator, logout } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [seedLoading, setSeedLoading] = useState(false);
   const {
     value: includesProfessorDefault,
     setValue: setIncludesProfessorDefault,
   } = useIncludesProfessorDefault();
+
+  const handleLogout = () => {
+    Alert.alert("Sair da conta?", "Seus dados locais continuam salvos.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+        },
+      },
+    ]);
+  };
 
   const handleSeed = async () => {
     if (seedLoading) return;
@@ -161,6 +179,86 @@ export default function SettingsScreen() {
             accessibilityLabel="Incluir professor nas contagens por padrão"
           />
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Conta</Text>
+        <Text style={styles.sectionDescription}>
+          {isAuthenticated
+            ? "Gerencie sua conta"
+            : "Entre ou crie uma conta para sincronizar"}
+        </Text>
+
+        {isAuthenticated ? (
+          <View style={styles.accountActions}>
+            <View style={styles.userInfoCard}>
+              <Ionicons
+                name="person-circle-outline"
+                size={40}
+                color={theme.colors.primary}
+              />
+              <View style={styles.userInfoText}>
+                <Text style={styles.userName}>
+                  {user?.display_name || user?.email}
+                </Text>
+                <Text style={styles.userEmail}>{user?.email}</Text>
+                <View style={styles.roleBadge}>
+                  <Text style={styles.roleBadgeText}>
+                    {user?.role === Role.COORDINATOR
+                      ? "Coordenador"
+                      : "Coletor"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <AnimatedPressable
+              style={[styles.devButton, styles.devButtonDanger]}
+              onPress={handleLogout}
+              accessibilityRole="button"
+              accessibilityLabel="Sair"
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={22}
+                color={theme.colors.danger}
+              />
+              <Text style={[styles.devButtonLabel, styles.devButtonLabelDanger]}>
+                Sair
+              </Text>
+            </AnimatedPressable>
+          </View>
+        ) : (
+          <View style={styles.accountActions}>
+            <AnimatedPressable
+              style={styles.devButton}
+              onPress={() => router.push("/login")}
+              accessibilityRole="button"
+              accessibilityLabel="Entrar"
+            >
+              <Ionicons
+                name="log-in-outline"
+                size={22}
+                color={theme.colors.primary}
+              />
+              <Text style={styles.devButtonLabel}>Entrar</Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.devButton}
+              onPress={() => router.push("/register")}
+              accessibilityRole="button"
+              accessibilityLabel="Criar conta"
+            >
+              <Ionicons
+                name="person-add-outline"
+                size={22}
+                color={theme.colors.primary}
+              />
+              <Text style={styles.devButtonLabel}>Criar conta</Text>
+            </AnimatedPressable>
+          </View>
+        )}
       </View>
 
       {__DEV__ && (
@@ -295,6 +393,44 @@ const createStyles = (theme: Theme) =>
     },
     checkIcon: {
       marginLeft: theme.spacing.sm,
+    },
+    accountActions: {
+      gap: theme.spacing.sm,
+    },
+    userInfoCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    userInfoText: {
+      flex: 1,
+    },
+    userName: {
+      ...theme.typography.body,
+      fontWeight: "bold",
+      color: theme.colors.text,
+    },
+    userEmail: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.textSecondary,
+    },
+    roleBadge: {
+      alignSelf: "flex-start",
+      marginTop: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 2,
+      borderRadius: theme.borderRadius.sm,
+      backgroundColor: theme.colors.primary,
+    },
+    roleBadgeText: {
+      ...theme.typography.caption,
+      color: theme.colors.background,
+      fontWeight: "bold",
     },
     defaultRow: {
       flexDirection: "row",

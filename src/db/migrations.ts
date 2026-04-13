@@ -4,6 +4,7 @@ import { DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 import { normalizeText, extractSeriesCode, extractSeriesTitle } from '../utils/text';
 
 const MIGRATION_FLAG_KEY = '003_schema_migration_complete';
+const MIGRATION_006_FLAG = '006_auth_identity_complete';
 
 interface LegacyLessonRow {
   id: string;
@@ -216,6 +217,65 @@ async function updateLessonsWithTopicId(
   }
   
   return updatedCount;
+}
+
+/**
+ * Spec 006: Add collector_user_id to lessons_data and create auth_users cache table.
+ * Idempotent — safe to re-run.
+ */
+export async function migrateAddAuthIdentity(db: SQLite.SQLiteDatabase): Promise<void> {
+  // Check if migration already complete
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS _migration_flags (
+      key TEXT PRIMARY KEY NOT NULL,
+      completed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const existing = await db.getFirstAsync<{ key: string }>(
+    'SELECT key FROM _migration_flags WHERE key = ?',
+    [MIGRATION_006_FLAG]
+  );
+  if (existing) {
+    console.log('Migration 006 already complete, skipping');
+    return;
+  }
+
+  console.log('Starting migration 006: Auth identity...');
+
+  // 1. Add collector_user_id column to lessons_data (if not exists)
+  const tableInfo = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(lessons_data)'
+  );
+  const hasCollectorUserId = tableInfo.some(col => col.name === 'collector_user_id');
+  if (!hasCollectorUserId) {
+    console.log('Adding collector_user_id column to lessons_data');
+    await db.execAsync('ALTER TABLE lessons_data ADD COLUMN collector_user_id TEXT;');
+  }
+
+  // 2. Create index for collector_user_id
+  await db.execAsync(
+    'CREATE INDEX IF NOT EXISTS idx_lessons_collector_user_id ON lessons_data(collector_user_id);'
+  );
+
+  // 3. Create auth_users cache table
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS auth_users (
+      id TEXT PRIMARY KEY NOT NULL,
+      email TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('COLLECTOR', 'COORDINATOR')),
+      accepted INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Mark complete
+  await db.runAsync(
+    'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+    [MIGRATION_006_FLAG]
+  );
+  console.log('Migration 006 completed successfully');
 }
 
 /**

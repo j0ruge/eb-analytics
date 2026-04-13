@@ -2,8 +2,9 @@
 
 ## Project Overview
 
-- **Stack**: React Native 0.81 + Expo SDK 54 + Expo Router 6 + TypeScript 5.9 (strict) + SQLite (expo-sqlite 16)
+- **Stack (Mobile)**: React Native 0.81 + Expo SDK 54 + Expo Router 6 + TypeScript 5.9 (strict) + SQLite (expo-sqlite 16)
 - **Architecture**: Local-first, offline-first mobile app
+- **Backend**: Node 22 + Fastify 5 + Prisma 7 + PostgreSQL 16 — lives in `server/` with its own rules → see [`server/CLAUDE.md`](server/CLAUDE.md)
 - **Language**: UI text and error messages in Brazilian Portuguese (pt-BR)
 - **Path Alias**: Use `@/` for imports from `src/` (e.g., `@/hooks/useTheme`)
 
@@ -406,8 +407,9 @@ src/
 ├── types/              # TypeScript interfaces, enums, constants
 └── utils/              # Pure utility functions
 
+server/                 # Backend API (see server/CLAUDE.md for rules)
 specs/                  # Feature specifications (Spec-Driven Dev)
-tests/                  # Unit and integration tests
+tests/                  # Mobile unit and E2E tests
 ```
 
 ### Organization Rules
@@ -420,6 +422,7 @@ tests/                  # Unit and integration tests
 - New components go in `src/components/`
 - New types go in `src/types/`
 - New hooks go in `src/hooks/`
+- Never import from `server/` in mobile code or vice-versa — they are independent packages
 
 ---
 

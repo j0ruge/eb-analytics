@@ -3,6 +3,7 @@ import { isAvailableAsync, shareAsync } from 'expo-sharing';
 import Constants from 'expo-constants';
 import { lessonService } from './lessonService';
 import { getDeviceId } from './deviceIdService';
+import { authService } from './authService';
 import { LessonStatus, LessonWithDetails } from '../types/lesson';
 
 // ============================================================================
@@ -53,10 +54,15 @@ interface CollectionSubmission {
   notes: string | null;
 }
 
+interface CollectorInfo {
+  user_id: string;
+  display_name: string;
+}
+
 interface ExportEnvelopeV2 {
   schema_version: '2.0';
   client: ClientInfo;
-  collector: null;
+  collector: CollectorInfo | null;
   exported_at: string;
   collections: CollectionSubmission[];
 }
@@ -144,13 +150,18 @@ async function buildEnvelope(): Promise<ExportEnvelopeV2> {
     throw new Error('Não há aulas finalizadas para exportar.');
   }
 
+  const currentUser = await authService.getCurrentUser();
+  const collector: CollectorInfo | null = currentUser
+    ? { user_id: currentUser.id, display_name: currentUser.display_name }
+    : null;
+
   const envelope: ExportEnvelopeV2 = {
     schema_version: '2.0',
     client: {
       app_version: Constants.expoConfig?.version ?? 'unknown',
       device_id: await getDeviceId(),
     },
-    collector: null,
+    collector,
     exported_at: new Date().toISOString(),
     collections: completed.map(buildCollection),
   };

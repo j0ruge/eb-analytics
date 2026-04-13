@@ -38,6 +38,7 @@ export interface Lesson {
   includes_professor: boolean; // Whether attendance counters include the professor (FR-004, FR-019)
   weather: string | null; // Free-text weather note; null when empty (FR-020)
   notes: string | null; // Free-text general notes; null when empty (FR-020)
+  collector_user_id: string | null; // Authenticated user who created this lesson (spec 006 FR-006); null = anonymous
 }
 
 // Tipo expandido para exibição (com JOINs)

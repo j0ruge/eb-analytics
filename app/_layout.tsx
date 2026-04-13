@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { initializeDatabase } from "../src/db/client";
+import { AuthProvider } from "../src/contexts/AuthProvider";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { useTheme } from "../src/hooks/useTheme";
 
@@ -48,6 +49,8 @@ function RootStack() {
         options={{ title: "Detalhes do Tópico" }}
       />
       <Stack.Screen name="settings" options={{ title: "Configurações" }} />
+      <Stack.Screen name="login" options={{ title: "Entrar" }} />
+      <Stack.Screen name="register" options={{ title: "Criar Conta" }} />
     </Stack>
   );
 }
@@ -58,8 +61,10 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <RootStack />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <RootStack />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }

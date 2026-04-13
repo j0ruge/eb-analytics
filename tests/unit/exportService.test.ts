@@ -48,6 +48,12 @@ jest.mock('../../src/services/lessonService', () => ({
   },
 }));
 
+jest.mock('../../src/services/authService', () => ({
+  authService: {
+    getCurrentUser: jest.fn().mockResolvedValue(null),
+  },
+}));
+
 // Mock AsyncStorage so getDeviceId persists between calls within a test.
 // Variable name MUST start with `mock` so Jest allows the reference from the
 // jest.mock factory (which is hoisted above the declaration).
@@ -67,6 +73,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 import { exportService } from '../../src/services/exportService';
 import { lessonService } from '../../src/services/lessonService';
+import { authService } from '../../src/services/authService';
 import { __resetDeviceIdCache } from '../../src/services/deviceIdService';
 
 // Fixture: a single COMPLETED lesson with catalog professor/topic.
@@ -93,6 +100,7 @@ const catalogLesson: LessonWithDetails = {
   includes_professor: false,
   weather: 'Ensolarado 28°C',
   notes: 'Tudo ok',
+  collector_user_id: null,
   topic_title: 'Inveja',
   series_code: 'Eb356',
   series_title: 'Série EB356',
@@ -119,6 +127,7 @@ describe('exportService v2 envelope', () => {
     for (const k of Object.keys(mockAsyncStorageMap)) delete mockAsyncStorageMap[k];
     __resetDeviceIdCache();
     (lessonService.getAllLessonsWithDetails as jest.Mock).mockReset();
+    (authService.getCurrentUser as jest.Mock).mockReset().mockResolvedValue(null);
   });
 
   // ==================================================================
@@ -346,6 +355,37 @@ describe('exportService v2 envelope', () => {
 
       const envelope = await exportService.__buildEnvelopeForTest();
       expect(envelope.collections[0].attendance.includes_professor).toBe(false);
+    });
+  });
+
+  // ==================================================================
+  // Collector identity (006 FR-009)
+  // ==================================================================
+  describe('collector identity', () => {
+    it('collector is null when no user is logged in', async () => {
+      (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([catalogLesson]);
+      (authService.getCurrentUser as jest.Mock).mockResolvedValue(null);
+
+      const envelope = await exportService.__buildEnvelopeForTest();
+      expect(envelope.collector).toBeNull();
+    });
+
+    it('collector includes user_id and display_name when logged in', async () => {
+      (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([catalogLesson]);
+      (authService.getCurrentUser as jest.Mock).mockResolvedValue({
+        id: 'user-uuid-1',
+        email: 'test@example.com',
+        display_name: 'Test User',
+        role: 'COLLECTOR',
+        accepted: true,
+        created_at: '2026-04-12T00:00:00.000Z',
+      });
+
+      const envelope = await exportService.__buildEnvelopeForTest();
+      expect(envelope.collector).toEqual({
+        user_id: 'user-uuid-1',
+        display_name: 'Test User',
+      });
     });
   });
 });

@@ -142,10 +142,10 @@ As the operator (self-hosting), I want a healthcheck endpoint and structured log
 
 #### Stack & Infrastructure
 
-- **FR-001**: Stack: Node 22 LTS, Fastify 5, TypeScript strict mode, Prisma 5, PostgreSQL 16.
+- **FR-001**: Stack: Node 22 LTS, Fastify 5, TypeScript strict mode, Prisma 7, PostgreSQL 16.
 - **FR-002**: Passwords stored as bcrypt hashes with cost factor 12 (or argon2id if the ARM deployment target prefers it).
 - **FR-003**: JWT signing uses RS256 or HS256 with a secret/key from environment variables. JWT payload: `{ sub: user_id, role, iat, exp }`. Expiration: 7 days.
-- **FR-004**: Prisma migrations are versioned in git under `server/prisma/migrations/`. Every schema change ships as a migration file.
+- **FR-004**: Prisma 7 migrations are versioned in git under `server/prisma/migrations/`. Every schema change ships as a migration file. Configuration lives in `server/prisma.config.ts`.
 - **FR-005**: Docker Compose file at `server/docker-compose.yml` brings up Node + Postgres for local dev and self-hosting.
 - **FR-006**: Structured logging via Fastify's default `pino`. Every request gets a `request_id`.
 
@@ -191,18 +191,18 @@ As the operator (self-hosting), I want a healthcheck endpoint and structured log
 
 ### Key Entities *(include if feature involves data)*
 
-Prisma schema (authoritative):
+Prisma 7 schema (authoritative). Configuration in `server/prisma.config.ts`, generated client at `server/src/generated/client/`:
 
 ```prisma
 // server/prisma/schema.prisma
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/client"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -324,7 +324,7 @@ function adjustedAttendance(c: LessonCollection): { start: number; mid: number; 
   };
 }
 
-async function recompute(instanceId: string, tx: PrismaTransaction) {
+async function recompute(instanceId: string, tx: PrismaTransaction): Promise<void> {
   const instance = await tx.lessonInstance.findUnique({
     where: { id: instanceId },
     include: { collections: { include: { collector: true } } },
@@ -372,17 +372,19 @@ server/
 │   │   ├── authService.ts
 │   │   └── catalogService.ts
 │   ├── lib/
-│   │   ├── prisma.ts
+│   │   ├── prisma.ts       // PrismaClient singleton with driver adapter
 │   │   ├── jwt.ts
 │   │   └── roles.ts
 │   ├── plugins/
 │   │   ├── auth.ts         // JWT verification plugin
 │   │   └── rbac.ts         // role checks
+│   ├── generated/client/   // Prisma 7 generated client (git-ignored)
 │   └── server.ts
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/
 │   └── seed.ts             // bootstrap + first-user-coordinator logic
+├── prisma.config.ts        // Prisma 7 configuration (DATABASE_URL, seed)
 ├── test/
 │   ├── auth.test.ts
 │   ├── sync.test.ts
@@ -393,6 +395,7 @@ server/
 ├── .env.example
 ├── package.json
 ├── tsconfig.json
+├── CLAUDE.md               // Server coding standards
 └── README.md
 ```
 

@@ -57,7 +57,7 @@ function normalizeLessons<T extends Lesson>(rows: T[]): T[] {
 }
 
 export const lessonService = {
-  async createLesson(partialLesson?: Partial<Lesson>): Promise<Lesson> {
+  async createLesson(partialLesson?: Partial<Lesson>, collectorUserId?: string | null): Promise<Lesson> {
     const db = await getDatabase();
 
     // Smart defaults: reuse last lesson's metadata
@@ -100,6 +100,7 @@ export const lessonService = {
       created_at: now,
       client_updated_at: now,
       includes_professor: includesProfessor,
+      collector_user_id: collectorUserId ?? null,
     };
 
     // FR-017: enforce XOR invariant defensively — catalog id wins, legacy field cleared.
@@ -108,8 +109,8 @@ export const lessonService = {
     await db.runAsync(
       `INSERT INTO lessons_data (
         id, date, coordinator_name, professor_name, professor_id, lesson_topic_id, series_name, lesson_title,
-        time_expected_start, time_expected_end, status, created_at, client_updated_at, includes_professor, weather, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        time_expected_start, time_expected_end, status, created_at, client_updated_at, includes_professor, weather, notes, collector_user_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newLesson.id,
         newLesson.date,
@@ -127,6 +128,7 @@ export const lessonService = {
         newLesson.includes_professor ? 1 : 0,
         newLesson.weather,
         newLesson.notes,
+        newLesson.collector_user_id,
       ]
     );
 
@@ -175,7 +177,7 @@ export const lessonService = {
     // clause small avoids flooding expo-sqlite's native prepared-statement
     // pool on Android, which can crash under rapid concurrent queries.
     // Note: `status` is NOT skipped — it must pass through for handleComplete().
-    const SKIP_FIELDS = new Set(['id', 'created_at']);
+    const SKIP_FIELDS = new Set(['id', 'created_at', 'collector_user_id']);
     const entries = Object.entries(withTimestamp).filter(
       ([key]) => !SKIP_FIELDS.has(key),
     );

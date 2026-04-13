@@ -49,6 +49,9 @@ nul
 bash.exe.stackdump
 *.stackdump
 
+# Prisma generated client (server)
+server/src/generated/
+
 # Secrets — OAuth, tokens, service account keys
 .secrets/
 google-client*.json
