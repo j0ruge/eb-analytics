@@ -12,7 +12,7 @@ import { ErrorRetry } from "../../src/components/ErrorRetry";
 
 export default function SyncScreen() {
   const { theme } = useTheme();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [completedCount, setCompletedCount] = useState(0);
   const [exportedCount, setExportedCount] = useState(0);
@@ -112,7 +112,7 @@ export default function SyncScreen() {
         )}
       </AnimatedPressable>
 
-      {!isAuthenticated && (
+      {!authLoading && !isAuthenticated && (
         <View
           style={styles.syncNotice}
           accessible={true}

@@ -29,7 +29,7 @@ const extractMessage = (err: unknown): string =>
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, themePreference, setThemePreference } = useTheme();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [seedLoading, setSeedLoading] = useState(false);
   const {
@@ -186,6 +186,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {!authLoading && (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Conta</Text>
         <Text style={styles.sectionDescription}>
@@ -265,6 +266,7 @@ export default function SettingsScreen() {
           </View>
         )}
       </View>
+      )}
 
       {__DEV__ && (
         <View style={styles.section}>

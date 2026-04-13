@@ -9,6 +9,10 @@ const BASE_URL: string =
   (Constants.expoConfig?.extra?.apiUrl as string) ||
   (__DEV__ ? 'http://localhost:3000' : '');
 
+if (!BASE_URL && !__DEV__) {
+  console.error('[apiClient] EXPO_PUBLIC_API_URL não configurado em app.config.js');
+}
+
 export interface ApiResponse<T> {
   data: T | null;
   error: string | null;
@@ -68,7 +72,7 @@ async function request<T>(
     const { status } = response;
 
     if (status === 204) {
-      return { data: null as T, error: null, status };
+      return { data: null, error: null, status };
     }
 
     if (status >= 200 && status < 300) {

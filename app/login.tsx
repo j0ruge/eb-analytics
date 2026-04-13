@@ -40,7 +40,7 @@ export default function LoginScreen() {
         return;
       }
 
-      router.back();
+      router.canGoBack() ? router.back() : router.replace("/");
     } catch {
       Alert.alert("Erro", "Erro no servidor, tente novamente");
     } finally {
