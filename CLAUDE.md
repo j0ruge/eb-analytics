@@ -19,6 +19,7 @@
 ## 1. TypeScript & Type Safety
 
 - **Strict mode is mandatory** — never use `any` unless absolutely unavoidable (and add a `// TODO` explaining why)
+- **Never use `as unknown as T`** — it defeats the type system. If a value can be null, type the return as `T | null`
 - Prefer `interface` for object shapes, `type` for unions and intersections
 - Use `enum` for finite sets of values (e.g., `LessonStatus`). Always use UPPERCASE_SNAKE_CASE for enum values
 - Use `Record<K, V>` for typed key-value mappings instead of plain objects
@@ -299,6 +300,9 @@ if (data.length === 0) return <EmptyState title="Nenhum item" />;
 - Use `Alert.alert()` for user-facing error messages
 - Always reset loading state in `finally` block
 - Validate at boundaries: user input in services, not in screens
+- **Every async call must have error handling** — no fire-and-forget promises. Use `.catch()` on Promise chains or `try/catch` on `await`
+- **Every catch block must log the error** — `catch (err) { console.error('Context:', err); }`, never bare `catch {}`
+- **Contexts with `isLoading`** — screens that consume a context with loading state MUST guard renders on `!isLoading` to avoid flash of incorrect content (FOIC)
 
 ```typescript
 // Service — validates and throws
@@ -347,6 +351,7 @@ try {
 - E2E tests run against the Expo web build (`npx expo start --web --port 8082`) using `@playwright/test`
 - Run E2E tests with `npm run test:e2e`
 - E2E tests cover: screen rendering, form persistence (debounced autosave round-trips), settings preference propagation, empty states and guard conditions
+- **Never use `waitForTimeout`** in E2E tests — use deterministic waits: `await expect(page).toHaveURL(...)`, `await page.getByRole(...).waitFor()`, or `await page.waitForLoadState('networkidle')`
 - E2E tests do NOT cover: `expo-file-system`, `expo-sharing`, `expo-secure-store` — these native-only APIs crash on web. Use unit tests for code paths that touch them.
 
 ---
