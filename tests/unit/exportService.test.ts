@@ -50,7 +50,7 @@ jest.mock('../../src/services/lessonService', () => ({
 
 jest.mock('../../src/services/authService', () => ({
   authService: {
-    getCurrentUser: jest.fn().mockResolvedValue(null),
+    getSession: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -127,7 +127,7 @@ describe('exportService v2 envelope', () => {
     for (const k of Object.keys(mockAsyncStorageMap)) delete mockAsyncStorageMap[k];
     __resetDeviceIdCache();
     (lessonService.getAllLessonsWithDetails as jest.Mock).mockReset();
-    (authService.getCurrentUser as jest.Mock).mockReset().mockResolvedValue(null);
+    (authService.getSession as jest.Mock).mockReset().mockResolvedValue(null);
   });
 
   // ==================================================================
@@ -364,7 +364,7 @@ describe('exportService v2 envelope', () => {
   describe('collector identity', () => {
     it('collector is null when no user is logged in', async () => {
       (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([catalogLesson]);
-      (authService.getCurrentUser as jest.Mock).mockResolvedValue(null);
+      (authService.getSession as jest.Mock).mockResolvedValue(null);
 
       const envelope = await exportService.__buildEnvelopeForTest();
       expect(envelope.collector).toBeNull();
@@ -372,13 +372,16 @@ describe('exportService v2 envelope', () => {
 
     it('collector includes user_id and display_name when logged in', async () => {
       (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([catalogLesson]);
-      (authService.getCurrentUser as jest.Mock).mockResolvedValue({
-        id: 'user-uuid-1',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        role: 'COLLECTOR',
-        accepted: true,
-        created_at: '2026-04-12T00:00:00.000Z',
+      (authService.getSession as jest.Mock).mockResolvedValue({
+        jwt: 'fake-jwt',
+        user: {
+          id: 'user-uuid-1',
+          email: 'test@example.com',
+          display_name: 'Test User',
+          role: 'COLLECTOR',
+          accepted: true,
+          created_at: '2026-04-12T00:00:00.000Z',
+        },
       });
 
       const envelope = await exportService.__buildEnvelopeForTest();

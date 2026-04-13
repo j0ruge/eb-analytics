@@ -150,9 +150,9 @@ async function buildEnvelope(): Promise<ExportEnvelopeV2> {
     throw new Error('Não há aulas finalizadas para exportar.');
   }
 
-  const currentUser = await authService.getCurrentUser();
-  const collector: CollectorInfo | null = currentUser
-    ? { user_id: currentUser.id, display_name: currentUser.display_name }
+  const session = await authService.getSession();
+  const collector: CollectorInfo | null = session
+    ? { user_id: session.user.id, display_name: session.user.display_name }
     : null;
 
   const envelope: ExportEnvelopeV2 = {

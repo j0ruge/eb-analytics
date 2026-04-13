@@ -57,10 +57,19 @@ export const authService = {
       if (!jwt) return null;
 
       const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY);
-      if (!userJson) return null;
+      if (!userJson) {
+        // JWT exists but user data missing — clear JWT to keep session atomic
+        await clearJwt();
+        return null;
+      }
 
       const user = JSON.parse(userJson) as User;
-      if (!user || !user.id || !user.email) return null;
+      if (!user || !user.id || !user.email) {
+        // User data corrupt — clear both stores
+        await clearJwt();
+        await AsyncStorage.removeItem(USER_STORAGE_KEY);
+        return null;
+      }
 
       return { jwt, user };
     })()

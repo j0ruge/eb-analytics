@@ -50,6 +50,10 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<ApiResponse<T>> {
+  if (!BASE_URL) {
+    return { data: null, error: 'API não configurada', status: 0 };
+  }
+
   const url = `${BASE_URL}${path}`;
   const headers: Record<string, string> = {};
 
@@ -66,7 +70,7 @@ async function request<T>(
     const response = await fetch(url, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
 
     const { status } = response;
@@ -78,6 +82,11 @@ async function request<T>(
     if (status >= 200 && status < 300) {
       const data = (await response.json()) as T;
       return { data, error: null, status };
+    }
+
+    // EC-001: clear JWT on 401 before any early return
+    if (status === 401) {
+      await clearJwt();
     }
 
     // Expected HTTP errors — parse server message if available
