@@ -11,10 +11,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
-import { useTheme } from "../src/hooks/useTheme";
-import { useAuth } from "../src/hooks/useAuth";
-import { Theme } from "../src/theme";
-import { AnimatedPressable } from "../src/components/AnimatedPressable";
+import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
+import { Theme } from "@/theme";
+import { AnimatedPressable } from "@/components/AnimatedPressable";
 
 export default function RegisterScreen() {
   const router = useRouter();

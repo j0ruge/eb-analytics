@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiClient, saveJwt, clearJwt } from './apiClient';
+import { apiClient, saveJwt, clearJwt, getStoredJwt } from './apiClient';
 import { User, LoginDTO, RegisterDTO, AuthSession } from '../types/auth';
 
 const USER_STORAGE_KEY = '@eb-insights/auth-user';
@@ -12,10 +12,10 @@ interface AuthResponse {
 }
 
 export const authService = {
-  async register(dto: RegisterDTO): Promise<{ user: User; error: string | null }> {
+  async register(dto: RegisterDTO): Promise<{ user: User | null; error: string | null }> {
     const { data, error } = await apiClient.post<AuthResponse>('/auth/register', dto);
     if (error || !data) {
-      return { user: null as unknown as User, error: error || 'Erro no servidor, tente novamente' };
+      return { user: null, error: error || 'Erro no servidor, tente novamente' };
     }
 
     await saveJwt(data.jwt);
@@ -25,15 +25,15 @@ export const authService = {
     return { user: data.user, error: null };
   },
 
-  async login(email: string, password: string): Promise<{ user: User; error: string | null }> {
+  async login(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
     const dto: LoginDTO = { email, password };
     const { data, error, status } = await apiClient.post<AuthResponse>('/auth/login', dto);
 
     if (error || !data) {
       if (status === 401) {
-        return { user: null as unknown as User, error: 'Email ou senha inválidos' };
+        return { user: null, error: 'Email ou senha inválidos' };
       }
-      return { user: null as unknown as User, error: error || 'Erro no servidor, tente novamente' };
+      return { user: null, error: error || 'Erro no servidor, tente novamente' };
     }
 
     await saveJwt(data.jwt);
@@ -53,34 +53,24 @@ export const authService = {
     if (pendingSessionPromise) return pendingSessionPromise;
 
     pendingSessionPromise = (async (): Promise<AuthSession | null> => {
-      try {
-        const { getStoredJwt } = await import('./apiClient').then(m => ({
-          getStoredJwt: async () => {
-            // Read JWT through apiClient's storage abstraction
-            const { Platform } = await import('react-native');
-            if (Platform.OS === 'web') {
-              return AsyncStorage.getItem('@eb-insights/auth-jwt');
-            }
-            const { getItemAsync } = await import('expo-secure-store');
-            return getItemAsync('eb:auth:jwt');
-          },
-        }));
+      const jwt = await getStoredJwt();
+      if (!jwt) return null;
 
-        const jwt = await getStoredJwt();
-        if (!jwt) return null;
+      const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY);
+      if (!userJson) return null;
 
-        const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY);
-        if (!userJson) return null;
+      const user = JSON.parse(userJson) as User;
+      if (!user || !user.id || !user.email) return null;
 
-        const user = JSON.parse(userJson) as User;
-        return { jwt, user };
-      } catch {
+      return { jwt, user };
+    })()
+      .catch((err) => {
+        console.error('getSession failed:', err);
         return null;
-      }
-    })().catch(() => {
-      pendingSessionPromise = null;
-      return null;
-    });
+      })
+      .finally(() => {
+        pendingSessionPromise = null;
+      });
 
     return pendingSessionPromise;
   },
@@ -90,7 +80,8 @@ export const authService = {
       const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY);
       if (!userJson) return null;
       return JSON.parse(userJson) as User;
-    } catch {
+    } catch (err) {
+      console.error('getCurrentUser: failed to parse stored user', err);
       return null;
     }
   },

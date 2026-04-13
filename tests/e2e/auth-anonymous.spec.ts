@@ -14,9 +14,8 @@ test.describe('Test F — Anonymous baseline (006 US1)', () => {
 
     await page.goto('/');
     await page.getByText('Nova Aula').click();
-    await page.waitForTimeout(1500);
 
-    // Should navigate to lesson detail
-    expect(page.url()).toContain('/lesson/');
+    // Wait for navigation to lesson detail deterministically
+    await expect(page).toHaveURL(/\/lesson\//, { timeout: 5000 });
   });
 });

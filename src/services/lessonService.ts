@@ -177,6 +177,7 @@ export const lessonService = {
     // clause small avoids flooding expo-sqlite's native prepared-statement
     // pool on Android, which can crash under rapid concurrent queries.
     // Note: `status` is NOT skipped — it must pass through for handleComplete().
+    // id and created_at are immutable; collector_user_id is set-once at creation (spec 006 FR-006)
     const SKIP_FIELDS = new Set(['id', 'created_at', 'collector_user_id']);
     const entries = Object.entries(withTimestamp).filter(
       ([key]) => !SKIP_FIELDS.has(key),

@@ -6,7 +6,8 @@ const AUTH_JWT_KEY = 'eb:auth:jwt';
 const ASYNC_JWT_KEY = '@eb-insights/auth-jwt';
 
 const BASE_URL: string =
-  (Constants.expoConfig?.extra?.apiUrl as string) || 'http://localhost:3000';
+  (Constants.expoConfig?.extra?.apiUrl as string) ||
+  (__DEV__ ? 'http://localhost:3000' : '');
 
 export interface ApiResponse<T> {
   data: T | null;
@@ -14,7 +15,7 @@ export interface ApiResponse<T> {
   status: number;
 }
 
-async function getStoredJwt(): Promise<string | null> {
+export async function getStoredJwt(): Promise<string | null> {
   if (Platform.OS === 'web') {
     return AsyncStorage.getItem(ASYNC_JWT_KEY);
   }
@@ -46,9 +47,11 @@ async function request<T>(
   body?: unknown,
 ): Promise<ApiResponse<T>> {
   const url = `${BASE_URL}${path}`;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
+
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const jwt = await getStoredJwt();
   if (jwt) {
@@ -62,7 +65,11 @@ async function request<T>(
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const status = response.status;
+    const { status } = response;
+
+    if (status === 204) {
+      return { data: null as T, error: null, status };
+    }
 
     if (status >= 200 && status < 300) {
       const data = (await response.json()) as T;

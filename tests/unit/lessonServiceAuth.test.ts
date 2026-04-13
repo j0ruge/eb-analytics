@@ -66,6 +66,28 @@ describe('lessonService — collector identity (006)', () => {
     expect(insertCall!.params[insertCall!.params.length - 1]).toBeNull();
   });
 
+  test('createLesson does NOT carry collector_user_id from previous lesson', async () => {
+    // Mock getLastLesson returning a lesson with a collector_user_id
+    mockDb.getFirstAsync.mockResolvedValueOnce({
+      id: 'prev-lesson',
+      collector_user_id: 'prev-user',
+      professor_name: '',
+      professor_id: null,
+      lesson_topic_id: null,
+      series_name: '',
+      lesson_title: '',
+      coordinator_name: '',
+      time_expected_start: '10:00',
+      time_expected_end: '11:00',
+      includes_professor: 0,
+    });
+
+    const lesson = await lessonService.createLesson();
+
+    // collector_user_id should NOT be inherited from the previous lesson
+    expect(lesson.collector_user_id).toBeNull();
+  });
+
   test('updateLesson cannot change collector_user_id', async () => {
     await lessonService.updateLesson('lesson-1', {
       notes: 'updated',

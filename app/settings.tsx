@@ -29,7 +29,7 @@ const extractMessage = (err: unknown): string =>
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, themePreference, setThemePreference } = useTheme();
-  const { user, isAuthenticated, isCoordinator, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [seedLoading, setSeedLoading] = useState(false);
   const {
@@ -44,7 +44,12 @@ export default function SettingsScreen() {
         text: "Sair",
         style: "destructive",
         onPress: async () => {
-          await logout();
+          try {
+            await logout();
+          } catch (err) {
+            console.error("Logout error:", err);
+            Alert.alert("Erro", "Não foi possível sair da conta");
+          }
         },
       },
     ]);
@@ -423,7 +428,7 @@ const createStyles = (theme: Theme) =>
       alignSelf: "flex-start",
       marginTop: theme.spacing.xs,
       paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
+      paddingVertical: theme.spacing.xs,
       borderRadius: theme.borderRadius.sm,
       backgroundColor: theme.colors.primary,
     },

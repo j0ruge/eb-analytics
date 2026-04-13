@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
-import { User, Role } from '../types/auth';
+import { User, Role, RegisterDTO } from '../types/auth';
 import { authService } from '../services/authService';
-import { RegisterDTO } from '../types/auth';
 
 export interface AuthContextValue {
   user: User | null;
@@ -13,15 +12,7 @@ export interface AuthContextValue {
   logout: () => Promise<void>;
 }
 
-export const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  isAuthenticated: false,
-  isCoordinator: false,
-  isLoading: true,
-  login: async () => ({ error: null }),
-  register: async () => ({ user: null, error: null, isFirstUser: false }),
-  logout: async () => {},
-});
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -34,6 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session) {
           setUser(session.user);
         }
+      })
+      .catch((err) => {
+        console.error('Erro ao restaurar sessão:', err);
       })
       .finally(() => setIsLoading(false));
   }, []);

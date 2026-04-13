@@ -243,39 +243,47 @@ export async function migrateAddAuthIdentity(db: SQLite.SQLiteDatabase): Promise
 
   console.log('Starting migration 006: Auth identity...');
 
-  // 1. Add collector_user_id column to lessons_data (if not exists)
-  const tableInfo = await db.getAllAsync<{ name: string }>(
-    'PRAGMA table_info(lessons_data)'
-  );
-  const hasCollectorUserId = tableInfo.some(col => col.name === 'collector_user_id');
-  if (!hasCollectorUserId) {
-    console.log('Adding collector_user_id column to lessons_data');
-    await db.execAsync('ALTER TABLE lessons_data ADD COLUMN collector_user_id TEXT;');
-  }
-
-  // 2. Create index for collector_user_id
-  await db.execAsync(
-    'CREATE INDEX IF NOT EXISTS idx_lessons_collector_user_id ON lessons_data(collector_user_id);'
-  );
-
-  // 3. Create auth_users cache table
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS auth_users (
-      id TEXT PRIMARY KEY NOT NULL,
-      email TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('COLLECTOR', 'COORDINATOR')),
-      accepted INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  try {
+    // 1. Add collector_user_id column to lessons_data (if not exists)
+    // Guard against partial-run: PRAGMA check is needed even with flag guard
+    // in case a previous crash happened between ALTER and flag INSERT.
+    const tableInfo = await db.getAllAsync<{ name: string }>(
+      'PRAGMA table_info(lessons_data)'
     );
-  `);
+    const hasCollectorUserId = tableInfo.some(col => col.name === 'collector_user_id');
+    if (!hasCollectorUserId) {
+      console.log('Adding collector_user_id column to lessons_data');
+      await db.execAsync('ALTER TABLE lessons_data ADD COLUMN collector_user_id TEXT;');
+    }
 
-  // Mark complete
-  await db.runAsync(
-    'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
-    [MIGRATION_006_FLAG]
-  );
-  console.log('Migration 006 completed successfully');
+    // 2. Create index for collector_user_id
+    await db.execAsync(
+      'CREATE INDEX IF NOT EXISTS idx_lessons_collector_user_id ON lessons_data(collector_user_id);'
+    );
+
+    // 3. Create auth_users cache table
+    // accepted DEFAULT 1: users are presumed accepted until server says otherwise
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS auth_users (
+        id TEXT PRIMARY KEY NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        display_name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('COLLECTOR', 'COORDINATOR')),
+        accepted INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Mark complete
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_006_FLAG]
+    );
+    console.log('Migration 006 completed successfully');
+  } catch (error) {
+    console.error('Migration 006 failed:', error);
+    throw error;
+  }
 }
 
 /**

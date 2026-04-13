@@ -54,8 +54,8 @@ export default function SyncScreen() {
         `${completedCount} aula(s) exportada(s) com sucesso!`,
       );
       await loadStats();
-    } catch (err: any) {
-      Alert.alert("Erro na Exportação", err.message);
+    } catch (err: unknown) {
+      Alert.alert("Erro na Exportação", err instanceof Error ? err.message : String(err));
     } finally {
       setExporting(false);
     }
@@ -113,11 +113,17 @@ export default function SyncScreen() {
       </AnimatedPressable>
 
       {!isAuthenticated && (
-        <View style={styles.syncNotice}>
+        <View
+          style={styles.syncNotice}
+          accessible={true}
+          accessibilityLabel="Faça login para sincronizar com a nuvem"
+        >
           <Ionicons
             name="cloud-offline-outline"
             size={20}
             color={theme.colors.textSecondary}
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
           />
           <Text style={styles.syncNoticeText}>
             Faça login para sincronizar com a nuvem
