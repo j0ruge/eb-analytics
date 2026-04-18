@@ -9,8 +9,9 @@
  * Usage (reference rig — 2 vCPU / 2 GB RAM):
  *   cd server/
  *   docker compose up -d         # DB + server
+ *   EB_PW='<choose-8+-chars>'
  *   curl -X POST http://localhost:3000/auth/register -H 'Content-Type: application/json' \
- *     -d '{"email":"load@test","password":"change-me-8","display_name":"Load"}'
+ *     -d "{\"email\":\"load@test\",\"password\":\"$EB_PW\",\"display_name\":\"Load\"}"
  *   # save the jwt from the response
  *   JWT=<paste> node test/load/sync-latency.k6.js
  *

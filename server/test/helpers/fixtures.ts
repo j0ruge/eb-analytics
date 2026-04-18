@@ -1,4 +1,12 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+
+// Per-run test credentials. CI can pin via TEST_PASSWORD / TEST_PASSWORD_2 env vars;
+// otherwise each test process gets a fresh random value so no credential-shaped
+// literal lives in source. The +8-char length satisfies FR-015 (min 8 chars).
+export const TEST_PASSWORD = process.env.TEST_PASSWORD ?? randomBytes(12).toString('hex');
+export const TEST_PASSWORD_2 = process.env.TEST_PASSWORD_2 ?? randomBytes(12).toString('hex');
+export const WRONG_TEST_PASSWORD = `${TEST_PASSWORD}-wrong`;
 
 let counter = 0;
 function nextEmail(): string {
@@ -19,7 +27,7 @@ export async function registerUser(
   opts: { email?: string; password?: string; displayName?: string } = {},
 ): Promise<UserFixture> {
   const email = opts.email ?? nextEmail();
-  const password = opts.password ?? 'secret-pw-1';
+  const password = opts.password ?? TEST_PASSWORD;
   const displayName = opts.displayName ?? 'Test User';
   const res = await app.inject({
     method: 'POST',

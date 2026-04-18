@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildTestApp, resetDb } from './helpers/buildTestApp.js';
-import { buildCollection, envelope, registerUser } from './helpers/fixtures.js';
+import {
+  TEST_PASSWORD,
+  TEST_PASSWORD_2,
+  buildCollection,
+  envelope,
+  registerUser,
+} from './helpers/fixtures.js';
 import { prisma } from '../src/lib/prisma.js';
 
 /**
@@ -30,12 +36,12 @@ describe('concurrency regressions', () => {
   it('H3: two concurrent first-registrations produce exactly one COORDINATOR', async () => {
     const payloadA = {
       email: 'a@example.com',
-      password: 'secret-pw-1',
+      password: TEST_PASSWORD,
       display_name: 'A',
     };
     const payloadB = {
       email: 'b@example.com',
-      password: 'secret-pw-2',
+      password: TEST_PASSWORD_2,
       display_name: 'B',
     };
     const [resA, resB] = await Promise.all([

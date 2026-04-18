@@ -12,9 +12,10 @@ TL;DR:
 cd server/
 cp .env.example .env           # set JWT_SECRET
 docker compose up -d           # Postgres 16 + server on :3000
+export EB_PW='<choose-8+-chars>'
 curl -X POST http://localhost:3000/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"you@example.com","password":"change-me-8","display_name":"You"}'
+  -d "{\"email\":\"you@example.com\",\"password\":\"$EB_PW\",\"display_name\":\"You\"}"
 ```
 
 The first registered user is auto-promoted to `COORDINATOR` (FR-013).
@@ -37,12 +38,20 @@ API=http://localhost:3000
 jp() { node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)'"$1"'))'; }
 ```
 
+Pick a pair of throwaway passwords once and reuse them across the walkthrough.
+Never reuse a real credential here — these are command-history-visible.
+
+```bash
+COORD_PW='<coord-password-8+>'
+COLLECTOR_PW='<collector-password-8+>'
+```
+
 ### 1. Register the first user → auto COORDINATOR (FR-013)
 
 ```bash
 COORD_JWT=$(curl -s -X POST $API/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"coord@example.com","password":"change-me-8","display_name":"Coord"}' \
+  -d "{\"email\":\"coord@example.com\",\"password\":\"$COORD_PW\",\"display_name\":\"Coord\"}" \
   | jp '.jwt')
 ```
 
@@ -51,7 +60,7 @@ COORD_JWT=$(curl -s -X POST $API/auth/register \
 ```bash
 COORD_JWT=$(curl -s -X POST $API/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"coord@example.com","password":"change-me-8"}' | jp '.jwt')
+  -d "{\"email\":\"coord@example.com\",\"password\":\"$COORD_PW\"}" | jp '.jwt')
 ```
 
 ### 3. Current user
@@ -66,7 +75,7 @@ curl -s -H "Authorization: Bearer $COORD_JWT" $API/me
 ```bash
 COLL=$(curl -s -X POST $API/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"collector@example.com","password":"other-pw-1","display_name":"Collector"}')
+  -d "{\"email\":\"collector@example.com\",\"password\":\"$COLLECTOR_PW\",\"display_name\":\"Collector\"}")
 COLLECTOR_JWT=$(echo "$COLL" | jp '.jwt')
 COLLECTOR_ID=$(echo "$COLL" | jp '.user.id')
 ```

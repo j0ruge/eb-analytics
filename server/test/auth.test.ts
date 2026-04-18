@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildTestApp, resetDb } from './helpers/buildTestApp.js';
+import { TEST_PASSWORD, TEST_PASSWORD_2, WRONG_TEST_PASSWORD } from './helpers/fixtures.js';
 import { prisma } from '../src/lib/prisma.js';
 
 describe('auth endpoints (US-4)', () => {
@@ -27,7 +28,7 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'first@example.com',
-          password: 'secret-pw-1',
+          password: TEST_PASSWORD,
           display_name: 'First',
         },
       });
@@ -50,7 +51,7 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'coord@example.com',
-          password: 'secret-pw-1',
+          password: TEST_PASSWORD,
           display_name: 'Coord',
         },
       });
@@ -59,7 +60,7 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'second@example.com',
-          password: 'secret-pw-2',
+          password: TEST_PASSWORD_2,
           display_name: 'Second',
         },
       });
@@ -87,7 +88,7 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'not-an-email',
-          password: 'secret-pw-1',
+          password: TEST_PASSWORD,
           display_name: 'Bad',
         },
       });
@@ -98,7 +99,7 @@ describe('auth endpoints (US-4)', () => {
     it('rejects duplicate email with 409 email_already_registered', async () => {
       const payload = {
         email: 'dup@example.com',
-        password: 'secret-pw-1',
+        password: TEST_PASSWORD,
         display_name: 'Dup',
       };
       await app.inject({ method: 'POST', url: '/auth/register', payload });
@@ -115,14 +116,14 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'user@example.com',
-          password: 'secret-pw-1',
+          password: TEST_PASSWORD,
           display_name: 'User',
         },
       });
       const res = await app.inject({
         method: 'POST',
         url: '/auth/login',
-        payload: { email: 'user@example.com', password: 'wrong-password' },
+        payload: { email: 'user@example.com', password: WRONG_TEST_PASSWORD },
       });
       expect(res.statusCode).toBe(401);
       expect(res.json().code).toBe('invalid_credentials');
@@ -132,7 +133,7 @@ describe('auth endpoints (US-4)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/auth/login',
-        payload: { email: 'nobody@example.com', password: 'secret-pw-1' },
+        payload: { email: 'nobody@example.com', password: TEST_PASSWORD },
       });
       expect(res.statusCode).toBe(401);
       expect(res.json().code).toBe('invalid_credentials');
@@ -144,14 +145,14 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'user@example.com',
-          password: 'secret-pw-1',
+          password: TEST_PASSWORD,
           display_name: 'User',
         },
       });
       const res = await app.inject({
         method: 'POST',
         url: '/auth/login',
-        payload: { email: 'user@example.com', password: 'secret-pw-1' },
+        payload: { email: 'user@example.com', password: TEST_PASSWORD },
       });
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -167,7 +168,7 @@ describe('auth endpoints (US-4)', () => {
         url: '/auth/register',
         payload: {
           email: 'me@example.com',
-          password: 'secret-pw-1',
+          password: TEST_PASSWORD,
           display_name: 'Me',
         },
       });

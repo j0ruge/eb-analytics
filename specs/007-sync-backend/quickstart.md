@@ -25,10 +25,14 @@ First boot runs `npx prisma migrate deploy` (inside the container's entrypoint),
 
 ## 3. Bootstrap the first coordinator
 
+Pick a throwaway password (≥8 chars) and export it — avoids baking the value into
+the document:
+
 ```bash
+export EB_PW='<choose-8+-chars>'
 curl -sS -X POST http://localhost:3000/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"coord@example.com","password":"change-me-8","display_name":"Coord"}'
+  -d "{\"email\":\"coord@example.com\",\"password\":\"$EB_PW\",\"display_name\":\"Coord\"}"
 ```
 
 Expected response (FR-013):
