@@ -6,6 +6,13 @@ import corsPlugin from './plugins/cors.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import rateLimitPlugin from './plugins/rateLimit.js';
 import rbacPlugin from './plugins/rbac.js';
+import authRoutes from './routes/auth.js';
+import catalogRoutes from './routes/catalog.js';
+import collectionsRoutes from './routes/collections.js';
+import healthRoutes from './routes/health.js';
+import instancesRoutes from './routes/instances.js';
+import syncRoutes from './routes/sync.js';
+import usersRoutes from './routes/users.js';
 
 export interface BuildAppOptions {
   rateLimit?: { max?: number; timeWindow?: string | number };
@@ -33,6 +40,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(authPlugin);
   await app.register(rbacPlugin);
   await app.register(rateLimitPlugin, opts.rateLimit ?? {});
+
+  // Public routes — no auth (FR-060 exempts /health, /auth/register, /auth/login)
+  await app.register(healthRoutes);
+  await app.register(authRoutes);
+
+  // Authenticated routes
+  await app.register(syncRoutes);
+  await app.register(collectionsRoutes);
+  await app.register(catalogRoutes);
+  await app.register(instancesRoutes);
+  await app.register(usersRoutes);
 
   return app;
 }

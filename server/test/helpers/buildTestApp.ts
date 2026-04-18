@@ -2,9 +2,19 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/server.js';
 import { prisma } from '../../src/lib/prisma.js';
 
-export async function buildTestApp(): Promise<FastifyInstance> {
-  // Shorter rate-limit window for tests that intentionally exercise throttling.
-  return buildApp({ rateLimit: { max: 60, timeWindow: '1 minute' } });
+export interface TestAppOpts {
+  rateLimit?: { max?: number; timeWindow?: string | number };
+}
+
+/**
+ * Default uses a permissive rate limit (10k/min) so property and load-ish
+ * tests don't trip the throttle. The dedicated rateLimit.test.ts passes
+ * production values explicitly.
+ */
+export async function buildTestApp(opts: TestAppOpts = {}): Promise<FastifyInstance> {
+  return buildApp({
+    rateLimit: opts.rateLimit ?? { max: 10_000, timeWindow: '1 minute' },
+  });
 }
 
 /**

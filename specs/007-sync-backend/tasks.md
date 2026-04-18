@@ -77,16 +77,16 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation.**
 
-- [ ] T027 [P] [US1] Property test `server/test/sync.idempotency.property.test.ts` — `fast-check` generates random batches (1..100 collections), posts each 1000× in a single Vitest run, asserts final DB row count equals the number of unique ids (SC-001)
-- [ ] T028 [P] [US1] Integration test `server/test/sync.test.ts` covering US-1 scenarios 1-5, EC-001 (missing catalog reference returned in `rejected[]`), EC-002 (free-text auto-creates pending with `email=null` for Professor), EC-003 (partial batch still 200), EC-006 (schema version required / unsupported — both `missing` and `"2"` rejected; only `"2.0"` accepted), EC-007 (413 batch_too_large). MUST include a "server-only fields are preserved on re-sync" case: ingest a collection, set its `acceptedOverride=true` via direct DB write, re-post the same `id` with newer `clientUpdatedAt` and a subset of client-authored fields, then assert that the re-fetched row has the updated client fields AND still has `acceptedOverride=true` (i.e., the merge is field-level per FR-021, not row-replace)
-- [ ] T029 [P] [US1] Integration test `server/test/collections.mine.test.ts` for `GET /collections?mine=true[&since=]` — returns only caller's collections, includes both `SYNCED` and `REJECTED` with `rejection_reason` populated when rejected (FR-043)
+- [X] T027 [P] [US1] Property test `server/test/sync.idempotency.property.test.ts` — `fast-check` generates random batches (1..100 collections), posts each 1000× in a single Vitest run, asserts final DB row count equals the number of unique ids (SC-001)
+- [X] T028 [P] [US1] Integration test `server/test/sync.test.ts` covering US-1 scenarios 1-5, EC-001 (missing catalog reference returned in `rejected[]`), EC-002 (free-text auto-creates pending with `email=null` for Professor), EC-003 (partial batch still 200), EC-006 (schema version required / unsupported — both `missing` and `"2"` rejected; only `"2.0"` accepted), EC-007 (413 batch_too_large). MUST include a "server-only fields are preserved on re-sync" case: ingest a collection, set its `acceptedOverride=true` via direct DB write, re-post the same `id` with newer `clientUpdatedAt` and a subset of client-authored fields, then assert that the re-fetched row has the updated client fields AND still has `acceptedOverride=true` (i.e., the merge is field-level per FR-021, not row-replace)
+- [X] T029 [P] [US1] Integration test `server/test/collections.mine.test.ts` for `GET /collections?mine=true[&since=]` — returns only caller's collections, includes both `SYNCED` and `REJECTED` with `rejection_reason` populated when rejected (FR-043)
 
 ### Implementation for User Story 1
 
-- [ ] T030 [US1] Create `server/src/services/syncService.ts` with `ingestBatch(userId, payload)` that: validates schema version (T016), enforces 500/5MB limits, opens Serializable `$transaction`, upserts referenced catalog items (series by code, topic by `(seriesId, title)`, professor by name with `email=null`) flipping `isPending=true` only on insert, upserts `LessonInstance` by `(date, seriesCode, topicId)`, takes `pg_advisory_xact_lock` per instance, applies **field-level** newer-wins merge keyed by `clientUpdatedAt` — when `clientUpdatedAt` is newer the UPDATE sets ONLY the client-authored columns (attendance*, includesProfessor, uniqueParticipants, real*, weather, notes, clientUpdatedAt) and MUST preserve server-only columns (`acceptedOverride`, `status`, `rejectionReason`, `serverReceivedAt`); never row-replace (FR-021), classifies each collection as `SYNCED` or `REJECTED` with `rejectionReason`, then calls `aggregateService.recompute` for every touched instance, returns `{accepted, rejected, server_now}`
-- [ ] T031 [US1] Create `server/src/routes/sync.ts` — `POST /sync/batch` Fastify plugin with JSON Schema body validation sourced from `specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json`, `bodyLimit: 5*1024*1024`, auth required via `plugins/auth.ts`, delegates to `syncService.ingestBatch`
-- [ ] T032 [US1] Create `server/src/routes/collections.ts` — `GET /collections?mine=true[&since=]` returning serialized collections per `contracts/sync.md` (FR-043); rejects any `mine` value other than `true` with `invalid_query`
-- [ ] T033 [US1] Register `routes/sync.ts` and `routes/collections.ts` in `server/src/server.ts` after the auth plugin; wire rate-limit to POST
+- [X] T030 [US1] Create `server/src/services/syncService.ts` with `ingestBatch(userId, payload)` that: validates schema version (T016), enforces 500/5MB limits, opens Serializable `$transaction`, upserts referenced catalog items (series by code, topic by `(seriesId, title)`, professor by name with `email=null`) flipping `isPending=true` only on insert, upserts `LessonInstance` by `(date, seriesCode, topicId)`, takes `pg_advisory_xact_lock` per instance, applies **field-level** newer-wins merge keyed by `clientUpdatedAt` — when `clientUpdatedAt` is newer the UPDATE sets ONLY the client-authored columns (attendance*, includesProfessor, uniqueParticipants, real*, weather, notes, clientUpdatedAt) and MUST preserve server-only columns (`acceptedOverride`, `status`, `rejectionReason`, `serverReceivedAt`); never row-replace (FR-021), classifies each collection as `SYNCED` or `REJECTED` with `rejectionReason`, then calls `aggregateService.recompute` for every touched instance, returns `{accepted, rejected, server_now}`
+- [X] T031 [US1] Create `server/src/routes/sync.ts` — `POST /sync/batch` Fastify plugin with JSON Schema body validation sourced from `specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json`, `bodyLimit: 5*1024*1024`, auth required via `plugins/auth.ts`, delegates to `syncService.ingestBatch`
+- [X] T032 [US1] Create `server/src/routes/collections.ts` — `GET /collections?mine=true[&since=]` returning serialized collections per `contracts/sync.md` (FR-043); rejects any `mine` value other than `true` with `invalid_query`
+- [X] T033 [US1] Register `routes/sync.ts` and `routes/collections.ts` in `server/src/server.ts` after the auth plugin; wire rate-limit to POST
 
 **Checkpoint**: US-1 fully testable. Running `vitest run test/sync*.test.ts test/collections.mine.test.ts` passes all assertions.
 
@@ -100,13 +100,13 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 ### Tests for User Story 2
 
-- [ ] T034 [P] [US2] Integration test `server/test/catalog.reads.test.ts` covering US-2 scenarios 1-4: baseline full catalog, `since` filter, pending exclusion by default, pending inclusion coordinator-only with 403 for collector, topic sort order
+- [X] T034 [P] [US2] Integration test `server/test/catalog.reads.test.ts` covering US-2 scenarios 1-4: baseline full catalog, `since` filter, pending exclusion by default, pending inclusion coordinator-only with 403 for collector, topic sort order
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Create `server/src/services/catalogService.ts` with `listCatalog({since?, includePending, actorRole})` that returns `{series, topics, professors, server_now}` filtered by `updatedAt > since` when provided, with pending hidden unless `includePending && actorRole === 'COORDINATOR'`; topics sorted by `(seriesId, sequenceOrder)` (FR-030, FR-031)
-- [ ] T036 [US2] Create `server/src/routes/catalog.ts` with `GET /catalog` handler only (mutations land in Phase 8); enforces coordinator gate on `include_pending=true` before calling the service
-- [ ] T037 [US2] Register `routes/catalog.ts` in `server/src/server.ts`
+- [X] T035 [US2] Create `server/src/services/catalogService.ts` with `listCatalog({since?, includePending, actorRole})` that returns `{series, topics, professors, server_now}` filtered by `updatedAt > since` when provided, with pending hidden unless `includePending && actorRole === 'COORDINATOR'`; topics sorted by `(seriesId, sequenceOrder)` (FR-030, FR-031)
+- [X] T036 [US2] Create `server/src/routes/catalog.ts` with `GET /catalog` handler only (mutations land in Phase 8); enforces coordinator gate on `include_pending=true` before calling the service
+- [X] T037 [US2] Register `routes/catalog.ts` in `server/src/server.ts`
 
 **Checkpoint**: US-2 tests green. Clients can pull catalog; collectors cannot see pending items.
 
@@ -120,13 +120,13 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 ### Tests for User Story 3
 
-- [ ] T038 [P] [US3] Property test `server/test/aggregation.property.test.ts` — `fast-check` generates random `{attendance_start[], includes_professor[], user_accepted[]}` arrays, asserts `aggStart` equals the median of `includes_professor`-normalized, eligibility-filtered values; runs 1000× (SC-002)
-- [ ] T039 [P] [US3] Integration test `server/test/instances.test.ts` covering US-3 scenarios 1-5 plus FR-040 (collector forbidden to see aggregates), FR-041 (single instance fetch), FR-042 (forced recompute)
+- [X] T038 [P] [US3] Property test `server/test/aggregation.property.test.ts` — `fast-check` generates random `{attendance_start[], includes_professor[], user_accepted[]}` arrays, asserts `aggStart` equals the median of `includes_professor`-normalized, eligibility-filtered values; runs 1000× (SC-002)
+- [X] T039 [P] [US3] Integration test `server/test/instances.test.ts` covering US-3 scenarios 1-5 plus FR-040 (collector forbidden to see aggregates), FR-041 (single instance fetch), FR-042 (forced recompute)
 
 ### Implementation for User Story 3
 
-- [ ] T040 [US3] Create `server/src/routes/instances.ts` with `GET /instances?from=&to=`, `GET /instances/:id`, `POST /instances/:id/recompute`; all guarded by `requireRole(COORDINATOR)`; the POST calls `aggregateService.recompute(prisma, id)` inside a transaction
-- [ ] T041 [US3] Register `routes/instances.ts` in `server/src/server.ts`
+- [X] T040 [US3] Create `server/src/routes/instances.ts` with `GET /instances?from=&to=`, `GET /instances/:id`, `POST /instances/:id/recompute`; all guarded by `requireRole(COORDINATOR)`; the POST calls `aggregateService.recompute(prisma, id)` inside a transaction
+- [X] T041 [US3] Register `routes/instances.ts` in `server/src/server.ts`
 
 **Checkpoint**: Aggregates visible to coordinators, property-verified for correctness across random inputs.
 
@@ -140,13 +140,13 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 ### Tests for User Story 4
 
-- [ ] T042 [P] [US4] Integration test `server/test/auth.test.ts` covering US-4 scenarios 1-5 and FR-015 (8-char minimum), asserting error `code` values (`invalid_credentials`, `password_too_short`, `email_already_registered`) against the registry in `contracts/error-codes.md`
+- [X] T042 [P] [US4] Integration test `server/test/auth.test.ts` covering US-4 scenarios 1-5 and FR-015 (8-char minimum), asserting error `code` values (`invalid_credentials`, `password_too_short`, `email_already_registered`) against the registry in `contracts/error-codes.md`
 
 ### Implementation for User Story 4
 
-- [ ] T043 [US4] Create `server/src/services/authService.ts` with `register(dto)` (tx: count users; first → COORDINATOR, else COLLECTOR; hash password; insert; return `{jwt, user}`), `login(email, password)` (generic `invalid_credentials` on any failure), `getMe(userId)` (per FR-012)
-- [ ] T044 [US4] Create `server/src/routes/auth.ts` with `POST /auth/register` (validates `password.length >= 8` in-body schema → `password_too_short`), `POST /auth/login`, `GET /me` (auth required)
-- [ ] T045 [US4] Register `routes/auth.ts` in `server/src/server.ts` BEFORE the blanket auth gate, since register/login are public (FR-060)
+- [X] T043 [US4] Create `server/src/services/authService.ts` with `register(dto)` (tx: count users; first → COORDINATOR, else COLLECTOR; hash password; insert; return `{jwt, user}`), `login(email, password)` (generic `invalid_credentials` on any failure), `getMe(userId)` (per FR-012)
+- [X] T044 [US4] Create `server/src/routes/auth.ts` with `POST /auth/register` (validates `password.length >= 8` in-body schema → `password_too_short`), `POST /auth/login`, `GET /me` (auth required)
+- [X] T045 [US4] Register `routes/auth.ts` in `server/src/server.ts` BEFORE the blanket auth gate, since register/login are public (FR-060)
 
 **Checkpoint**: Every other phase's integration tests can now use `authService.register` (directly) to create fixture users; full HTTP flow exercisable via the three endpoints.
 
@@ -160,13 +160,13 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 ### Tests for User Story 5
 
-- [ ] T046 [P] [US5] Integration test `server/test/moderation.test.ts` covering US-5 scenarios 1-3 and SC-006 timing assertion (patch call must resolve in <1 s for ~100 affected instances)
+- [X] T046 [P] [US5] Integration test `server/test/moderation.test.ts` covering US-5 scenarios 1-3 and SC-006 timing assertion (patch call must resolve in <1 s for ~100 affected instances)
 
 ### Implementation for User Story 5
 
-- [ ] T047 [US5] Create `server/src/services/moderationService.ts` with `listUsers()` and `toggleAccepted(userId, accepted)`; the latter opens a transaction, updates the flag, fetches the distinct set of `lessonInstanceId` the user has contributed to via `LessonCollection.collectorUserId=userId`, and calls `aggregateService.recompute(tx, instanceId)` for each (FR-051)
-- [ ] T048 [US5] Create `server/src/routes/users.ts` with `GET /users` and `PATCH /users/:id/accepted`; both guarded by `requireRole(COORDINATOR)`
-- [ ] T049 [US5] Register `routes/users.ts` in `server/src/server.ts`
+- [X] T047 [US5] Create `server/src/services/moderationService.ts` with `listUsers()` and `toggleAccepted(userId, accepted)`; the latter opens a transaction, updates the flag, fetches the distinct set of `lessonInstanceId` the user has contributed to via `LessonCollection.collectorUserId=userId`, and calls `aggregateService.recompute(tx, instanceId)` for each (FR-051)
+- [X] T048 [US5] Create `server/src/routes/users.ts` with `GET /users` and `PATCH /users/:id/accepted`; both guarded by `requireRole(COORDINATOR)`
+- [X] T049 [US5] Register `routes/users.ts` in `server/src/server.ts`
 
 **Checkpoint**: Moderation round-trip works; cascade recompute verified under realistic load.
 
@@ -180,12 +180,12 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 ### Tests for User Story 6
 
-- [ ] T050 [P] [US6] Integration test `server/test/catalog.mutations.test.ts` covering US-6 scenarios 1-4 (create / patch / delete / referenced-conflict) for all three resources, plus coordinator-only gate (FR-032..034)
+- [X] T050 [P] [US6] Integration test `server/test/catalog.mutations.test.ts` covering US-6 scenarios 1-4 (create / patch / delete / referenced-conflict) for all three resources, plus coordinator-only gate (FR-032..034)
 
 ### Implementation for User Story 6
 
-- [ ] T051 [US6] Extend `server/src/services/catalogService.ts` with `createSeries/Topic/Professor(dto)` (sets `isPending=false`), `updateSeries/Topic/Professor(id, partial)` (refreshes `updatedAt`), and `deleteSeries/Topic/Professor(id)` (counts references in `LessonInstance`, throws `*_referenced` when non-zero)
-- [ ] T052 [US6] Extend `server/src/routes/catalog.ts` with `POST /catalog/:resource`, `PATCH /catalog/:resource/:id`, `DELETE /catalog/:resource/:id` for `resource ∈ {series, topics, professors}`; all guarded by `requireRole(COORDINATOR)`
+- [X] T051 [US6] Extend `server/src/services/catalogService.ts` with `createSeries/Topic/Professor(dto)` (sets `isPending=false`), `updateSeries/Topic/Professor(id, partial)` (refreshes `updatedAt`), and `deleteSeries/Topic/Professor(id)` (counts references in `LessonInstance`, throws `*_referenced` when non-zero)
+- [X] T052 [US6] Extend `server/src/routes/catalog.ts` with `POST /catalog/:resource`, `PATCH /catalog/:resource/:id`, `DELETE /catalog/:resource/:id` for `resource ∈ {series, topics, professors}`; all guarded by `requireRole(COORDINATOR)`
 
 **Checkpoint**: Catalog is coordinator-curatable end to end; pending items auto-created by sync can be cleaned up.
 
@@ -199,13 +199,13 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 ### Tests for User Story 7
 
-- [ ] T053 [P] [US7] Integration test `server/test/health.test.ts` covering US-7 scenarios 1-3 (healthy, degraded via Prisma connection stub, log line shape)
+- [X] T053 [P] [US7] Integration test `server/test/health.test.ts` covering US-7 scenarios 1-3 (healthy, degraded via Prisma connection stub, log line shape)
 
 ### Implementation for User Story 7
 
-- [ ] T054 [US7] Create `server/src/routes/health.ts` — `GET /health` runs `prisma.$queryRawUnsafe('SELECT 1')` with a 500 ms timeout, returns 200 or 503 per research §13; no auth required (FR-060 exempts it)
-- [ ] T055 [US7] Configure `pino` in `server/src/server.ts` with `genReqId: () => crypto.randomUUID()`, `redact: ['req.headers.authorization', 'req.body.password']`, pretty transport in non-production (US-7 scenario 3, research §12)
-- [ ] T056 [US7] Register `routes/health.ts` in `server/src/server.ts` BEFORE the blanket auth gate
+- [X] T054 [US7] Create `server/src/routes/health.ts` — `GET /health` runs `prisma.$queryRawUnsafe('SELECT 1')` with a 500 ms timeout, returns 200 or 503 per research §13; no auth required (FR-060 exempts it)
+- [X] T055 [US7] Configure `pino` in `server/src/server.ts` with `genReqId: () => crypto.randomUUID()`, `redact: ['req.headers.authorization', 'req.body.password']`, pretty transport in non-production (US-7 scenario 3, research §12)
+- [X] T056 [US7] Register `routes/health.ts` in `server/src/server.ts` BEFORE the blanket auth gate
 
 **Checkpoint**: Operator has an endpoint to monitor and structured logs to debug.
 
@@ -215,13 +215,13 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 
 **Purpose**: Performance validation, registry consistency, docs.
 
-- [ ] T057 [P] Load test `server/test/load/sync-latency.k6.js` — posts a 50-collection batch, asserts p95 < 500 ms on the reference rig (2 vCPU / 2 GB RAM) per SC-003. **MVP gate**: this test MUST be executed and pass before tagging an MVP release (referenced from §Implementation Strategy below); it is marked Phase 10 because the test code lands last, not because its pass/fail is optional. Document run command + reference-rig specs in `server/README.md`
-- [ ] T058 [P] Load test `server/test/load/concurrent-writes.k6.js` — fires 10 parallel batches at a single lesson instance, asserts every collection persisted and final aggregate matches expected median (SC-005)
-- [ ] T059 [P] Load test `server/test/load/moderation-recompute.k6.js` — seeds a user with ~100 contributing instances, patches `accepted=false`, asserts total wall time < 1 s (SC-006)
-- [ ] T060 [P] Create `server/test/lib/error-codes.check.test.ts` — static-asserts that every `HttpError.code` literal used in `server/src/**` appears in `specs/007-sync-backend/contracts/error-codes.md` (guard against registry drift)
-- [ ] T061 [P] Update `server/README.md` to point at `specs/007-sync-backend/quickstart.md` and the contracts directory
+- [X] T057 [P] Load test `server/test/load/sync-latency.k6.js` — posts a 50-collection batch, asserts p95 < 500 ms on the reference rig (2 vCPU / 2 GB RAM) per SC-003. **MVP gate**: this test MUST be executed and pass before tagging an MVP release (referenced from §Implementation Strategy below); it is marked Phase 10 because the test code lands last, not because its pass/fail is optional. Document run command + reference-rig specs in `server/README.md`
+- [X] T058 [P] Load test `server/test/load/concurrent-writes.k6.js` — fires 10 parallel batches at a single lesson instance, asserts every collection persisted and final aggregate matches expected median (SC-005)
+- [X] T059 [P] Load test `server/test/load/moderation-recompute.k6.js` — seeds a user with ~100 contributing instances, patches `accepted=false`, asserts total wall time < 1 s (SC-006)
+- [X] T060 [P] Create `server/test/lib/error-codes.check.test.ts` — static-asserts that every `HttpError.code` literal used in `server/src/**` appears in `specs/007-sync-backend/contracts/error-codes.md` (guard against registry drift)
+- [X] T061 [P] Update `server/README.md` to point at `specs/007-sync-backend/quickstart.md` and the contracts directory
 - [ ] T062 Run `specs/007-sync-backend/quickstart.md` end-to-end manually on a clean Docker environment; record timing to validate SC-004 (<5 minutes)
-- [ ] T063 [P] Integration test `server/test/rateLimit.test.ts` — acquires a JWT via `authService.register`, bursts 61 `POST /sync/batch` calls inside a single minute against a dev-tuned limiter (window may be shortened to seconds for test speed as long as the per-window count under test equals the production value), asserts that at least one call returns HTTP 429 with `code: rate_limited`, and that `GET` reads in the same window are NOT throttled (FR-063)
+- [X] T063 [P] Integration test `server/test/rateLimit.test.ts` — acquires a JWT via `authService.register`, bursts 61 `POST /sync/batch` calls inside a single minute against a dev-tuned limiter (window may be shortened to seconds for test speed as long as the per-window count under test equals the production value), asserts that at least one call returns HTTP 429 with `code: rate_limited`, and that `GET` reads in the same window are NOT throttled (FR-063)
 
 ---
 
