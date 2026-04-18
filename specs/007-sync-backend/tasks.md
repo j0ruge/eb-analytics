@@ -220,7 +220,7 @@ Monorepo web service. All tasks touch `server/**`; mobile code (`src/`, `app/`) 
 - [X] T059 [P] Load test `server/test/load/moderation-recompute.k6.js` — seeds a user with ~100 contributing instances, patches `accepted=false`, asserts total wall time < 1 s (SC-006)
 - [X] T060 [P] Create `server/test/lib/error-codes.check.test.ts` — static-asserts that every `HttpError.code` literal used in `server/src/**` appears in `specs/007-sync-backend/contracts/error-codes.md` (guard against registry drift)
 - [X] T061 [P] Update `server/README.md` to point at `specs/007-sync-backend/quickstart.md` and the contracts directory
-- [ ] T062 Run `specs/007-sync-backend/quickstart.md` end-to-end manually on a clean Docker environment; record timing to validate SC-004 (<5 minutes)
+- [X] T062 Run `specs/007-sync-backend/quickstart.md` end-to-end manually on a clean Docker environment; record timing to validate SC-004 (<5 minutes)
 - [X] T063 [P] Integration test `server/test/rateLimit.test.ts` — acquires a JWT via `authService.register`, bursts 61 `POST /sync/batch` calls inside a single minute against a dev-tuned limiter (window may be shortened to seconds for test speed as long as the per-window count under test equals the production value), asserts that at least one call returns HTTP 429 with `code: rate_limited`, and that `GET` reads in the same window are NOT throttled (FR-063)
 
 ---

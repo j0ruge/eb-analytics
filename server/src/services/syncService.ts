@@ -159,18 +159,22 @@ async function resolveSeries(
   if (!fallback) {
     throw new CollectionError('missing_catalog_reference', 'Série não informada.');
   }
-  const existing = await tx.lessonSeries.findUnique({ where: { code: fallback } });
-  if (existing) {
-    return { id: existing.id, code: existing.code };
-  }
-  const created = await tx.lessonSeries.create({
-    data: {
-      code: fallback,
-      title: `${fallback} (auto)`,
-      isPending: true,
-    },
-  });
-  return { id: created.id, code: created.code };
+  // Atomic INSERT ... ON CONFLICT (code) DO UPDATE — uses RETURNING so the
+  // row id is available even when a peer inserted concurrently. Prisma's
+  // upsert is SELECT-then-INSERT and races under concurrent writes.
+  // DO UPDATE SET code = EXCLUDED.code is a no-op that still drives the
+  // RETURNING clause to fire on conflict.
+  const inserted = await tx.$queryRawUnsafe<Array<{ id: string; code: string }>>(
+    `INSERT INTO "LessonSeries" ("id", "code", "title", "isPending", "updatedAt")
+     VALUES (gen_random_uuid(), $1, $2, TRUE, NOW())
+     ON CONFLICT ("code") DO UPDATE SET "code" = EXCLUDED."code"
+     RETURNING "id", "code"`,
+    fallback,
+    `${fallback} (auto)`,
+  );
+  const row = inserted[0];
+  if (!row) throw new Error('upsert returned no row');
+  return { id: row.id, code: row.code };
 }
 
 async function resolveTopic(
@@ -267,10 +271,39 @@ async function upsertInstance(
 
 // ---------------- Main entry point ----------------
 
+const MAX_SERIALIZATION_RETRIES = 5;
+
+function isSerializationFailure(err: unknown): boolean {
+  // Prisma maps Postgres 40001 (could not serialize) to P2034 and P2002/P2025
+  // can also surface under contention. P2034 is the one Serializable raises.
+  if (!err || typeof err !== 'object') return false;
+  const code = (err as { code?: string }).code;
+  return code === 'P2034';
+}
+
 export const syncService = {
   async ingestBatch(userId: string, payload: SyncPayload): Promise<SyncResult> {
     const collections = assertBatchShape(payload);
 
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < MAX_SERIALIZATION_RETRIES; attempt += 1) {
+      try {
+        return await runOnce(userId, collections);
+      } catch (err) {
+        if (!isSerializationFailure(err)) throw err;
+        lastErr = err;
+        // Small backoff so the losing tx doesn't immediately re-collide.
+        await new Promise((r) => setTimeout(r, 10 + attempt * 20));
+      }
+    }
+    throw lastErr;
+  },
+};
+
+async function runOnce(
+  userId: string,
+  collections: CollectionInput[],
+): Promise<SyncResult> {
     const accepted: string[] = [];
     const rejected: Array<{ id: string; code: string; message: string }> = [];
 
@@ -437,7 +470,10 @@ export const syncService = {
           await aggregateService.recompute(tx, instanceId);
         }
       },
-      { isolationLevel: 'Serializable' },
+      // ReadCommitted (default) is sufficient — per-instance serialization
+      // is provided by pg_advisory_xact_lock below (research §9 alternative).
+      // Serializable adds commit-time retries (P2034) without extra safety
+      // once the advisory lock is held.
     );
 
     return {
@@ -445,5 +481,4 @@ export const syncService = {
       rejected,
       server_now: new Date().toISOString(),
     };
-  },
-};
+}

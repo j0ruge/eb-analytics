@@ -6,7 +6,10 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 COPY tsconfig.json ./
 COPY src ./src
-RUN npx prisma generate
+# prisma.config.ts reads DATABASE_URL via env() at load time; a dummy value
+# satisfies the loader during `prisma generate` (the command itself only
+# introspects the schema file, it does not connect).
+RUN DATABASE_URL="postgresql://build:build@build/build" npx prisma generate
 RUN npx tsc
 
 FROM node:22-alpine AS runtime

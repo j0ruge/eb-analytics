@@ -56,7 +56,7 @@ curl -sS -X POST http://localhost:3000/sync/batch \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $JWT" \
   -d '{
-    "schema_version": "2",
+    "schema_version": "2.0",
     "collections": [{
       "id": "11111111-1111-1111-1111-111111111111",
       "client_created_at": "2026-04-11T10:00:00Z",
@@ -127,4 +127,4 @@ npm run test:watch            # Vitest watch mode
 | `PrismaClientInitializationError: P1001` | `DATABASE_URL` still points at `db:5432` from .env but you run outside Docker | Switch host to `localhost:5432` when running `npm run dev` locally |
 | `jwt malformed` on every request | Wrong Authorization header | `Authorization: Bearer <jwt>` — mind the space |
 | 413 `batch_too_large` | Batch over 500 rows or 5 MB | Split into chunks (client's job — spec 008) |
-| 400 `schema_version_required` | Client forgot the envelope field | Add `"schema_version": "2"` at the top level |
+| 400 `schema_version_required` | Client forgot the envelope field | Add `"schema_version": "2.0"` at the top level |

@@ -75,12 +75,20 @@ const result = await autocannon({
   },
 });
 
-console.log('Latency p50/p95/p99 (ms):', result.latency.p50, result.latency.p95, result.latency.p99);
+// autocannon reports p50/p90/p97_5/p99 directly; p97_5 is a conservative
+// proxy for p95 (any batch below the p97.5 is also below the p95).
+console.log(
+  'Latency p50/p90/p97_5/p99 (ms):',
+  result.latency.p50,
+  result.latency.p90,
+  result.latency.p97_5,
+  result.latency.p99,
+);
 console.log('Throughput req/s:', result.requests.average);
 
-const p95 = result.latency.p95;
-if (p95 >= 500) {
-  console.error(`SC-003 FAIL: p95=${p95}ms (must be < 500ms)`);
+const p97_5 = result.latency.p97_5;
+if (p97_5 >= 500) {
+  console.error(`SC-003 FAIL: p97.5=${p97_5}ms (conservative proxy for p95; must be < 500ms)`);
   process.exit(1);
 }
-console.log(`SC-003 PASS: p95=${p95}ms`);
+console.log(`SC-003 PASS: p97.5=${p97_5}ms (p95 ≤ p97.5 by definition)`);

@@ -35,6 +35,15 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Other Fastify content-type parser errors (malformed JSON, wrong
+    // Content-Length, etc.) should be 400 invalid_payload, not 500.
+    if (typeof fe.code === 'string' && fe.code.startsWith('FST_ERR_CTP_')) {
+      return reply.status(400).send({
+        code: 'invalid_payload',
+        message: 'Payload inválido.',
+      });
+    }
+
     if (fe.statusCode === 429) {
       return reply
         .status(429)
