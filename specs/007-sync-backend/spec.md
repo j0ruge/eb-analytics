@@ -3,42 +3,52 @@
 **Feature Branch**: `007-sync-backend`
 **Created**: 2026-04-11
 **Status**: Draft
-**Input**: Roadmap item #2 — "Criar um backend, para poder sincronizar com a nuvem"
+**Input**: Roadmap item #2 — "Criar um backend, para poder sincronizar com a nuvem". Source PRD: [prd.md](prd.md).
+
+## Clarifications
+
+### Session 2026-04-17
+
+- Q: Is a rejected collection persisted on the server, and does each collection carry an explicit status? → A: Yes, two-state status persisted: `SYNCED` (persisted, eligible for aggregation subject to moderation) or `REJECTED` (persisted with a rejection reason for audit, never enters an aggregate). Both statuses are visible through the "my collections" read-back endpoint.
+- Q: What is the Professor catalog's natural key? → A: `email` (non-sensitive, operator-assigned). Unique when present; nullable for auto-created pending professors so EC-002 can still create placeholders from free-text names. No governmental document id is persisted on the Professor catalog entity.
+- Q: What is the password policy baseline? → A: Minimum 8 characters, no composition rules (aligned with NIST 800-63B). No upper/lower/number/symbol requirement. Registration rejects shorter passwords with a clear, translatable error.
+- Q: Does the per-submission `acceptedOverride` field ship with a setter endpoint in MVP? → A: No. The field exists on the Lesson Collection entity and the aggregation algorithm honors it, but no MVP endpoint mutates it. Setting it is explicitly deferred to post-MVP. US-3 scenario 5 remains valid as an aggregation-correctness property (if the field is set by any means, per-submission override wins over user-level `accepted`), not as an end-to-end API acceptance test in MVP.
+- Q: What is the language and shape of error responses from the backend? → A: Every error response is a JSON object with two fields: `code` (stable, English `snake_case` identifier such as `invalid_credentials`, `password_too_short`, `schema_version_required`, `professor_referenced`) and `message` (human-readable Brazilian Portuguese). Acceptance tests assert on `code`; the Portuguese `message` is for humans (operators, `curl` debugging) and may be refined without breaking tests. No `Accept-Language` negotiation in MVP.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Receive Idempotent Batch from Client (Priority: P1)
 
-As the backend, I want to accept batches of `lesson_collections` from authenticated collectors and persist them idempotently, so that collectors on unstable church Wi-Fi can retry freely without corrupting the aggregated numbers.
+As the backend, I want to accept batches of collection records from authenticated collectors and persist them idempotently, so that collectors on unstable church Wi-Fi can retry freely without corrupting the aggregated numbers.
 
 **Why this priority**: Core reason the backend exists. Without this, there is no point to the rest of the system.
 
-**Independent Test**: POST a batch of 3 collections with valid JWT. Verify all 3 persist. POST the same batch again. Verify no duplicates and a 200 response.
+**Independent Test**: Submit a batch of 3 collections with valid credentials. Verify all 3 persist. Submit the same batch again. Verify no duplicates and a success response.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid JWT for user `U1` and a batch of 3 collections `[A, B, C]` where none exist on the server, **When** `POST /sync/batch` is called, **Then** all 3 rows are inserted into `lesson_collections`, the response is 200 with `{ accepted: [A,B,C], rejected: [] }`, and affected `LessonInstance.agg*` fields are recomputed.
-2. **Given** the same batch is POSTed a second time, **Then** the response is 200 with `{ accepted: [A,B,C], rejected: [] }` but the database row count is unchanged.
-3. **Given** the batch contains collection `C` with a newer `client_updated_at` than the stored version, **Then** the stored row is updated (fields that changed), not duplicated.
-4. **Given** the batch contains collection `C` with an older `client_updated_at` than the stored version, **Then** the stored row is left alone (older writes are ignored).
-5. **Given** the JWT is missing or invalid, **Then** the response is 401 and nothing is persisted.
+1. **Given** a valid session for user `U1` and a batch of 3 collections `[A, B, C]` where none exist on the server, **When** the batch is submitted, **Then** all 3 records are stored, the response reports `{ accepted: [A,B,C], rejected: [] }`, and affected lesson aggregates are recomputed.
+2. **Given** the same batch is submitted a second time, **Then** the response still reports `{ accepted: [A,B,C], rejected: [] }` but the stored record count is unchanged.
+3. **Given** the batch contains collection `C` with a newer client update timestamp than the stored version, **Then** the stored record is updated (only fields that changed), not duplicated.
+4. **Given** the batch contains collection `C` with an older client update timestamp than the stored version, **Then** the stored record is left alone (older writes are ignored).
+5. **Given** the session is missing or invalid, **Then** the response is an authentication error and nothing is persisted.
 
 ---
 
 ### User Story 2 - Serve Catalog to Clients (Priority: P1)
 
-As a collector app, I want to download the latest list of `series`, `topics` (with ordering), and `professors` from the server so that my dropdowns are always populated with the canonical catalog.
+As a collector app, I want to download the latest list of lesson series, topics (with ordering), and professors from the server so that my dropdowns are always populated with the canonical catalog.
 
 **Why this priority**: Without the catalog, the client falls back to free-text entry, which defeats the whole point of having a central data model.
 
-**Independent Test**: `GET /catalog` with a valid JWT. Verify the response contains the three arrays. Call again with `?since=<timestamp>` and verify only recently-updated items are returned.
+**Independent Test**: Request the catalog with a valid session. Verify the response contains the three arrays. Request it again with an "updated since" filter and verify only recently-updated items are returned.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid JWT and no `since` parameter, **When** `GET /catalog` is called, **Then** the response is 200 with `{ series: [...], topics: [...], professors: [...], server_now: "<iso>" }` containing all non-pending catalog entries.
-2. **Given** the client calls again with `?since=<the server_now from the previous call>`, **Then** the response contains only items whose `updatedAt` is newer than `since`.
-3. **Given** the catalog has items with `isPending: true` (auto-created from sync), **Then** those items are EXCLUDED from the default catalog feed. A coordinator endpoint (`GET /catalog?includePending=true`, coordinator-only) shows them.
-4. **Given** topics are returned, **Then** each topic has `sequence_order` and the array is sorted by `series_id, sequence_order ASC`.
+1. **Given** a valid session and no "updated since" filter, **When** the catalog is requested, **Then** the response contains all three catalog arrays plus a server timestamp usable for subsequent incremental pulls.
+2. **Given** the client requests again passing the previous server timestamp as "updated since", **Then** the response contains only items whose update timestamp is newer.
+3. **Given** the catalog has items marked as pending (auto-created from sync), **Then** those items are excluded from the default catalog feed. A coordinator-only variant of the endpoint exposes them.
+4. **Given** topics are returned, **Then** each topic carries its sequence order and the array is sorted by series, then sequence order ascending.
 
 ---
 
@@ -48,397 +58,198 @@ As a coordinator looking at a lesson instance, I want to see the median of all a
 
 **Why this priority**: The entire multi-collector model is pointless if the server doesn't compute the aggregate. This is the feature that makes divergent readings valuable instead of confusing.
 
-**Independent Test**: Create 3 collections for the same `(date, series, topic)` with attendance `[10, 12, 15]`. Call `GET /instances/:id`. Verify `aggStart = 12` (median).
+**Independent Test**: Create 3 collections for the same `(date, series, topic)` with attendance starts `[10, 12, 15]`. Fetch the instance. Verify the aggregated start equals `12` (median).
 
 **Acceptance Scenarios**:
 
-1. **Given** 3 accepted collections for instance `I` with attendance starts `[10, 12, 15]`, **When** I `GET /instances/I`, **Then** `aggStart = 12`.
-2. **Given** one of the collectors has `accepted = false` at the user level, **Then** that collector's collection is EXCLUDED from the aggregate. The response reflects `aggCollectorCount = 2`.
-3. **Given** one collection has `includes_professor = true`, **Then** its attendance values are decremented by 1 before entering the aggregate (normalization to "without professor").
-4. **Given** a coordinator toggles a collector from `accepted=true` to `accepted=false` via `PATCH /users/:id/accepted`, **Then** all `LessonInstance` aggregates that include any of that collector's collections are recomputed automatically.
-5. **Given** `acceptedOverride` is explicitly set on a collection (per-submission moderation, future feature), **Then** it overrides the collector-level `accepted` flag.
+1. **Given** 3 accepted collections for instance `I` with attendance starts `[10, 12, 15]`, **When** the instance is fetched, **Then** the aggregated start is `12`.
+2. **Given** one of the collectors is marked as not accepted at the user level, **Then** that collector's collection is excluded from the aggregate and the aggregate's collector count reflects the exclusion.
+3. **Given** one collection is flagged as "includes professor", **Then** its three attendance values are decremented by 1 before entering the aggregate (normalization to "without professor").
+4. **Given** a coordinator toggles a collector from accepted to not accepted, **Then** every lesson instance aggregate that included any of that collector's collections is recomputed atomically with the toggle.
+5. **Given** an explicit per-submission accepted override is set on a collection (via any mechanism — no public setter endpoint ships in MVP), **Then** it wins over the collector-level accepted flag. This scenario verifies the aggregation property, not an API flow.
 
 ---
 
 ### User Story 4 - Authenticate Users (Priority: P1)
 
-As the backend, I want to register new users, authenticate them with email + password, and issue JWTs so that the client app can attach collector identity to every sync request.
+As the backend, I want to register new users, authenticate them with email + password, and issue session credentials so that the client app can attach collector identity to every sync request.
 
-**Why this priority**: Spec 006 depends on these endpoints existing.
+**Why this priority**: The client spec (006) depends on these capabilities existing.
 
-**Independent Test**: `POST /auth/register` with unique email. Verify 201 and JWT. `POST /auth/login` with same credentials. Verify 200 and a new JWT. `GET /users/me` with the JWT. Verify 200 and user info.
+**Independent Test**: Register with a unique email. Log in with the same credentials. Fetch "me" with the resulting session. Verify identity and role.
 
 **Acceptance Scenarios**:
 
-1. **Given** an empty user table, **When** the first user calls `POST /auth/register`, **Then** the response is 201 with a JWT AND the user's `role` is automatically set to `COORDINATOR`.
-2. **Given** one user already exists, **When** a second user registers, **Then** the second user's `role` is `COLLECTOR` by default.
-3. **Given** bad credentials on login, **Then** the response is 401 with a generic "invalid credentials" message (no leak of whether email or password was wrong).
-4. **Given** a valid JWT, **When** `GET /users/me` is called, **Then** the response is the current user's info including `role` and `accepted`.
+1. **Given** an empty user table, **When** the first user registers, **Then** registration succeeds AND the user's role is automatically set to coordinator.
+2. **Given** one user already exists, **When** a second user registers, **Then** the second user is assigned the default collector role.
+3. **Given** bad credentials on login, **Then** the response is an authentication error with a generic "invalid credentials" message (no leak of whether the email or the password was the wrong part).
+4. **Given** a valid session, **When** "me" is requested, **Then** the response includes identity, role, and accepted flag.
+5. **Given** a registration attempt with a password shorter than 8 characters, **Then** the response is a validation error that states the minimum length is 8 characters, and no user is created.
 
 ---
 
 ### User Story 5 - Coordinator Moderation Endpoints (Priority: P2)
 
-As a coordinator, I want endpoints to list users and toggle their `accepted` flag, so that I can control which collectors contribute to the aggregated numbers.
+As a coordinator, I want to list users and toggle each user's accepted flag, so that I can control which collectors contribute to the aggregated numbers.
 
 **Why this priority**: Ships after P1 core sync is working, because moderation is only useful once there are multiple collectors feeding the system.
 
-**Independent Test**: With a coordinator JWT, `GET /users`. Verify the list. `PATCH /users/:id/accepted` with `{ accepted: false }`. Verify the field updates AND any affected aggregates are recomputed.
+**Independent Test**: With a coordinator session, list users. Toggle a user to not accepted. Verify the flag updates AND any affected aggregates are recomputed.
 
 **Acceptance Scenarios**:
 
-1. **Given** I am a coordinator and I call `GET /users`, **Then** I get a list of all users with their `accepted` flag.
-2. **Given** I am a non-coordinator and call the same endpoint, **Then** I get 403.
-3. **Given** I toggle user `U2` to `accepted=false`, **Then** all `LessonInstance` rows that had a collection from `U2` contributing to the aggregate are recomputed in the same transaction.
+1. **Given** I am a coordinator and I list users, **Then** I see every user with their accepted flag.
+2. **Given** I am a non-coordinator and I attempt to list users, **Then** I am refused with an authorization error.
+3. **Given** I toggle user `U2` to not accepted, **Then** every lesson instance that had any contributing collection from `U2` is recomputed inside the same transaction as the toggle.
 
 ---
 
 ### User Story 6 - Coordinator Manages Catalog (Priority: P2)
 
-As a coordinator, I want endpoints to create, update, and delete items in the catalog (series, topics, professors) so that I can curate the data the collectors see.
+As a coordinator, I want to create, update, and delete catalog items (series, topics, professors) so that I can curate the data collectors see.
 
-**Why this priority**: Catalog quality directly affects collection quality. But it can ship after the initial sync is working, because auto-create from sync (FR-012) gives a baseline catalog from day one.
+**Why this priority**: Catalog quality directly affects collection quality. But it can ship after the initial sync is working, because auto-creation from sync provides a baseline catalog from day one.
 
-**Independent Test**: With a coordinator JWT, `POST /catalog/series` with `{ code: "EB357", title: "Nova Série" }`. Verify 201. `GET /catalog` and verify the new series appears.
+**Independent Test**: With a coordinator session, create a new series with a unique code and title. Verify creation succeeds. Request the catalog and verify the new series appears.
 
 **Acceptance Scenarios**:
 
-1. **Given** I am a coordinator, **When** I `POST /catalog/series`, `/catalog/topics`, or `/catalog/professors`, **Then** the item is created, `isPending: false`, and `updatedAt` is now.
-2. **Given** I `PATCH /catalog/topics/:id` with `{ sequenceOrder: 5 }`, **Then** the topic's order changes and `updatedAt` is refreshed.
-3. **Given** I am NOT a coordinator, **When** I try the same endpoints, **Then** I get 403.
-4. **Given** I `DELETE /catalog/professors/:id` for a professor referenced by existing `LessonInstance` rows, **Then** the response is 409 with a clear message. Soft delete (marking `archived: true`) is not in MVP.
+1. **Given** I am a coordinator, **When** I create a series, topic, or professor, **Then** the item is stored with pending flag cleared and a fresh update timestamp.
+2. **Given** I update a topic's sequence order, **Then** the topic's order changes and its update timestamp is refreshed.
+3. **Given** I am not a coordinator, **When** I attempt any catalog mutation, **Then** I am refused with an authorization error.
+4. **Given** I attempt to delete a professor that is still referenced by one or more lesson instances, **Then** the deletion is refused with a clear conflict message. Soft delete is not part of MVP.
 
 ---
 
 ### User Story 7 - Health and Observability (Priority: P3)
 
-As the operator (self-hosting), I want a healthcheck endpoint and structured logs so that I can know the server is alive and debug issues.
+As the operator (self-hosting), I want a healthcheck endpoint and structured request logs so that I can know the server is alive and debug issues.
 
 **Why this priority**: Nice to have for operations. Can ship after the functional endpoints.
 
-**Independent Test**: `GET /health`. Verify 200 with `{ status: "ok", postgres: "up" }`. Stop Postgres. Verify 503 with `{ status: "degraded", postgres: "down" }`.
+**Independent Test**: Call the health endpoint while the database is up; verify a healthy response. Stop the database and call again; verify a degraded response.
 
 **Acceptance Scenarios**:
 
-1. **Given** Postgres is up, `GET /health` returns 200 with `{ status: "ok", postgres: "up" }`.
-2. **Given** Postgres is down, `GET /health` returns 503 with `{ status: "degraded", postgres: "down" }`.
-3. **Given** any request comes in, **Then** the server logs a structured line via `pino` with request_id, method, path, status, latency.
+1. **Given** the database is up, the health endpoint reports healthy with database up.
+2. **Given** the database is down, the health endpoint reports degraded with database down.
+3. **Given** any request comes in, **Then** the server emits a structured log line containing at minimum a request identifier, method, path, status code, and latency.
 
 ---
 
 ### Edge Cases
 
-- **EC-001 (Missing Catalog Reference)**: A batch contains a collection with `series_id: "nonexistent"`. Response: the server tries the `series_code_fallback` next. If that's also missing, it returns 400 for that specific collection in the `rejected` list. Other collections in the batch are processed normally.
-- **EC-002 (Free-Text Auto-Create)**: A collection has `series_id: null` and `series_code_fallback: "EB999"` (not in catalog). The server creates `LessonSeries { code: "EB999", title: "EB999 (auto)", isPending: true }` and uses its id. Same for topic and professor.
-- **EC-003 (Partial Batch Failure)**: A batch of 10 collections has 1 with malformed data. The other 9 are accepted. The response is `{ accepted: [9 ids], rejected: [{ id: "X", reason: "..." }] }` with HTTP 200 (partial success is not an error).
-- **EC-004 (Race on Aggregation)**: Two batches hit `POST /sync/batch` simultaneously, both affecting the same `LessonInstance`. The server uses a row-level lock or serializable transaction on `LessonInstance` while updating `agg*`. Eventually-consistent is NOT acceptable — readers must always see aggregates consistent with the collections that existed at the time of the last write.
-- **EC-005 (Coordinator Registers First)**: First registration becomes coordinator. If the first user later deletes their own account (out of MVP scope), the system does NOT automatically promote a new coordinator — an operator must do it via direct DB edit.
-- **EC-006 (Schema Version Mismatch)**: A batch arrives with `schema_version: "1.0"` or missing. Response: 400 with clear "schema version required" error. The server NEVER processes v1 batches.
-- **EC-007 (Over-Large Batch)**: A batch with > 500 collections or > 5MB total is rejected with 413. The client is responsible for chunking (spec 005 FR-011 / 008 FR-010).
+- **EC-001 (Missing Catalog Reference)**: A batch contains a collection with a series id that does not exist on the server. The server falls back to the human-readable series code next. If that is also unknown, the collection is returned in the `rejected` list with a clear reason; other collections in the batch are processed normally.
+- **EC-002 (Free-Text Auto-Create)**: A collection references an unknown series/topic/professor by code or name only (no id). The server creates a catalog entry from the supplied text, marks it pending, and uses its id. For an auto-created pending Professor, `email` is left null (uniqueness applies only when present); the coordinator later assigns an email when curating. Pending entries are excluded from the default catalog feed until a coordinator curates them.
+- **EC-003 (Partial Batch Failure)**: A batch of 10 collections has 1 with malformed data. The other 9 are accepted. The response is a success response listing 9 accepted ids and 1 rejected id with reason (partial success is not treated as a batch failure).
+- **EC-004 (Race on Aggregation)**: Two batches affecting the same lesson instance arrive concurrently. The server serializes aggregate updates per instance so readers always see aggregates consistent with the collections that existed at the time of the last write. Eventual consistency is not acceptable.
+- **EC-005 (Coordinator Registers First)**: The first registered user becomes coordinator. If that user later deletes their own account (out of MVP scope), the system does not auto-promote a replacement — an operator must do it via direct database edit.
+- **EC-006 (Schema Version Mismatch)**: A batch arrives missing or declaring an unsupported schema version. The server rejects the whole batch with a "schema version required/unsupported" error. The server never processes pre-v2 batches.
+- **EC-007 (Over-Large Batch)**: A batch with more than 500 collections or larger than 5 MB total is rejected with a payload-too-large error. The client (spec 008) is responsible for chunking.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-#### Stack & Infrastructure
+#### Authentication
 
-- **FR-001**: Stack: Node 22 LTS, Fastify 5, TypeScript strict mode, Prisma 7, PostgreSQL 16.
-- **FR-002**: Passwords stored as bcrypt hashes with cost factor 12 (or argon2id if the ARM deployment target prefers it).
-- **FR-003**: JWT signing uses RS256 or HS256 with a secret/key from environment variables. JWT payload: `{ sub: user_id, role, iat, exp }`. Expiration: 7 days.
-- **FR-004**: Prisma 7 migrations are versioned in git under `server/prisma/migrations/`. Every schema change ships as a migration file. Configuration lives in `server/prisma.config.ts`.
-- **FR-005**: Docker Compose file at `server/docker-compose.yml` brings up Node + Postgres for local dev and self-hosting.
-- **FR-006**: Structured logging via Fastify's default `pino`. Every request gets a `request_id`.
+- **FR-010**: The system MUST provide user registration with email, password, and display name. A successful registration returns a valid session credential and the user record.
+- **FR-011**: The system MUST provide login with email and password. A successful login returns a valid session credential. A failed login returns a generic "invalid credentials" response that does not distinguish between wrong email and wrong password.
+- **FR-012**: The system MUST provide a "me" endpoint that returns the current session user's identity, display name, role, and accepted flag.
+- **FR-013**: The first user to register in an empty system MUST be assigned the coordinator role automatically. All subsequent users MUST default to the collector role.
+- **FR-014**: Passwords MUST be stored only as one-way hashes. Plaintext passwords MUST never be persisted or logged.
+- **FR-015**: The system MUST enforce a minimum password length of 8 characters on registration. No additional composition rules (uppercase, lowercase, digits, symbols) are imposed. A registration attempt with a password shorter than 8 characters MUST be refused with a validation error that explicitly states the minimum length.
 
-#### Auth Endpoints
+#### Sync
 
-- **FR-010**: `POST /auth/register` — body `{ email, password, display_name }`. Returns 201 with `{ jwt, user }`. First user to register in an empty DB is set to `role: COORDINATOR`.
-- **FR-011**: `POST /auth/login` — body `{ email, password }`. Returns 200 with `{ jwt, user }` or 401.
-- **FR-012**: `GET /users/me` — Bearer JWT. Returns 200 with `{ id, email, display_name, role, accepted }` or 401.
+- **FR-020**: The system MUST expose a batch submission endpoint that accepts authenticated payloads conforming to the v2 export contract defined in spec 005.
+- **FR-021**: The idempotency key for a batched collection MUST be the collection's client-generated id. Re-posting the same id MUST NOT create a duplicate; instead, the server MUST apply a field-level merge keyed by the client's last-update timestamp (newer wins; older is ignored).
+- **FR-022**: On successful insert or update, the server MUST recompute affected lesson instance aggregates inside the same transaction as the write.
+- **FR-023**: When a batched collection references a catalog item by free-text fallback rather than id, the server MUST auto-create a pending catalog item and use its id. Auto-created items MUST be flagged as pending.
+- **FR-024**: A batch MUST be accepted partially when individual collections are malformed: accepted and rejected lists are reported separately; the overall response is still a success.
+- **FR-025**: Every persisted collection MUST carry an explicit status: `SYNCED` (eligible for aggregation subject to moderation rules) or `REJECTED` (persisted for audit only, never enters aggregates). A rejected collection MUST also carry a human-readable `rejection_reason`. The server MUST persist rejected collections so their reasons can be retrieved later via FR-043.
 
-#### Sync Endpoint
+#### Catalog Reads
 
-- **FR-020**: `POST /sync/batch` — Bearer JWT, body follows the v2 schema from spec 005. Returns 200 with `{ accepted: [id], rejected: [{id, reason}] }`.
-- **FR-021**: Idempotency key is `collections[].id`. Reposting is a no-op; updates are field-level merges based on `client_updated_at`.
-- **FR-022**: On successful insertion/update, the server recomputes affected `LessonInstance.agg*` inside the same transaction as the write.
-- **FR-023**: Auto-create catalog items when `*_id` is null but `*_fallback` is present. Auto-created items have `isPending: true`.
+- **FR-030**: The system MUST expose an authenticated catalog-read endpoint returning all non-pending series, topics, and professors plus a server-side timestamp the client can use for subsequent incremental pulls. When an "updated since" parameter is supplied, only items with a newer update timestamp MUST be returned. Topics MUST be sorted by series, then by sequence order ascending.
+- **FR-031**: A coordinator-only variant of the catalog-read endpoint MUST include pending items.
 
-#### Catalog Endpoints
+#### Catalog Mutations
 
-- **FR-030**: `GET /catalog?since=<iso>` — Bearer JWT. Returns `{ series, topics, professors, server_now }`. If `since` is omitted, returns the full non-pending catalog. Topics are sorted by `series_id, sequenceOrder ASC`.
-- **FR-031**: `GET /catalog?includePending=true` — coordinator-only. Includes items with `isPending: true`.
-- **FR-032**: `POST /catalog/series`, `POST /catalog/topics`, `POST /catalog/professors` — coordinator-only. Body validated against Prisma schema. Returns 201 with the created item.
-- **FR-033**: `PATCH /catalog/:resource/:id` — coordinator-only. Supports partial updates. Returns 200.
-- **FR-034**: `DELETE /catalog/:resource/:id` — coordinator-only. Returns 409 if the item is referenced by any `LessonInstance`. No soft-delete in MVP.
+- **FR-032**: Only coordinators MUST be able to create items in any catalog collection (series, topics, professors). Created items are stored with pending flag cleared.
+- **FR-033**: Only coordinators MUST be able to partially update any catalog item. The server MUST refresh the item's update timestamp on successful change.
+- **FR-034**: Only coordinators MUST be able to delete catalog items. A delete of an item still referenced by any lesson instance MUST be refused with a conflict error. Soft-delete is explicitly out of scope for MVP.
 
-#### Instance Endpoints
+#### Lesson Instances
 
-- **FR-040**: `GET /instances?from=<iso>&to=<iso>` — coordinator-only (plain collectors do not see aggregates per roadmap decision #7). Returns an array of `LessonInstance` with expanded `collections[]` and `agg*` fields.
-- **FR-041**: `GET /instances/:id` — coordinator-only. Returns a single instance with full expansion.
-- **FR-042**: `POST /instances/:id/recompute` — coordinator-only. Forces re-aggregation for debugging. Returns 200.
-- **FR-043**: `GET /collections?mine=true&since=<iso>` — any authenticated user. Returns only collections where `collectorUserId = currentUser.id`. Used by spec 008's P6 story (read-back of moderation status).
+- **FR-040**: Lesson-instance read endpoints are coordinator-only. Coordinators MUST be able to list lesson instances filtered by a date range, each with its contributing collections and aggregate fields expanded. Plain collectors MUST NOT call these endpoints at all (not just hide aggregates) — any request from a non-coordinator MUST be refused with an authorization error. Collectors can still read their own submissions via FR-043.
+- **FR-041**: Coordinators MUST be able to fetch a single lesson instance with full expansion.
+- **FR-042**: Coordinators MUST be able to request a forced re-aggregation of a single lesson instance (debug/repair tool).
+- **FR-043**: Any authenticated user MUST be able to fetch only their own collections (filter "mine = true"), optionally with an "updated since" filter. The response MUST include both `SYNCED` and `REJECTED` collections with their status and, when applicable, the `rejection_reason`, so the client can surface per-submission moderation and validation outcomes as described in spec 008 P6.
 
 #### Moderation
 
-- **FR-050**: `GET /users` — coordinator-only. Returns all users with `accepted` flag.
-- **FR-051**: `PATCH /users/:id/accepted` — coordinator-only. Body `{ accepted: boolean }`. Recomputes all affected aggregates in the same transaction.
+- **FR-050**: Coordinators MUST be able to list all users along with each user's accepted flag. Non-coordinators MUST be refused.
+- **FR-051**: Coordinators MUST be able to toggle a user's accepted flag. The toggle MUST recompute every affected lesson instance's aggregate in the same transaction as the flag change.
 
 #### Security & Policy
 
-- **FR-060**: All endpoints except `/auth/register`, `/auth/login`, and `/health` require a valid JWT.
-- **FR-061**: Role-based access control: `role === 'COORDINATOR'` is required for all catalog mutations, user list, moderation, and instance aggregates reads.
-- **FR-062**: CORS is configured to allow the app's origin only (configurable via env).
-- **FR-063**: Rate limiting: 60 requests per minute per JWT on mutation endpoints (`POST`, `PATCH`, `DELETE`). Reads are unthrottled within reason.
+- **FR-060**: Every endpoint except registration, login, and health MUST require a valid session credential.
+- **FR-061**: Role-based access control MUST gate all catalog mutations, user listing, moderation actions, and lesson-instance reads behind the coordinator role.
+- **FR-062**: Cross-origin access MUST be restricted to one or more operator-configured origins (single origin for most deploys; multiple origins supported to cover the self-host + preview/staging case). Every other origin MUST be refused.
+- **FR-063**: Mutating endpoints MUST be rate-limited per session to reasonable limits (for example, 60 requests per minute). Read endpoints MAY be unthrottled within reason.
+- **FR-064**: Session credentials MUST have a bounded lifetime (for example, 7 days) after which re-authentication is required. Refresh flows are out of scope for MVP.
+- **FR-065**: Every error response (any 4xx or 5xx) MUST be a JSON object containing at least two fields: `code` — a stable, English `snake_case` identifier (for example `invalid_credentials`, `password_too_short`, `schema_version_required`, `batch_too_large`, `professor_referenced`) — and `message` — a human-readable Brazilian Portuguese (pt-BR) string. Automated tests and client logic MUST key off `code`; `message` is advisory and may be rephrased without versioning. `Accept-Language` negotiation is not supported in MVP.
 
-### Key Entities *(include if feature involves data)*
+### Aggregation Rules
 
-Prisma 7 schema (authoritative). Configuration in `server/prisma.config.ts`, generated client at `server/src/generated/client/`:
+The aggregate on a lesson instance is derived from its contributing collections using the following rules:
 
-```prisma
-// server/prisma/schema.prisma
+1. **Eligibility**: a collection contributes only if its stored status is `SYNCED` AND (its per-submission accepted override is true, OR the override is unset and the contributing collector's user-level accepted flag is true). `REJECTED` collections are never eligible.
+2. **Normalization**: if a contributing collection is flagged as "includes professor", its three attendance counts (start, middle, end) are each decremented by 1 before entering the aggregate (the aggregate's unit is "without professor").
+3. **Aggregation**: each of `aggStart`, `aggMid`, `aggEnd` is the median of the normalized attendance array from eligible collections. `aggDist` (unique participants) is the median of the unique-participant counts from eligible collections (no normalization). The aggregate's collector count is the number of eligible collections. **Tie-break for even-length arrays**: return the lower middle element (i.e., `sorted[(n-1)/2]` with integer division, not the mean of the two middle values). Example: `[10, 12]` → `10`. This is an intentional choice so the result stays an integer and matches what a collector actually observed, avoiding fractional attendance counts.
+4. **Empty**: if no collections are eligible, every aggregate value is cleared (null) and the collector count is zero.
+5. **Consistency**: recomputation for a given lesson instance MUST be serialized against concurrent writes to the same instance so readers never observe stale aggregates.
 
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/client"
-}
+### Key Entities
 
-datasource db {
-  provider = "postgresql"
-}
-
-enum Role {
-  COLLECTOR
-  COORDINATOR
-}
-
-enum CollectionStatus {
-  COMPLETED
-  SYNCED
-  REJECTED
-}
-
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  displayName  String
-  role         Role     @default(COLLECTOR)
-  accepted     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  collections  LessonCollection[]
-}
-
-model LessonSeries {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  title       String
-  description String?
-  isPending   Boolean  @default(false)
-  updatedAt   DateTime @updatedAt
-  topics      LessonTopic[]
-}
-
-model LessonTopic {
-  id            String       @id @default(uuid())
-  seriesId      String
-  series        LessonSeries @relation(fields: [seriesId], references: [id])
-  title         String
-  sequenceOrder Int
-  suggestedDate DateTime?
-  isPending     Boolean      @default(false)
-  updatedAt     DateTime     @updatedAt
-  instances     LessonInstance[]
-  @@index([seriesId, sequenceOrder])
-}
-
-model Professor {
-  id        String   @id @default(uuid())
-  docId     String   @unique
-  name      String
-  isPending Boolean  @default(false)
-  updatedAt DateTime @updatedAt
-  instances LessonInstance[]
-}
-
-model LessonInstance {
-  id                String   @id @default(uuid())
-  date              DateTime @db.Date
-  seriesCode        String
-  topicId           String?
-  topic             LessonTopic? @relation(fields: [topicId], references: [id])
-  professorId       String?
-  professor         Professor?   @relation(fields: [professorId], references: [id])
-  collections       LessonCollection[]
-  // aggregate cache — recomputed on collection change
-  aggStart          Float?
-  aggMid            Float?
-  aggEnd            Float?
-  aggDist           Float?
-  aggCollectorCount Int      @default(0)
-  @@unique([date, seriesCode, topicId])
-  @@index([date])
-}
-
-model LessonCollection {
-  id                 String   @id  // client-generated UUID — idempotency key
-  lessonInstanceId   String
-  lessonInstance     LessonInstance @relation(fields: [lessonInstanceId], references: [id])
-  collectorUserId    String
-  collector          User     @relation(fields: [collectorUserId], references: [id])
-  status             CollectionStatus @default(SYNCED)
-  clientCreatedAt    DateTime
-  clientUpdatedAt    DateTime
-  serverReceivedAt   DateTime @default(now())
-  expectedStart      String
-  expectedEnd        String
-  realStart          String?
-  realEnd            String?
-  attendanceStart    Int
-  attendanceMid      Int
-  attendanceEnd      Int
-  includesProfessor  Boolean
-  uniqueParticipants Int
-  weather            String?
-  notes              String?
-  acceptedOverride   Boolean? // null = inherit User.accepted
-  @@index([lessonInstanceId])
-  @@index([collectorUserId])
-}
-```
-
-### Aggregation Algorithm
-
-```typescript
-// server/src/services/aggregateService.ts
-
-function isCollectionAccepted(c: LessonCollection, user: User): boolean {
-  if (c.acceptedOverride !== null) return c.acceptedOverride;
-  return user.accepted;
-}
-
-function adjustedAttendance(c: LessonCollection): { start: number; mid: number; end: number } {
-  const offset = c.includesProfessor ? -1 : 0;
-  return {
-    start: c.attendanceStart + offset,
-    mid:   c.attendanceMid + offset,
-    end:   c.attendanceEnd + offset,
-  };
-}
-
-async function recompute(instanceId: string, tx: PrismaTransaction): Promise<void> {
-  const instance = await tx.lessonInstance.findUnique({
-    where: { id: instanceId },
-    include: { collections: { include: { collector: true } } },
-  });
-  if (!instance) return;
-
-  const accepted = instance.collections.filter(c =>
-    isCollectionAccepted(c, c.collector)
-  );
-
-  if (accepted.length === 0) {
-    await tx.lessonInstance.update({
-      where: { id: instanceId },
-      data: { aggStart: null, aggMid: null, aggEnd: null, aggDist: null, aggCollectorCount: 0 },
-    });
-    return;
-  }
-
-  const adjusted = accepted.map(adjustedAttendance);
-  const aggStart = median(adjusted.map(a => a.start));
-  const aggMid   = median(adjusted.map(a => a.mid));
-  const aggEnd   = median(adjusted.map(a => a.end));
-  const aggDist  = median(accepted.map(c => c.uniqueParticipants));
-
-  await tx.lessonInstance.update({
-    where: { id: instanceId },
-    data: { aggStart, aggMid, aggEnd, aggDist, aggCollectorCount: accepted.length },
-  });
-}
-```
-
-### Folder Structure
-
-```text
-server/
-├── src/
-│   ├── routes/
-│   │   ├── auth.ts
-│   │   ├── sync.ts
-│   │   ├── catalog.ts
-│   │   ├── instances.ts
-│   │   └── users.ts
-│   ├── services/
-│   │   ├── aggregateService.ts
-│   │   ├── authService.ts
-│   │   └── catalogService.ts
-│   ├── lib/
-│   │   ├── prisma.ts       // PrismaClient singleton with driver adapter
-│   │   ├── jwt.ts
-│   │   └── roles.ts
-│   ├── plugins/
-│   │   ├── auth.ts         // JWT verification plugin
-│   │   └── rbac.ts         // role checks
-│   ├── generated/client/   // Prisma 7 generated client (git-ignored)
-│   └── server.ts
-├── prisma/
-│   ├── schema.prisma
-│   ├── migrations/
-│   └── seed.ts             // bootstrap + first-user-coordinator logic
-├── prisma.config.ts        // Prisma 7 configuration (DATABASE_URL, seed)
-├── test/
-│   ├── auth.test.ts
-│   ├── sync.test.ts
-│   ├── aggregation.test.ts
-│   └── catalog.test.ts
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── package.json
-├── tsconfig.json
-├── CLAUDE.md               // Server coding standards
-└── README.md
-```
-
-Note: `server/` lives in the same repo as the app for now (monorepo). A separate repo can be extracted later if desired.
+- **User**: A person registered with the system. Attributes: identity, email (unique), display name, password hash, role (collector or coordinator), accepted flag (whether contributions count toward aggregates), creation timestamp.
+- **Lesson Series**: A named curriculum series. Attributes: identity, short code (unique, human-readable), title, optional description, pending flag, update timestamp.
+- **Lesson Topic**: A single lesson within a series. Attributes: identity, owning series, title, sequence order within the series, optional suggested date, pending flag, update timestamp.
+- **Professor**: A teacher in the catalog. Attributes: identity, display name, email (non-sensitive natural key — unique when present, nullable so that auto-created pending entries from free-text can be stored without an email), pending flag, update timestamp. No governmental document id is stored on this entity.
+- **Lesson Instance**: A specific occurrence of a topic on a specific date, distinguished by `(date, series code, topic)`. Attributes: identity, date, series code, optional topic reference, optional professor reference, aggregate values (start/mid/end attendance, unique participants), aggregate collector count.
+- **Lesson Collection**: One collector's submission for a lesson instance. Attributes: client-generated identity (idempotency key), owning lesson instance, contributing collector, status (`SYNCED` or `REJECTED`), optional rejection reason (required when status is `REJECTED`, null otherwise), client-side created and updated timestamps, server-side received timestamp, expected and real start/end times, attendance values (start/mid/end), includes-professor flag, unique participants count, optional weather and notes, optional per-submission accepted override.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: **Idempotency Correctness**: 1000 consecutive reposts of the same batch result in exactly 1 row per collection. Property-tested in CI with randomized batch sizes.
-- **SC-002**: **Aggregation Correctness**: For any set of accepted collections, the resulting `agg*` fields equal the median of the `includes_professor`-adjusted attendance arrays. Property-tested with generated collections.
-- **SC-003**: **Latency**: `POST /sync/batch` with 50 collections completes in < 500ms p95 on a modest self-hosted VPS (2 vCPU, 2GB RAM).
-- **SC-004**: **First Deploy Time**: From a clean VPS with Docker installed, `docker compose up -d` brings the backend online in < 5 minutes.
-- **SC-005**: **Zero Data Loss on Concurrent Writes**: 10 parallel `POST /sync/batch` calls affecting the same `LessonInstance` result in a consistent final state — all collections persisted, aggregate correct. Tested with load test.
-- **SC-006**: **Moderation Recompute Latency**: `PATCH /users/:id/accepted` affecting ~100 collections recomputes all aggregates in < 1 second.
+- **SC-001**: **Idempotency Correctness** — 1000 consecutive re-submissions of the same batch result in exactly one stored record per collection. Property-tested in CI with randomized batch sizes.
+- **SC-002**: **Aggregation Correctness** — For any set of eligible collections, the resulting aggregate values equal the median of the includes-professor-normalized attendance arrays. Property-tested with generated collections.
+- **SC-003**: **Latency** — A batch of 50 collections is accepted, persisted, and aggregates recomputed in under 500 ms at the 95th percentile on a modest self-hosted environment (2 vCPU, 2 GB RAM).
+- **SC-004**: **First Deploy Time** — From a clean environment with container tooling installed, the operator can bring the backend online in under 5 minutes.
+- **SC-005**: **Zero Data Loss on Concurrent Writes** — Ten parallel batches affecting the same lesson instance produce a final state in which every submitted collection is persisted and the aggregate reflects all of them. Verified via load test.
+- **SC-006**: **Moderation Recompute Latency** — Toggling a user's accepted flag when that user has contributed to roughly 100 lesson instances recomputes all affected aggregates in under 1 second.
 
 ## Assumptions
 
-- PostgreSQL 16 or newer is available (either managed or self-hosted).
-- A single backend instance serves the entire church. Horizontal scaling is NOT a goal for MVP (load is tiny — tens of collectors, hundreds of submissions per month at most).
-- Self-hosting is the default deployment target. The spec documents fly.io, Oracle Cloud Free, and Cloudflare Tunnel as fallbacks.
-- The client (spec 008) is responsible for splitting large batches. The server rejects overlarge batches with 413 and does not attempt streaming.
-- Moderation is a feature for ONE coordinator at a time. There is no workflow for "two coordinators disagree on a user's acceptance".
-- Backup and disaster recovery is the operator's responsibility. MVP does not include automated backups.
-
-## Hosting Plan
-
-1. **Self-host (primary)** — Docker Compose on the operator's VPS or mini-PC. Nginx reverse proxy with TLS via Let's Encrypt. Postgres data volume mounted from host.
-2. **Fly.io free tier (fallback)** — 3 shared-CPU VMs, up to 3GB persistent volume. Sufficient for the church's volume. Easy deploys via `fly deploy`.
-3. **Oracle Cloud always-free (fallback)** — ARM VM with 4 OCPUs and 24GB RAM, generous but occasionally reclaimed by Oracle for inactivity. Monitor carefully.
-4. **Cloudflare Tunnel + home mini-PC (fallback)** — A Raspberry Pi or old PC at the church, exposed via Cloudflare Tunnel (free), no firewall changes. Lowest infra cost long-term.
-
-The spec does NOT prescribe one. The operator picks at deploy time.
+- A single backend instance serves the entire congregation. Horizontal scaling is not a goal for MVP (load is tiny — tens of collectors, hundreds of submissions per month at most).
+- Self-hosting is the default deployment target. Managed-cloud alternatives are acceptable but not prescribed by this spec.
+- The client (spec 008) is responsible for splitting large batches. The server rejects overlarge batches and does not attempt streaming.
+- Moderation is performed by one coordinator at a time. There is no workflow for two coordinators disagreeing on a user's acceptance.
+- Backup and disaster recovery are the operator's responsibility. MVP does not include automated backups.
+- Email verification at registration is not required for MVP.
+- Password reset is performed manually by the coordinator (direct data edit) for MVP.
 
 ## Open Questions
 
-- Should email verification be required at registration? **Default: no, for MVP simplicity.** Can be added later.
-- Should there be an admin endpoint to promote/demote roles after the first-user rule? **Default: no, for MVP simplicity. Direct DB edit is acceptable.** Flagged for post-MVP.
-- Password reset flow? **Out of scope for MVP. Coordinator does it manually via DB.**
-- Refresh tokens? **Out of scope for MVP. 7-day JWT is enough.**
+- Should email verification be required at registration? Default for MVP: no. May be reconsidered post-MVP.
+- Should an admin endpoint exist to promote/demote roles after the first-user rule? Default for MVP: no. Direct data edit is acceptable. Flagged for post-MVP.
+- Refresh tokens / long-lived sessions? Out of scope for MVP.
+- Public setter endpoint for per-submission `acceptedOverride` (fine-grained moderation of a single collection rather than a whole collector)? Out of scope for MVP. The field is persisted and honored by aggregation; a coordinator-only endpoint can be added post-MVP without migration.
 
 ## Related Specs
 
-- **005-export-contract-v2** — defines the payload this backend accepts at `POST /sync/batch`.
-- **006-auth-identity** — client-side counterpart of the auth endpoints in FR-010 to FR-012.
-- **008-offline-sync-client** — consumer of this backend, implements the retry/queue logic on the app side.
+- **005-export-contract-v2** — defines the payload this backend accepts at batch submission.
+- **006-auth-identity** — client-side counterpart of the authentication capabilities here.
+- **008-offline-sync-client** — consumer of this backend; implements the retry/queue logic on the app side.

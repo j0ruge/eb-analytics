@@ -445,3 +445,8 @@ tests/                  # Mobile unit and E2E tests
 Procedimentos operacionais recorrentes têm runbooks detalhados em `.claude/rules/`. Leia o arquivo correspondente antes de executar.
 
 - **Sincronização com Google Sheets** (`.claude/rules/google-sheets-sync.md`) — atualizar a planilha `eb_insights` com novas coletas do `EB-Insights.md` (Obsidian). Cobre credenciais OAuth, estilo de consolidação do dono da planilha, e fluxo dry-run → apply.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan: `specs/007-sync-backend/plan.md`
+<!-- SPECKIT END -->

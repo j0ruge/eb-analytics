@@ -1,0 +1,114 @@
+// EB Insights — Server Database Schema
+// Prisma 7 — generator outputs to src/generated/client
+// DATABASE_URL configured in prisma.config.ts (not here)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  COLLECTOR
+  COORDINATOR
+}
+
+enum CollectionStatus {
+  SYNCED
+  REJECTED
+}
+
+model User {
+  id           String             @id @default(uuid())
+  email        String             @unique
+  passwordHash String
+  displayName  String
+  role         Role               @default(COLLECTOR)
+  accepted     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  collections  LessonCollection[]
+}
+
+model LessonSeries {
+  id          String        @id @default(uuid())
+  code        String        @unique
+  title       String
+  description String?
+  isPending   Boolean       @default(false)
+  updatedAt   DateTime      @updatedAt
+  topics      LessonTopic[]
+}
+
+model LessonTopic {
+  id            String           @id @default(uuid())
+  seriesId      String
+  series        LessonSeries     @relation(fields: [seriesId], references: [id])
+  title         String
+  sequenceOrder Int
+  suggestedDate DateTime?
+  isPending     Boolean          @default(false)
+  updatedAt     DateTime         @updatedAt
+  instances     LessonInstance[]
+
+  @@index([seriesId, sequenceOrder])
+}
+
+model Professor {
+  id        String           @id @default(uuid())
+  name      String
+  email     String?          @unique
+  isPending Boolean          @default(false)
+  updatedAt DateTime         @updatedAt
+  instances LessonInstance[]
+}
+
+model LessonInstance {
+  id                String             @id @default(uuid())
+  date              DateTime           @db.Date
+  seriesCode        String
+  topicId           String?
+  topic             LessonTopic?       @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  professorId       String?
+  professor         Professor?         @relation(fields: [professorId], references: [id], onDelete: Restrict)
+  collections       LessonCollection[]
+  // aggregate cache — recomputed on collection change
+  aggStart          Float?
+  aggMid            Float?
+  aggEnd            Float?
+  aggDist           Float?
+  aggCollectorCount Int                @default(0)
+
+  @@unique([date, seriesCode, topicId])
+  @@index([date])
+}
+
+model LessonCollection {
+  id                 String           @id // client-generated UUID — idempotency key
+  lessonInstanceId   String
+  lessonInstance     LessonInstance   @relation(fields: [lessonInstanceId], references: [id])
+  collectorUserId    String
+  collector          User             @relation(fields: [collectorUserId], references: [id])
+  status             CollectionStatus @default(SYNCED)
+  rejectionReason    String?
+  clientCreatedAt    DateTime
+  clientUpdatedAt    DateTime
+  serverReceivedAt   DateTime         @default(now())
+  expectedStart      String
+  expectedEnd        String
+  realStart          String?
+  realEnd            String?
+  attendanceStart    Int
+  attendanceMid      Int
+  attendanceEnd      Int
+  includesProfessor  Boolean
+  uniqueParticipants Int
+  weather            String?
+  notes              String?
+  acceptedOverride   Boolean? // null = inherit User.accepted
+
+  @@index([lessonInstanceId])
+  @@index([collectorUserId])
+}

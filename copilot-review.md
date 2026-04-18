@@ -1,40 +1,24 @@
-# Copilot Review — PR #4
+# Copilot Review — PR #5
 
 **Repository**: j0ruge/eb-analytics
-**Branch**: `006-auth-identity` → `main`
+**PR**: feat(server): cloud sync backend (spec 007)
+**Branch**: `007-sync-backend` → `main`
 **Reviewer**: copilot-pull-request-reviewer[bot]
-**Total comments**: 5
-**Date**: 2026-04-13
+**Date**: 2026-04-18
+**Total findings**: 5
 
 ---
 
-## Checklist
+## MEDIUM (3)
 
-### HIGH
+- [x] **1.** `specs/007-sync-backend/quickstart.md:76` — Flat vs nested v2 envelope — **Already fixed — see coderabbit-review.md #28** (rewrote the quickstart POST payload to the nested `lesson_instance`/`times`/`attendance` envelope so it matches `syncService`'s validator).
+- [x] **2.** `specs/007-sync-backend/contracts/sync.md:37` — **Fixed** — contract line for `schema_version_unsupported` now reads `"schema_version ≠ \"2.0\""` (was `≠ "2"`) with an explicit note that the exact string `"2.0"` is the only accepted value.
+- [x] **3.** `specs/007-sync-backend/contracts/auth.md:42` — **Fixed** — `invalid_email` doc now says the server uses a pragmatic regex subset of RFC-5321 (not the full grammar), listing the concrete rejection rules so clients know what will fail.
 
-- [x] **1. [HIGH] src/services/authService.ts:60 — Inconsistent session state when user JSON is missing**
-  `getSession()` can return `null` while JWT remains in storage, causing API calls to still send `Authorization: Bearer` header even though app treats user as anonymous. Should clear JWT proactively.
-  - **Status**: Fixed — added `clearJwt()` call when userJson is missing or user data is corrupt/incomplete.
+## LOW (2)
 
-- [x] **2. [HIGH] src/services/apiClient.ts:15 — Empty `BASE_URL` causes opaque fetch failures in prod**
-  When `apiUrl` not configured, `BASE_URL` is `''`, fetch fails as `Sem conexão` (status 0), indistinguishable from real network failure.
-  - **Status**: Fixed — added early return `{ error: 'API não configurada', status: 0 }` at start of `request()` when BASE_URL is empty.
-
-### MEDIUM
-
-- [x] **3. [MEDIUM] src/services/apiClient.ts:69 — Truthy check drops valid falsy request body values**
-  `body ? JSON.stringify(body) : undefined` drops `0`, `false`, `''`, `null`. Should use `body !== undefined`.
-  - **Status**: Fixed — changed to `body !== undefined ? JSON.stringify(body) : undefined`.
-
-- [x] **4. [MEDIUM] src/services/exportService.ts:153 — Collector from AsyncStorage cache, not full session**
-  `getCurrentUser()` reads AsyncStorage only. If JWT wiped but cache survives, exports include stale collector identity.
-  - **Status**: Fixed — changed to `authService.getSession()` which validates JWT + user atomically. Updated tests to match.
-
-### LOW
-
-- [x] **5. [LOW] src/db/migrations.ts:232 — Migration-flag logic duplicated instead of reusing helpers**
-  `migrateAddAuthIdentity` re-implements `_migration_flags` table query inline rather than reusing `isMigrationComplete`/`markMigrationComplete` helpers.
-  - **Status**: Not applicable — existing helpers use AsyncStorage, not SQLite. Migration 006 deliberately uses `_migration_flags` SQLite table, which is a different and better mechanism. Extracting a shared helper is deferred to when migration 003 is refactored.
+- [x] **4.** `server/Dockerfile:28` — Prisma CLI not in runtime — **Already fixed — see coderabbit-review.md #1** (moved `prisma` to `dependencies`).
+- [x] **5.** `specs/007-sync-backend/contracts/users.md:18` — TS-union in json fence — **Fixed** — switched fence to `jsonc`, rewrote the example with a single valid `"role": "COLLECTOR"` and a leading comment explaining the allowed enum values; also rewrote the PATCH body snippet so it's valid JSON.
 
 ---
 
@@ -42,15 +26,9 @@
 
 | Status | Count |
 |--------|-------|
-| Fixed | 4 |
-| Already fixed | 0 |
-| Not applicable | 1 |
+| Fixed | 3 |
+| Already fixed (cross-reviewer) | 2 |
+| Not applicable | 0 |
 | Pending | 0 |
-| **Total** | **5** |
 
-### Tests
-- **Command**: `npm test`
-- **Result**: All passed (115 tests, 10 suites)
-
-### Conversations
-Pending
+Tests: **73 of 73 passed** — see coderabbit-review.md for details.

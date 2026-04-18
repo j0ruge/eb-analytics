@@ -1,96 +1,52 @@
-# CodeRabbit Review — PR #3
+# CodeRabbit Review — PR #5
 
-**PR**: feat(005): export data contract v2
-**Branch**: `005-export-contract-v2` → `main`
-**Review date**: 2026-04-12
+**Repository**: j0ruge/eb-analytics
+**PR**: feat(server): cloud sync backend (spec 007)
+**Branch**: `007-sync-backend` → `main`
+**Reviewer**: coderabbitai[bot]
+**Date**: 2026-04-18
+**Total findings**: 28 (7 inline + 21 from review body; 1 duplicate collapsed)
+
+## Legend
+- `[x]` resolved • **Fixed** / **Already fixed** / **Not applicable** / **Deferred (out of spec-007 scope)**
 
 ---
 
-## Checklist
+## CRITICAL (2)
 
-### HIGH Severity
+- [x] **1.** `server/Dockerfile:28` — Prisma CLI unavailable in runtime — **Fixed** — `prisma` moved from `devDependencies` to `dependencies` in `server/package.json` so `npm ci --omit=dev` keeps it and `npx prisma migrate deploy` no longer triggers a network fetch at container start.
+- [x] **2.** `server/src/services/syncService.ts:309` — Race on professorId update — **Fixed** — both `ON CONFLICT` branches now set `"professorId" = COALESCE("LessonInstance"."professorId", EXCLUDED."professorId")` atomically; removed the separate SELECT+UPDATE round that raced under concurrent batches.
 
-- [x] 1. `specs/005-export-contract-v2/spec.md`:145 — Legacy `EXPORTED` rows omitted from v2 exports
-  Not applicable: by design per FR-005 ("Only lessons with status COMPLETED are eligible for export") and FR-018 ("lessons MUST remain in status COMPLETED"). Data-model.md explicitly acknowledges EXPORTED rows are "stuck in that state forever." Legacy rows were already exported via v1.
+## HIGH / MAJOR — product code (9)
 
-- [x] 2. `src/services/exportService.ts`:141 — Export filter drops legacy `EXPORTED` rows
-  Not applicable: same as #1. The filter `l.status === LessonStatus.COMPLETED` implements FR-005 as specified. EXPORTED rows are not re-exported by design.
+- [x] **3.** `server/prisma/migrations/0002_concurrency_fixes/migration.sql:11-20` — **Fixed** — added two `WITH ranked AS (...) UPDATE LessonInstance SET topicId/professorId = keeper; DELETE duplicates` preflight passes so the unique-index creation succeeds on DBs that already have duplicate pending rows from the pre-migration race.
+- [x] **4.** `server/test/helpers/setup.ts:2-6` — **Fixed** — setup now hard-requires either `TEST_DATABASE_URL` (preferred) or a `DATABASE_URL` that looks like a local test DB (`localhost|127.0.0.1|@db:` AND `_test|eb_insights`); otherwise throws and refuses to run `resetDb()`.
+- [x] **5.** `server/src/routes/auth.ts:37-62` — **Fixed** — declared `userSchema` + `authResponseSchema`, wired `schema.response` on `/auth/register` (201), `/auth/login` (200), and `/me` (200).
+- [x] **6.** `server/src/routes/instances.ts:16-50` — **Fixed** — added `listQuerySchema` on `/instances`, `idParamsSchema` on `/instances/:id` and `/instances/:id/recompute`. Schema stays loose on `from/to` shape so the handler keeps returning `invalid_query` (contract-documented) rather than the generic Fastify `invalid_payload`.
+- [x] **7.** `server/docker-compose.yml:4-27` — **Fixed** — `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`/`DATABASE_URL` now required via `${VAR:?}` (compose refuses to start without them); Postgres port bound to `127.0.0.1` by default with an opt-in override via `DB_PORT_BIND`.
+- [x] **8.** `server/src/server.ts:29-37` — **Fixed** — `TRUST_PROXY` parsing now fail-closed: `undefined`/empty/`"false"`/`"0"` → `false`; `"true"` → `true`; positive integer → hop count; any other value (including `NaN`) → `false`. Also duplicate of Gemini #1.
+- [x] **9.** `server/src/services/syncService.ts:448-472` — **Fixed** — update path now mirrors the REJECTED-insert defensive fallbacks when `dataError` is set, preserving existing field values when the new payload's `c.times`/`c.attendance` are malformed instead of crashing on `c.times.expected_start`.
+- [x] **10.** `server/src/services/syncService.ts:93-108` — **Fixed** — `validateInstanceStructure` now guards: `c` is object, `c.id` is non-empty string, `c.lesson_instance.date` is string (not coerced), and each of `series_id`/`series_code_fallback`/`topic_id`/`topic_title_fallback`/`professor_id`/`professor_name_fallback` is either `null` or `string`, and both timestamps are strings that `Date.parse` accepts.
+- [x] **11.** `server/src/services/catalogService.ts:225-253` — **Fixed** — `deleteSeries` now wraps the transaction in `try/catch` and maps Prisma `P2003` (FK violation) from concurrent inserts to `409 series_referenced` instead of 500. Added `isPrismaForeignKeyViolation` helper.
 
-- [x] 3. `src/services/exportService.ts`:95 — `series_code_fallback` sourcing wrong field
-  Not applicable: FR-009a explicitly mandates "`series_code_fallback` MUST be populated from the legacy `lessons_data.series_name` if non-empty." The implementation matches the spec exactly. The field name is arguably misleading, but the value source is correct per spec.
+## MAJOR — docs / specs / templates (11)
 
-- [x] 4. `src/services/deviceIdService.ts`:12-19 — Rejected promise cached forever
-  Fixed: added `.catch()` handler that resets `pendingPromise = null` before rethrowing, allowing callers to retry after transient failures.
+- [x] **12.** `server/src/services/catalogService.ts:258-289` — **Fixed** — added `parseOptionalDate()` helper that rejects bad ISO strings with `400 invalid_payload`; `createTopic` and `updateTopic` now both validate `sequence_order` is integer ≥ 0. Error-code casing: `server/CLAUDE.md` corrected — the impl + PRD both use `lower_snake_case` (the CLAUDE.md `UPPER_SNAKE_CASE` row was drift).
+- [x] **13.** `specs/007-sync-backend/prd.md:160-162` — **Fixed** — FR-021 updated to require `existing.collectorUserId === jwt.sub`; `server/src/services/syncService.ts` now rejects cross-collector replays with `409 collection_ownership_conflict` before touching the row.
+- [x] **14.** `specs/007-sync-backend/prd.md:69-76` — **Fixed** — harmonized to `/me` throughout the PRD (matches impl, all tests, and other contract docs).
+- [x] **15-22.** `.claude/`, `.agent/`, `.agents/`, `.cursor/`, `.gemini/`, `.github/`, `.specify/` speckit scaffolding (`git add .` auto-commit concerns, PS `;` separator) — **Deferred (out of spec-007 scope)** — these are vendored templates from the speckit toolkit, not active hooks on this repo (nothing in this branch wires them up to auto-run). The concerns are valid but the fix belongs upstream in the speckit skill package or in a dedicated tooling PR; rewriting all 8 mirrored copies in this PR would create churn without reducing exposure because they don't execute. Tracking note added for a follow-up tooling PR.
 
-- [x] 5. `src/hooks/useIncludesProfessorDefault.ts`:36-38 — Race condition between state and AsyncStorage
-  Fixed: added module-scoped `_cachedValue` variable. `setValue` updates the cache synchronously alongside React state, and `getIncludesProfessorDefault()` reads from cache first, eliminating the race.
+## MAJOR — load tests (3)
 
-- [x] 6. `src/components/charts/ChartTooltip.tsx`:49 — Tooltip not clamped vertically
-  Fixed: added vertical clamping logic. When `anchorY + estimatedHeight + VERTICAL_MARGIN > screenHeight`, the tooltip flips above the anchor point.
+- [x] **23.** `server/test/load/sync-latency.k6.js:52` — **Fixed** — `unique_participants` raised to 60 and `attendance.start/mid/end` clamped to `min(base + i, uniq)` so no generated collection fails `validateCollectionData`'s "attendance ≤ unique_participants" invariant.
+- [x] **24.** `server/test/load/sync-latency.k6.js:76` — **Fixed** — switched from `setupClient` + shared body to `setupRequest` + fresh `buildBatch()` per request; every request now carries a fresh set of UUIDs, so the server does real insert work instead of hitting the idempotent fast-path.
+- [x] **25.** `server/test/load/sync-latency.k6.js:95` — **Fixed** — added a fail-closed gate: any `errors + timeouts + non2xx > 0` aborts with exit 1 before the p97.5 latency check. The pass line now prints "0 errors" explicitly.
 
-- [x] 7. `playwright.config.ts`:3-23 — Parallel E2E causes state leakage
-  Fixed: added `workers: 1` and `fullyParallel: false` to enforce serial execution.
+## MINOR (3)
 
-### MEDIUM Severity
-
-- [x] 8. `app/(tabs)/_layout.tsx`:57 — Tab title "Dashboard" not localized to pt-BR
-  Fixed: changed `title: "Dashboard"` to `title: "Painel"`.
-
-- [x] 9. `specs/.../export-envelope.v2.schema.json`:18-23 — Schema too permissive (collector / collections)
-  Not applicable: the schema is the v2.0 contract shared across specs 005-008. `collector` uses `oneOf[null, CollectorInfo]` intentionally for forward compatibility (spec 006 populates it). `collections` has no `minItems` because the empty guard is a runtime concern (FR-008), not a schema constraint — the description explicitly says "Can be empty only if the exporter was invoked despite the empty-guard."
-
-- [x] 10. `specs/005-export-contract-v2/plan.md`:100 — Plan out of sync with actual diff
-  Fixed: updated the components line to clarify "(no new components for 005)" — dashboard components on this branch belong to spec 009.
-
-- [x] 11. `src/services/exportService.ts`:172 — Error message in English
-  Fixed: changed to `'O compartilhamento não está disponível neste dispositivo.'`
-
-- [x] 12. `tests/e2e/seed-and-lesson-detail.spec.ts`:14-30 — Hard waits and brittle selectors
-  Fixed: replaced `waitForTimeout()` with deterministic `expect(...).toBeVisible({ timeout })` waits and replaced the fragile `[role="generic"]` locator with `page.getByText(/Eb\d{3}/)`.
-
-### LOW Severity (Nitpicks)
-
-- [x] 13. `src/components/charts/DashboardEmptyState.tsx`:21,30 — Hardcoded magic values
-  Fixed: replaced `size={40}` with `theme.spacing.xxl` (48) and `minHeight: 160` with a theme-derived expression.
-
-- [x] 14. `src/theme/colors.ts`:38,62 — Constants not UPPERCASE_SNAKE_CASE
-  Fixed: renamed `lightBase` → `LIGHT_BASE` and `darkBase` → `DARK_BASE` with all references updated.
-
-- [x] 15. `app/settings.tsx`:0-1 — Import order mismatch
-  Fixed: moved React core imports (`useMemo, useState`) before React Native imports, with blank-line separation.
-
-- [x] 16. `tests/e2e/settings-default-toggle.spec.ts`:25-27 — Inconsistent selector style
-  Fixed: replaced CSS locator `page.locator('input[role="switch"]...')` with `page.getByRole('switch', { name: '...' })`.
-
-- [x] 17. `src/components/charts/*.tsx` + `app/(tabs)/dashboard.tsx` — Duplicated `formatDayMonth`
-  Fixed: extracted to `src/utils/date.ts` as a shared export; replaced all 6 duplicate definitions with imports.
-
-- [x] 18. `specs/005-export-contract-v2/tasks.md`:149-156 — Repetitive sentence openings
-  Not applicable: the dependency list uses consistent "Depends on" / "Can" phrasing deliberately for scannability in a task spec. The repetition aids machine-readability and grep-ability. Varying phrasing would reduce clarity.
-
-- [x] 19. `src/components/charts/AttendanceCurveRow.tsx`:32-88 — ScrollView+map instead of FlatList
-  Fixed: replaced `ScrollView` + `.map()` with `FlatList` using `horizontal`, `keyExtractor`, and an extracted `renderItem` wrapped in `useCallback`.
-
-- [x] 20. `src/components/charts/ChartCard.tsx`:8-18 — Missing `disabled` prop
-  Not applicable: the retry button is only rendered when `status === 'error'`, which is mutually exclusive with loading. Adding a `disabled` prop would be speculative — no caller needs it. Per project guidelines: "Don't add features beyond what was asked."
-
-- [x] 21. `tests/unit/dashboardService.test.ts`:28 — `mockDb` typed as `any`
-  Already fixed: the file already uses `let mockDb: MockDb` with a proper `MockDb` interface (lines 14-18). CodeRabbit's finding was based on stale diff context.
-
-- [x] 22. `specs/005-export-contract-v2/data-model.md`:73 — Missing language specifier on code block
-  Fixed: added `text` language specifier to the fenced code block.
-
-- [x] 23. `src/services/lessonService.ts`:78-101 — Spread order lets callers override timestamps
-  Fixed: moved `...partialLesson` spread before the service-computed fields (`created_at`, `client_updated_at`, `includes_professor`) so callers cannot override them.
-
-- [x] 24. `tests/unit/lessonService.test.ts`:28 — `mockDb` typed as `any`
-  Fixed: added `MockDb` interface and changed `let mockDb: any` to `let mockDb: MockDb`.
-
-- [x] 25. `tests/unit/dbMigration.test.ts`:110 — `as any` cast hides API drift
-  Fixed: added `MigrationDb` interface documenting the 3 methods the fake implements; replaced `as any` with `as MigrationDb`.
-
-- [x] 26. `specs/009-statistics-dashboard/tasks.md`:1-8 — Dashboard spec tasks included in wrong PR
-  Not applicable: the dashboard spec (009) tasks were developed alongside this branch and are included intentionally. Splitting them into a separate PR would create an artificial separation since the dashboard code is already on this branch.
+- [x] **26.** `server/test/helpers/fixtures.ts:9` — **Fixed** — `pinnedOrRandom()` helper now rejects env-pinned values shorter than 8 chars and falls back to `randomBytes(12).toString('hex')` so `registerUser()` never hits `password_too_short` due to a too-short pinned `TEST_PASSWORD`.
+- [x] **27.** `server/test/helpers/fixtures.ts:15` — **Fixed** — `nextEmail()` now uses `randomUUID()` instead of a process-local counter + `Date.now()`; parallel vitest workers against a shared DB no longer collide.
+- [x] **28.** `specs/007-sync-backend/quickstart.md:58-73` — **Fixed** — payload rewritten to the nested v2 envelope (`lesson_instance`, `times`, `attendance`) matching what `syncService` validates and what `server/README.md` already documented.
 
 ---
 
@@ -98,16 +54,10 @@
 
 | Status | Count |
 |--------|-------|
-| Fixed | 18 |
-| Already fixed | 1 |
-| Not applicable | 7 |
+| Fixed | 20 |
+| Already fixed | 0 |
+| Not applicable | 0 |
+| Deferred (out of scope) | 8 (speckit scaffolding items #15-22) |
 | Pending | 0 |
 
-### Tests
-- Unit: **All 109 tests passed** (9 suites)
-- E2E: not run (requires Expo web server)
-
-### Conversations
-- **Total threads**: 18
-- **Resolved in this run**: 18 (12 CodeRabbit + 6 Copilot)
-- **Previously resolved**: 0
+Tests: **73 of 73 passed** with `TEST_DATABASE_URL` set, `npm test` via `vitest run`. No regressions from any of the applied fixes.
