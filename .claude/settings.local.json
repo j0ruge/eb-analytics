@@ -29,7 +29,9 @@
       "Bash(npm ls:*)",
       "Bash(powershell.exe -NoProfile -Command \"Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output done\")",
       "mcp__code-search__get_index_status",
-      "mcp__code-search__index_directory"
+      "mcp__code-search__index_directory",
+      "Bash(npx jest:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

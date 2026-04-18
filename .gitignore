@@ -58,3 +58,9 @@ google-client*.json
 google-token*.json
 *credentials*.json
 client_secret*.json
+# Playwright MCP browser logs (transient)
+.playwright-mcp/
+
+# Playwright test run artifacts
+test-results/
+playwright-report/
