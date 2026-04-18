@@ -61,17 +61,28 @@ curl -sS -X POST http://localhost:3000/sync/batch \
   -H "Authorization: Bearer $JWT" \
   -d '{
     "schema_version": "2.0",
+    "client": { "app_version": "quickstart", "device_id": "11111111-1111-1111-1111-111111111112" },
+    "collector": null,
+    "exported_at": "2026-04-11T10:07:30Z",
     "collections": [{
       "id": "11111111-1111-1111-1111-111111111111",
       "client_created_at": "2026-04-11T10:00:00Z",
       "client_updated_at": "2026-04-11T10:07:00Z",
-      "date": "2026-04-11",
-      "series_code_fallback": "EB354",
-      "topic_title_fallback": "Lição 1",
-      "professor_name_fallback": "Prof Teste",
-      "expected_start": "10:00", "expected_end": "11:00",
-      "attendance_start": 10, "attendance_mid": 12, "attendance_end": 11,
-      "includes_professor": false, "unique_participants": 13
+      "status": "COMPLETED",
+      "lesson_instance": {
+        "date": "2026-04-11",
+        "series_id": null,
+        "series_code_fallback": "EB354",
+        "topic_id": null,
+        "topic_title_fallback": "Lição 1",
+        "professor_id": null,
+        "professor_name_fallback": "Prof Teste"
+      },
+      "times": { "expected_start": "10:00", "expected_end": "11:00", "real_start": null, "real_end": null },
+      "attendance": { "start": 10, "mid": 12, "end": 11, "includes_professor": false },
+      "unique_participants": 13,
+      "weather": null,
+      "notes": null
     }]
   }'
 ```

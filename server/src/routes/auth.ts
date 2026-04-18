@@ -33,10 +33,36 @@ const loginBodySchema = {
   additionalProperties: false,
 } as const;
 
+const userSchema = {
+  type: 'object',
+  required: ['id', 'email', 'display_name', 'role', 'accepted'],
+  properties: {
+    id: { type: 'string' },
+    email: { type: 'string' },
+    display_name: { type: 'string' },
+    role: { type: 'string', enum: ['COORDINATOR', 'COLLECTOR'] },
+    accepted: { type: 'boolean' },
+  },
+} as const;
+
+const authResponseSchema = {
+  type: 'object',
+  required: ['jwt', 'user'],
+  properties: {
+    jwt: { type: 'string' },
+    user: userSchema,
+  },
+} as const;
+
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: RegisterBody }>(
     '/auth/register',
-    { schema: { body: registerBodySchema } },
+    {
+      schema: {
+        body: registerBodySchema,
+        response: { 201: authResponseSchema },
+      },
+    },
     async (request, reply) => {
       const result = await authService.register({
         email: request.body.email,
@@ -49,7 +75,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: LoginBody }>(
     '/auth/login',
-    { schema: { body: loginBodySchema } },
+    {
+      schema: {
+        body: loginBodySchema,
+        response: { 200: authResponseSchema },
+      },
+    },
     async (request) => {
       return authService.login(request.body.email, request.body.password);
     },
@@ -57,7 +88,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get(
     '/me',
-    { preHandler: [fastify.requireAuth] },
+    {
+      preHandler: [fastify.requireAuth],
+      schema: { response: { 200: userSchema } },
+    },
     async (request) => authService.getMe(request.user!.id),
   );
 };

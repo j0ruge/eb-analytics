@@ -10,10 +10,18 @@ Maps to FR-050.
 
 **200**:
 
-```json
+```jsonc
+// role is always one of "COLLECTOR" or "COORDINATOR"; accepted is always a boolean
 {
   "users": [
-    { "id": "...", "email": "...", "display_name": "...", "role": "COLLECTOR" | "COORDINATOR", "accepted": true, "created_at": "..." }
+    {
+      "id": "...",
+      "email": "...",
+      "display_name": "...",
+      "role": "COLLECTOR",
+      "accepted": true,
+      "created_at": "..."
+    }
   ]
 }
 ```
@@ -27,7 +35,7 @@ Maps to FR-051, US-5 scenario 3, SC-006.
 
 **Auth**: required, coordinator.
 
-**Body**: `{ "accepted": true | false }`.
+**Body**: `{ "accepted": true }` (a boolean — pass either `true` or `false`).
 
 Behavior: the flag is toggled AND every `LessonInstance` with at least one collection from `:id` is recomputed inside the same transaction as the flag change (US-5 scenario 3). The transaction takes an advisory lock per affected instance (research §9) so concurrent sync ingests cannot interleave a stale aggregate.
 

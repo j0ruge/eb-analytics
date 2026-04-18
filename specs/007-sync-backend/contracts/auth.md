@@ -37,7 +37,7 @@ The first successfully registered user has `role: "COORDINATOR"`; all others def
 
 **Errors**:
 - 400 `password_too_short` — password shorter than 8 chars (FR-015, US-4 scenario 5).
-- 400 `invalid_email` — email fails RFC-5321 validation.
+- 400 `invalid_email` — email fails the server-side format check (a pragmatic regex subset of RFC-5321, not the full grammar — rejects missing `@`, missing TLD, whitespace, multiple `@`, empty local/domain parts).
 - 409 `email_already_registered` — email uniqueness violation.
 
 ## POST /auth/login

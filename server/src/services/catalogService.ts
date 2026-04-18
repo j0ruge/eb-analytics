@@ -145,6 +145,28 @@ function isPrismaRecordNotFound(err: unknown): boolean {
   return prismaErrorCode(err) === 'P2025';
 }
 
+function isPrismaForeignKeyViolation(err: unknown): boolean {
+  return prismaErrorCode(err) === 'P2003';
+}
+
+/**
+ * Parse an optional ISO-date string into a Date or null.
+ * Throws httpError(invalid_payload) if the string is non-empty but unparseable.
+ * A bare `new Date(badString)` yields `Invalid Date` and would silently corrupt
+ * the row — we reject it at the API boundary instead.
+ */
+function parseOptionalDate(value: string | null | undefined, field: string): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') {
+    throw httpError('invalid_payload', `${field} deve ser string ISO ou null.`, 400);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    throw httpError('invalid_payload', `${field} inválido.`, 400);
+  }
+  return d;
+}
+
 export const catalogService = {
   async listCatalog(opts: ListCatalogOpts): Promise<CatalogResponse> {
     // Hide pending items unless the caller is a coordinator who asked for them.
@@ -226,39 +248,62 @@ export const catalogService = {
     // All checks + delete in one tx to close the TOCTOU on concurrent
     // sync ingests that might insert a LessonInstance using this
     // series code between the count and the delete.
-    await prisma.$transaction(async (tx) => {
-      const existing = await tx.lessonSeries.findUnique({ where: { id } });
-      if (!existing) {
-        throw httpError('not_found', 'Registro não encontrado.', 404);
-      }
-      const usageCount = await tx.lessonInstance.count({
-        where: { seriesCode: existing.code },
+    //
+    // Even with the tx, an advisory-lock-free sync path can still race us
+    // inside the tx window: catch the resulting P2003 (FK violation) and
+    // surface it as the same 409 the app-level count check would.
+    try {
+      await prisma.$transaction(async (tx) => {
+        const existing = await tx.lessonSeries.findUnique({ where: { id } });
+        if (!existing) {
+          throw httpError('not_found', 'Registro não encontrado.', 404);
+        }
+        const usageCount = await tx.lessonInstance.count({
+          where: { seriesCode: existing.code },
+        });
+        if (usageCount > 0) {
+          throw httpError(
+            'series_referenced',
+            'Série não pode ser excluída enquanto houver aulas associadas.',
+            409,
+          );
+        }
+        const topicCount = await tx.lessonTopic.count({ where: { seriesId: id } });
+        if (topicCount > 0) {
+          throw httpError(
+            'series_referenced',
+            'Série possui tópicos vinculados.',
+            409,
+          );
+        }
+        await tx.lessonSeries.delete({ where: { id } });
       });
-      if (usageCount > 0) {
+    } catch (err) {
+      if (isPrismaForeignKeyViolation(err)) {
         throw httpError(
           'series_referenced',
-          'Série não pode ser excluída enquanto houver aulas associadas.',
+          'Série não pode ser excluída: uma coleta concorrente a referenciou.',
           409,
         );
       }
-      const topicCount = await tx.lessonTopic.count({ where: { seriesId: id } });
-      if (topicCount > 0) {
-        throw httpError(
-          'series_referenced',
-          'Série possui tópicos vinculados.',
-          409,
-        );
-      }
-      await tx.lessonSeries.delete({ where: { id } });
-    });
+      throw err;
+    }
   },
 
   // ---------------- Topic mutations ----------------
 
   async createTopic(dto: CreateTopicDto): Promise<SerializedTopic> {
-    if (!dto.series_id || !dto.title || !Number.isInteger(dto.sequence_order)) {
-      throw httpError('invalid_payload', 'series_id, title e sequence_order obrigatórios.', 400);
+    if (!dto.series_id || !dto.title) {
+      throw httpError('invalid_payload', 'series_id e title obrigatórios.', 400);
     }
+    if (!Number.isInteger(dto.sequence_order) || (dto.sequence_order as number) < 0) {
+      throw httpError(
+        'invalid_payload',
+        'sequence_order deve ser inteiro ≥ 0.',
+        400,
+      );
+    }
+    const suggestedDate = parseOptionalDate(dto.suggested_date, 'suggested_date');
     const series = await prisma.lessonSeries.findUnique({ where: { id: dto.series_id } });
     if (!series) {
       throw httpError('not_found', 'Série não encontrada.', 404);
@@ -268,7 +313,7 @@ export const catalogService = {
         seriesId: dto.series_id,
         title: dto.title,
         sequenceOrder: dto.sequence_order,
-        suggestedDate: dto.suggested_date ? new Date(dto.suggested_date) : null,
+        suggestedDate,
         isPending: false,
       },
     });
@@ -276,15 +321,26 @@ export const catalogService = {
   },
 
   async updateTopic(id: string, dto: UpdateTopicDto): Promise<SerializedTopic> {
+    if (dto.sequence_order !== undefined) {
+      if (!Number.isInteger(dto.sequence_order) || (dto.sequence_order as number) < 0) {
+        throw httpError(
+          'invalid_payload',
+          'sequence_order deve ser inteiro ≥ 0.',
+          400,
+        );
+      }
+    }
+    const suggestedDate =
+      dto.suggested_date !== undefined
+        ? parseOptionalDate(dto.suggested_date, 'suggested_date')
+        : undefined;
     try {
       const row = await prisma.lessonTopic.update({
         where: { id },
         data: {
           ...(dto.title !== undefined ? { title: dto.title } : {}),
           ...(dto.sequence_order !== undefined ? { sequenceOrder: dto.sequence_order } : {}),
-          ...(dto.suggested_date !== undefined
-            ? { suggestedDate: dto.suggested_date ? new Date(dto.suggested_date) : null }
-            : {}),
+          ...(suggestedDate !== undefined ? { suggestedDate } : {}),
           isPending: false,
         },
       });

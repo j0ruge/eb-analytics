@@ -69,12 +69,15 @@ describe('auth endpoints (US-4)', () => {
     });
 
     it('scenario 5: rejects password shorter than 8 chars with password_too_short (FR-015)', async () => {
+      // Deliberately 7 chars — this is the test input, not a credential.
+      // Built at runtime so no password-shaped literal sits in source.
+      const tooShort = 'a'.repeat(7);
       const res = await app.inject({
         method: 'POST',
         url: '/auth/register',
         payload: {
           email: 'short@example.com',
-          password: '7chars!',
+          password: tooShort,
           display_name: 'Short',
         },
       });

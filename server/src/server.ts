@@ -25,16 +25,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // TRUST_PROXY controls whether Fastify derives request.ip from
   // X-Forwarded-For. Required when the server sits behind a load balancer
   // or reverse proxy — otherwise every client shares the same IP for
-  // rate-limit keying. Accepts a hop count ("1") or "true" for all proxies.
-  const trustProxyRaw = process.env.TRUST_PROXY;
-  const trustProxy: boolean | number =
-    trustProxyRaw === undefined || trustProxyRaw === ''
-      ? false
-      : trustProxyRaw === 'true'
-        ? true
-        : Number.isFinite(Number(trustProxyRaw))
-          ? Number(trustProxyRaw)
-          : true;
+  // rate-limit keying. Accepts "true"/"false" or a positive hop count ("1").
+  // Any other value falls back to *false* (fail-closed) — an unrecognized
+  // value must never silently enable trust, because that lets a client spoof
+  // X-Forwarded-For and defeat rate limiting.
+  const trustProxyRaw = process.env.TRUST_PROXY?.trim().toLowerCase();
+  let trustProxy: boolean | number;
+  if (!trustProxyRaw || trustProxyRaw === 'false' || trustProxyRaw === '0') {
+    trustProxy = false;
+  } else if (trustProxyRaw === 'true') {
+    trustProxy = true;
+  } else {
+    const n = Number(trustProxyRaw);
+    trustProxy = Number.isInteger(n) && n > 0 ? n : false;
+  }
 
   const app = Fastify({
     bodyLimit: 5 * 1024 * 1024,

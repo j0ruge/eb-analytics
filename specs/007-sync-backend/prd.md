@@ -66,14 +66,14 @@ As the backend, I want to register new users, authenticate them with email + pas
 
 **Why this priority**: Spec 006 depends on these endpoints existing.
 
-**Independent Test**: `POST /auth/register` with unique email. Verify 201 and JWT. `POST /auth/login` with same credentials. Verify 200 and a new JWT. `GET /users/me` with the JWT. Verify 200 and user info.
+**Independent Test**: `POST /auth/register` with unique email. Verify 201 and JWT. `POST /auth/login` with same credentials. Verify 200 and a new JWT. `GET /me` with the JWT. Verify 200 and user info.
 
 **Acceptance Scenarios**:
 
 1. **Given** an empty user table, **When** the first user calls `POST /auth/register`, **Then** the response is 201 with a JWT AND the user's `role` is automatically set to `COORDINATOR`.
 2. **Given** one user already exists, **When** a second user registers, **Then** the second user's `role` is `COLLECTOR` by default.
 3. **Given** bad credentials on login, **Then** the response is 401 with a generic "invalid credentials" message (no leak of whether email or password was wrong).
-4. **Given** a valid JWT, **When** `GET /users/me` is called, **Then** the response is the current user's info including `role` and `accepted`.
+4. **Given** a valid JWT, **When** `GET /me` is called, **Then** the response is the current user's info including `role` and `accepted`.
 
 ---
 
@@ -153,12 +153,12 @@ As the operator (self-hosting), I want a healthcheck endpoint and structured log
 
 - **FR-010**: `POST /auth/register` — body `{ email, password, display_name }`. Returns 201 with `{ jwt, user }`. First user to register in an empty DB is set to `role: COORDINATOR`.
 - **FR-011**: `POST /auth/login` — body `{ email, password }`. Returns 200 with `{ jwt, user }` or 401.
-- **FR-012**: `GET /users/me` — Bearer JWT. Returns 200 with `{ id, email, display_name, role, accepted }` or 401.
+- **FR-012**: `GET /me` — Bearer JWT. Returns 200 with `{ id, email, display_name, role, accepted }` or 401.
 
 #### Sync Endpoint
 
 - **FR-020**: `POST /sync/batch` — Bearer JWT, body follows the v2 schema from spec 005. Returns 200 with `{ accepted: [id], rejected: [{id, reason}] }`.
-- **FR-021**: Idempotency key is `collections[].id`. Reposting is a no-op; updates are field-level merges based on `client_updated_at`.
+- **FR-021**: Idempotency key is `collections[].id`. Reposting by the **original collector** is a no-op; updates are field-level merges based on `client_updated_at`. A repost referencing a collection ID already owned by a different collector (`existing.collectorUserId !== jwt.sub`) MUST be rejected with `collection_ownership_conflict` (409) — a collector cannot overwrite another collector's row by guessing or replaying its ID.
 - **FR-022**: On successful insertion/update, the server recomputes affected `LessonInstance.agg*` inside the same transaction as the write.
 - **FR-023**: Auto-create catalog items when `*_id` is null but `*_fallback` is present. Auto-created items have `isPending: true`.
 

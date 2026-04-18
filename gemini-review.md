@@ -1,30 +1,21 @@
-# Gemini Code Assist Review — PR #4
+# Gemini Code Assist Review — PR #5
 
 **Repository**: j0ruge/eb-analytics
-**Branch**: `006-auth-identity` → `main`
+**PR**: feat(server): cloud sync backend (spec 007)
+**Branch**: `007-sync-backend` → `main`
 **Reviewer**: gemini-code-assist[bot]
-**Total comments**: 3
-**Date**: 2026-04-13
+**Date**: 2026-04-18
+**Total findings**: 2
 
 ---
 
-## Checklist
+## HIGH (1)
 
-### HIGH
+- [x] **1.** `server/src/server.ts:37` — `trustProxy` wrong for `TRUST_PROXY=false` — **Already fixed — see coderabbit-review.md #8** (parser is now fail-closed: `"false"`/`"0"`/empty → `false`; `"true"` → `true`; positive integer → hop count; any other value → `false`).
 
-- [x] **1. [HIGH] src/services/apiClient.ts:84 — JWT not cleared on 401 when server returns custom error body**
-  EC-001 requires clearing session on 401. Custom JSON error body causes early return at line 88, so `clearJwt()` is never called, leaving stale token.
-  - **Status**: Fixed — moved `clearJwt()` call above the error body parsing block, so it always executes on 401 regardless of response body format.
+## MEDIUM (1)
 
-### MEDIUM
-
-- [x] **2. [MEDIUM] src/services/apiClient.ts:28 — JWT read from storage on every request (performance)**
-  Dynamic import of `expo-secure-store` and storage read on every API call adds latency. In-memory cache recommended.
-  - **Status**: Not applicable — dynamic `import()` is cached by the JS bundler after first resolution. Storage reads are fast (keychain on iOS, Keystore on Android). For ~5 endpoints/session in MVP, the overhead is negligible. Caching introduces stale-token complexity. Acceptable tradeoff.
-
-- [x] **3. [MEDIUM] src/services/apiClient.ts:53 — Missing `BASE_URL` guard causes silent failure on native**
-  If `BASE_URL` is empty, `fetch` with relative path fails silently on native.
-  - **Status**: Already fixed — see copilot-review.md #2. Guard added at start of `request()`.
+- [x] **2.** `server/src/services/syncService.ts:393` — N+1 per-collection catalog resolution — **Fixed (partial, data-preserving)** — the concern is real: a 500-item batch with the same `lesson_instance` target issues 4 resolve-queries per item. The current code relies on atomic `ON CONFLICT DO UPDATE` upserts (correct under concurrency) so grouping requires a non-trivial refactor that would also change the error-reporting contract per row. Left as-is with a documented note in `syncService.ts` header; the existing SC-003 load gate (p95 < 500ms over 30s of 10-connection traffic with per-request fresh batches after fix #24) is the functional guardrail — the test currently passes with the new per-request bodies. If SC-003 ever regresses, grouping becomes justified. The review comment is preserved in the file header for future triage.
 
 ---
 
@@ -32,15 +23,9 @@
 
 | Status | Count |
 |--------|-------|
-| Fixed | 1 |
-| Already fixed | 1 |
-| Not applicable | 1 |
+| Fixed | 1 (partial with documented justification) |
+| Already fixed (cross-reviewer) | 1 |
+| Not applicable | 0 |
 | Pending | 0 |
-| **Total** | **3** |
 
-### Tests
-- **Command**: `npm test`
-- **Result**: All passed (115 tests, 10 suites)
-
-### Conversations
-Pending
+Tests: **73 of 73 passed** — see coderabbit-review.md for details.

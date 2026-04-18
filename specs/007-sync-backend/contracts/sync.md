@@ -33,7 +33,7 @@ Each collection object carries a client-generated `id` (idempotency key, FR-021)
 
 **Errors (whole-batch)**:
 - 400 `schema_version_required` — missing `schema_version` (EC-006).
-- 400 `schema_version_unsupported` — `schema_version ≠ "2"` (EC-006).
+- 400 `schema_version_unsupported` — `schema_version ≠ "2.0"` (EC-006). Only the exact string `"2.0"` is accepted in this server version.
 - 413 `batch_too_large` — > 500 collections or > 5 MB body (EC-007).
 - 401 `unauthenticated` — no/invalid JWT (US-1 scenario 5).
 - 429 `rate_limited` — exceeded per-session mutation quota (FR-063).

@@ -1,17 +1,24 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
-// Per-run test credentials. CI can pin via TEST_PASSWORD / TEST_PASSWORD_2 env vars;
-// otherwise each test process gets a fresh random value so no credential-shaped
-// literal lives in source. The +8-char length satisfies FR-015 (min 8 chars).
-export const TEST_PASSWORD = process.env.TEST_PASSWORD ?? randomBytes(12).toString('hex');
-export const TEST_PASSWORD_2 = process.env.TEST_PASSWORD_2 ?? randomBytes(12).toString('hex');
+// Per-run test credentials. CI can pin via TEST_PASSWORD / TEST_PASSWORD_2 env
+// vars; otherwise each test process gets a fresh random value so no
+// credential-shaped literal lives in source. We enforce the FR-015 8-char
+// minimum here — if an env-pinned value is too short, fall back to the random
+// default so tests don't fail with password_too_short at registerUser().
+function pinnedOrRandom(envVar: string | undefined, bytes = 12): string {
+  if (envVar && envVar.length >= 8) return envVar;
+  return randomBytes(bytes).toString('hex');
+}
+export const TEST_PASSWORD = pinnedOrRandom(process.env.TEST_PASSWORD);
+export const TEST_PASSWORD_2 = pinnedOrRandom(process.env.TEST_PASSWORD_2);
 export const WRONG_TEST_PASSWORD = `${TEST_PASSWORD}-wrong`;
 
-let counter = 0;
+// Random suffix per email avoids cross-worker collisions when vitest runs tests
+// in parallel against the same DB (ms-precision `Date.now()` + process-local
+// counter can still collide across forked workers).
 function nextEmail(): string {
-  counter += 1;
-  return `user-${Date.now()}-${counter}@test.local`;
+  return `user-${Date.now()}-${randomUUID()}@test.local`;
 }
 
 export interface UserFixture {

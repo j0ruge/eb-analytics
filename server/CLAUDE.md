@@ -220,7 +220,7 @@ fastify.decorate('requireRole', (role: Role) => {
 | Enums | PascalCase (name), UPPER_SNAKE (values) | `Role.COORDINATOR` |
 | Constants | UPPER_SNAKE_CASE | `JWT_EXPIRY`, `BCRYPT_ROUNDS` |
 | Env vars | UPPER_SNAKE_CASE | `DATABASE_URL`, `JWT_SECRET` |
-| Error codes | UPPER_SNAKE_CASE | `INVALID_CREDENTIALS` |
+| Error codes | lower_snake_case (stable, English, client-keyed) | `invalid_credentials`, `password_too_short`, `series_referenced` — see `specs/007-sync-backend/contracts/error-codes.md` |
 
 ---
 
@@ -248,7 +248,8 @@ describe('POST /auth/register', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/auth/register',
-      payload: { email: 'first@test.com', password: 'secret123', display_name: 'First' },
+      // Real tests must import TEST_PASSWORD from test/helpers/fixtures.ts — never inline a literal here.
+      payload: { email: 'first@test.com', password: TEST_PASSWORD, display_name: 'First' },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().user.role).toBe('COORDINATOR');

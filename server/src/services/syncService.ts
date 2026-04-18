@@ -89,18 +89,46 @@ function assertBatchShape(payload: SyncPayload): CollectionInput[] {
 /**
  * Structural validation needed BEFORE we can resolve a LessonInstance.
  * Must pass for the row to be persistable at all (even as REJECTED).
+ *
+ * Guard order matters: we check the outer shape (non-null object) and each
+ * field type before dereferencing, so a `null` array entry or a `date` that
+ * happens to be a number cannot escape as an unhandled TypeError/RangeError.
  */
 function validateInstanceStructure(c: CollectionInput): void {
-  if (!c.id || typeof c.id !== 'string') {
+  if (!isObject(c)) {
+    throw new CollectionError('invalid_collection_payload', 'coleta deve ser um objeto.');
+  }
+  if (typeof c.id !== 'string' || c.id.length === 0) {
     throw new CollectionError('invalid_collection_payload', 'id ausente.');
   }
   if (!isObject(c.lesson_instance)) {
     throw new CollectionError('invalid_collection_payload', 'lesson_instance ausente.');
   }
-  if (!ISO_DATE.test(c.lesson_instance.date)) {
+  const li = c.lesson_instance;
+  if (typeof li.date !== 'string' || !ISO_DATE.test(li.date)) {
     throw new CollectionError('invalid_collection_payload', 'date inválida.');
   }
+  if (li.series_id !== null && typeof li.series_id !== 'string') {
+    throw new CollectionError('invalid_collection_payload', 'series_id inválido.');
+  }
+  if (li.series_code_fallback !== null && typeof li.series_code_fallback !== 'string') {
+    throw new CollectionError('invalid_collection_payload', 'series_code_fallback inválido.');
+  }
+  if (li.topic_id !== null && typeof li.topic_id !== 'string') {
+    throw new CollectionError('invalid_collection_payload', 'topic_id inválido.');
+  }
+  if (li.topic_title_fallback !== null && typeof li.topic_title_fallback !== 'string') {
+    throw new CollectionError('invalid_collection_payload', 'topic_title_fallback inválido.');
+  }
+  if (li.professor_id !== null && typeof li.professor_id !== 'string') {
+    throw new CollectionError('invalid_collection_payload', 'professor_id inválido.');
+  }
+  if (li.professor_name_fallback !== null && typeof li.professor_name_fallback !== 'string') {
+    throw new CollectionError('invalid_collection_payload', 'professor_name_fallback inválido.');
+  }
   if (
+    typeof c.client_created_at !== 'string' ||
+    typeof c.client_updated_at !== 'string' ||
     Number.isNaN(Date.parse(c.client_created_at)) ||
     Number.isNaN(Date.parse(c.client_updated_at))
   ) {
@@ -267,11 +295,17 @@ async function upsertInstance(
   const dateStr = args.date.toISOString().slice(0, 10);
   if (args.topicId === null) {
     const rows = await tx.$queryRawUnsafe<Array<{ id: string; professorId: string | null }>>(
+      // COALESCE the professorId atomically on conflict: only backfill when
+      // the existing row still has NULL. A separate SELECT+UPDATE round would
+      // race with concurrent upserts that also saw NULL and each tried to
+      // write their own professor, clobbering each other.
       `INSERT INTO "LessonInstance"
          ("id", "date", "seriesCode", "topicId", "professorId", "aggCollectorCount")
        VALUES (gen_random_uuid(), $1::date, $2, NULL, $3, 0)
        ON CONFLICT ("date", "seriesCode") WHERE "topicId" IS NULL
-       DO UPDATE SET "seriesCode" = EXCLUDED."seriesCode"
+       DO UPDATE SET
+         "seriesCode" = EXCLUDED."seriesCode",
+         "professorId" = COALESCE("LessonInstance"."professorId", EXCLUDED."professorId")
        RETURNING "id", "professorId"`,
       dateStr,
       args.seriesCode,
@@ -279,12 +313,6 @@ async function upsertInstance(
     );
     const row = rows[0];
     if (!row) throw new Error('instance upsert (no-topic) returned no row');
-    if (!row.professorId && args.professorId) {
-      await tx.lessonInstance.update({
-        where: { id: row.id },
-        data: { professorId: args.professorId },
-      });
-    }
     return row.id;
   }
   const rows = await tx.$queryRawUnsafe<Array<{ id: string; professorId: string | null }>>(
@@ -292,7 +320,9 @@ async function upsertInstance(
        ("id", "date", "seriesCode", "topicId", "professorId", "aggCollectorCount")
      VALUES (gen_random_uuid(), $1::date, $2, $3, $4, 0)
      ON CONFLICT ("date", "seriesCode", "topicId")
-     DO UPDATE SET "seriesCode" = EXCLUDED."seriesCode"
+     DO UPDATE SET
+       "seriesCode" = EXCLUDED."seriesCode",
+       "professorId" = COALESCE("LessonInstance"."professorId", EXCLUDED."professorId")
      RETURNING "id", "professorId"`,
     dateStr,
     args.seriesCode,
@@ -301,12 +331,6 @@ async function upsertInstance(
   );
   const row = rows[0];
   if (!row) throw new Error('instance upsert returned no row');
-  if (!row.professorId && args.professorId) {
-    await tx.lessonInstance.update({
-      where: { id: row.id },
-      data: { professorId: args.professorId },
-    });
-  }
   return row.id;
 }
 
@@ -441,6 +465,19 @@ async function runOnce(
           const existing = await tx.lessonCollection.findUnique({ where: { id: c.id } });
           const newUpdatedAt = new Date(c.client_updated_at);
 
+          // FR-021: Reposting an ID owned by another collector MUST be
+          // rejected, not merged. Without this check, any authenticated
+          // user who learns (or guesses) another collector's collection UUID
+          // could overwrite their record by replaying the sync.
+          if (existing && existing.collectorUserId !== userId) {
+            rejected.push({
+              id: c.id,
+              code: 'collection_ownership_conflict',
+              message: 'Coleta já registrada por outro coletor.',
+            });
+            continue;
+          }
+
           if (existing) {
             const existingUpdatedAt = existing.clientUpdatedAt;
             const isNewer = newUpdatedAt.getTime() > existingUpdatedAt.getTime();
@@ -450,23 +487,79 @@ async function runOnce(
               // REJECTED → SYNCED flip when the client corrects malformed
               // data). Server-only fields (acceptedOverride, serverReceivedAt)
               // remain preserved.
+              //
+              // When dataError is set, the raw fields (c.times / c.attendance)
+              // may be missing or malformed — mirror the defensive defaults
+              // used on the REJECTED insert path below so a bad payload
+              // doesn't abort the whole batch with a TypeError.
               const nextStatus = dataError ? 'REJECTED' : 'SYNCED';
               const nextReason = dataError ? `${dataError.code}:${dataError.message}` : null;
+              const sanitized = dataError
+                ? {
+                    expectedStart:
+                      isObject(c.times) && typeof c.times.expected_start === 'string'
+                        ? c.times.expected_start
+                        : existing.expectedStart,
+                    expectedEnd:
+                      isObject(c.times) && typeof c.times.expected_end === 'string'
+                        ? c.times.expected_end
+                        : existing.expectedEnd,
+                    realStart:
+                      isObject(c.times) && typeof c.times.real_start === 'string'
+                        ? c.times.real_start
+                        : null,
+                    realEnd:
+                      isObject(c.times) && typeof c.times.real_end === 'string'
+                        ? c.times.real_end
+                        : null,
+                    attendanceStart:
+                      isObject(c.attendance) &&
+                      Number.isInteger(c.attendance.start) &&
+                      c.attendance.start >= 0
+                        ? c.attendance.start
+                        : existing.attendanceStart,
+                    attendanceMid:
+                      isObject(c.attendance) &&
+                      Number.isInteger(c.attendance.mid) &&
+                      c.attendance.mid >= 0
+                        ? c.attendance.mid
+                        : existing.attendanceMid,
+                    attendanceEnd:
+                      isObject(c.attendance) &&
+                      Number.isInteger(c.attendance.end) &&
+                      c.attendance.end >= 0
+                        ? c.attendance.end
+                        : existing.attendanceEnd,
+                    includesProfessor:
+                      isObject(c.attendance) &&
+                      typeof c.attendance.includes_professor === 'boolean'
+                        ? c.attendance.includes_professor
+                        : existing.includesProfessor,
+                    uniqueParticipants:
+                      Number.isInteger(c.unique_participants) && c.unique_participants >= 0
+                        ? c.unique_participants
+                        : existing.uniqueParticipants,
+                    weather: typeof c.weather === 'string' ? c.weather : existing.weather,
+                    notes: typeof c.notes === 'string' ? c.notes : existing.notes,
+                  }
+                : {
+                    expectedStart: c.times.expected_start,
+                    expectedEnd: c.times.expected_end,
+                    realStart: c.times.real_start,
+                    realEnd: c.times.real_end,
+                    attendanceStart: c.attendance.start,
+                    attendanceMid: c.attendance.mid,
+                    attendanceEnd: c.attendance.end,
+                    includesProfessor: c.attendance.includes_professor,
+                    uniqueParticipants: c.unique_participants,
+                    weather: c.weather,
+                    notes: c.notes,
+                  };
               await tx.lessonCollection.update({
                 where: { id: c.id },
                 data: {
                   clientUpdatedAt: newUpdatedAt,
-                  expectedStart: c.times.expected_start,
-                  expectedEnd: c.times.expected_end,
-                  realStart: c.times.real_start,
-                  realEnd: c.times.real_end,
-                  attendanceStart: c.attendance.start,
-                  attendanceMid: c.attendance.mid,
-                  attendanceEnd: c.attendance.end,
-                  includesProfessor: c.attendance.includes_professor,
-                  uniqueParticipants: c.unique_participants,
-                  weather: c.weather,
-                  notes: c.notes,
+                  ...sanitized,
                   status: nextStatus,
                   rejectionReason: nextReason,
                 },
