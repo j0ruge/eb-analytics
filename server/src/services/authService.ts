@@ -4,6 +4,14 @@ import { signToken } from '../lib/jwt.js';
 import { httpError } from '../lib/errors.js';
 import { Role } from '../lib/roles.js';
 
+function isSerializationFailure(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const anyErr = err as { code?: string; meta?: { driverAdapterError?: { cause?: { originalCode?: string } } } };
+  if (anyErr.code === 'P2034') return true;
+  const original = anyErr.meta?.driverAdapterError?.cause?.originalCode;
+  return original === '40001' || original === '40P01';
+}
+
 export interface RegisterDto {
   email: string;
   password: string;
@@ -52,29 +60,52 @@ export const authService = {
       throw httpError('invalid_email', 'E-mail inválido.', 400);
     }
 
+    // Cheap duplicate-email pre-check avoids wasting bcrypt (~250 ms) on the
+    // 409 path. The definitive check is still the DB unique index below.
+    const alreadyExists = await prisma.user.findUnique({ where: { email: dto.email } });
+    if (alreadyExists) {
+      throw httpError('email_already_registered', 'Este e-mail já está cadastrado.', 409);
+    }
+
     const passwordHash = await hashPassword(dto.password);
 
-    const user = await prisma.$transaction(async (tx) => {
-      const existing = await tx.user.findUnique({ where: { email: dto.email } });
-      if (existing) {
-        throw httpError('email_already_registered', 'Este e-mail já está cadastrado.', 409);
+    // Serializable isolation closes the first-user TOCTOU: two concurrent
+    // registrations racing on an empty DB will no longer both read count=0
+    // and both become COORDINATOR; one will receive a P2034 and retry,
+    // seeing count=1 the second time. Wrapped in a retry loop because the
+    // losing side gets a serialization error, not a business error.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const user = await prisma.$transaction(
+          async (tx) => {
+            const existing = await tx.user.findUnique({ where: { email: dto.email } });
+            if (existing) {
+              throw httpError('email_already_registered', 'Este e-mail já está cadastrado.', 409);
+            }
+            const count = await tx.user.count();
+            const role: Role = count === 0 ? Role.COORDINATOR : Role.COLLECTOR;
+            return tx.user.create({
+              data: {
+                email: dto.email,
+                passwordHash,
+                displayName: dto.displayName,
+                role,
+              },
+            });
+          },
+          { isolationLevel: 'Serializable' },
+        );
+        return {
+          jwt: signToken({ id: user.id, role: user.role }),
+          user: toUserDto(user),
+        };
+      } catch (err) {
+        if (isSerializationFailure(err) && attempt < 2) continue;
+        throw err;
       }
-      const count = await tx.user.count();
-      const role: Role = count === 0 ? Role.COORDINATOR : Role.COLLECTOR;
-      return tx.user.create({
-        data: {
-          email: dto.email,
-          passwordHash,
-          displayName: dto.displayName,
-          role,
-        },
-      });
-    });
-
-    return {
-      jwt: signToken({ id: user.id, role: user.role }),
-      user: toUserDto(user),
-    };
+    }
+    // Unreachable: the loop either returns or throws on the final attempt.
+    throw new Error('register: retries exhausted');
   },
 
   async login(email: string, password: string): Promise<AuthResult> {

@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { authService } from '../services/authService.js';
-import { httpError } from '../lib/errors.js';
 
 interface RegisterBody {
   email: string;
@@ -56,12 +55,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  fastify.get('/me', async (request) => {
-    if (!request.user) {
-      throw httpError('unauthenticated', 'Credencial ausente ou inválida.', 401);
-    }
-    return authService.getMe(request.user.id);
-  });
+  fastify.get(
+    '/me',
+    { preHandler: [fastify.requireAuth] },
+    async (request) => authService.getMe(request.user!.id),
+  );
 };
 
 export default authRoutes;

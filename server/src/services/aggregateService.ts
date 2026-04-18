@@ -13,7 +13,9 @@ interface EligibleCollection {
 }
 
 function normalize(value: number, includesProfessor: boolean): number {
-  return includesProfessor ? Math.max(0, value - 1) : value;
+  // Strict `=== true` guards against any future driver quirk that returns
+  // booleans as truthy non-boolean values (e.g. the string "t").
+  return includesProfessor === true ? Math.max(0, value - 1) : value;
 }
 
 /**
@@ -36,11 +38,11 @@ export const aggregateService = {
 
     const rows = await tx.$queryRawUnsafe<EligibleCollection[]>(
       `
-      SELECT c."attendanceStart"    AS "attendanceStart",
-             c."attendanceMid"      AS "attendanceMid",
-             c."attendanceEnd"      AS "attendanceEnd",
-             c."uniqueParticipants" AS "uniqueParticipants",
-             c."includesProfessor"  AS "includesProfessor"
+      SELECT c."attendanceStart"          AS "attendanceStart",
+             c."attendanceMid"            AS "attendanceMid",
+             c."attendanceEnd"            AS "attendanceEnd",
+             c."uniqueParticipants"       AS "uniqueParticipants",
+             c."includesProfessor"::bool  AS "includesProfessor"
       FROM "LessonCollection" c
       JOIN "User" u ON u.id = c."collectorUserId"
       WHERE c."lessonInstanceId" = $1

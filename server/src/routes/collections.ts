@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { prisma } from '../lib/prisma.js';
+import { collectionsService } from '../services/collectionsService.js';
 import { httpError } from '../lib/errors.js';
 
 interface MineQuery {
@@ -24,31 +24,7 @@ const collectionsRoutes: FastifyPluginAsync = async (fastify) => {
         }
         sinceDate = new Date(parsed);
       }
-
-      const rows = await prisma.lessonCollection.findMany({
-        where: {
-          collectorUserId: request.user!.id,
-          ...(sinceDate ? { clientUpdatedAt: { gt: sinceDate } } : {}),
-        },
-        orderBy: { clientUpdatedAt: 'asc' },
-      });
-
-      return {
-        collections: rows.map((r) => ({
-          id: r.id,
-          lesson_instance_id: r.lessonInstanceId,
-          status: r.status,
-          rejection_reason: r.rejectionReason,
-          client_updated_at: r.clientUpdatedAt.toISOString(),
-          server_received_at: r.serverReceivedAt.toISOString(),
-          attendance_start: r.attendanceStart,
-          attendance_mid: r.attendanceMid,
-          attendance_end: r.attendanceEnd,
-          includes_professor: r.includesProfessor,
-          unique_participants: r.uniqueParticipants,
-        })),
-        server_now: new Date().toISOString(),
-      };
+      return collectionsService.listMine(request.user!.id, sinceDate);
     },
   );
 };

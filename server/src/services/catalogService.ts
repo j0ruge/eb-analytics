@@ -131,14 +131,18 @@ function serializeProfessor(p: {
   };
 }
 
+function prismaErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 function isPrismaUniqueViolation(err: unknown): boolean {
-  return !!err && typeof err === 'object' && (err as { code?: string }).code === 'P2025'
-    ? false
-    : !!err && typeof err === 'object' && (err as { code?: string }).code === 'P2002';
+  return prismaErrorCode(err) === 'P2002';
 }
 
 function isPrismaRecordNotFound(err: unknown): boolean {
-  return !!err && typeof err === 'object' && (err as { code?: string }).code === 'P2025';
+  return prismaErrorCode(err) === 'P2025';
 }
 
 export const catalogService = {
@@ -219,31 +223,34 @@ export const catalogService = {
   },
 
   async deleteSeries(id: string): Promise<void> {
-    const existing = await prisma.lessonSeries.findUnique({ where: { id } });
-    if (!existing) {
-      throw httpError('not_found', 'Registro não encontrado.', 404);
-    }
-    // LessonInstance references series by `seriesCode` (TEXT, not FK).
-    const usageCount = await prisma.lessonInstance.count({
-      where: { seriesCode: existing.code },
+    // All checks + delete in one tx to close the TOCTOU on concurrent
+    // sync ingests that might insert a LessonInstance using this
+    // series code between the count and the delete.
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.lessonSeries.findUnique({ where: { id } });
+      if (!existing) {
+        throw httpError('not_found', 'Registro não encontrado.', 404);
+      }
+      const usageCount = await tx.lessonInstance.count({
+        where: { seriesCode: existing.code },
+      });
+      if (usageCount > 0) {
+        throw httpError(
+          'series_referenced',
+          'Série não pode ser excluída enquanto houver aulas associadas.',
+          409,
+        );
+      }
+      const topicCount = await tx.lessonTopic.count({ where: { seriesId: id } });
+      if (topicCount > 0) {
+        throw httpError(
+          'series_referenced',
+          'Série possui tópicos vinculados.',
+          409,
+        );
+      }
+      await tx.lessonSeries.delete({ where: { id } });
     });
-    if (usageCount > 0) {
-      throw httpError(
-        'series_referenced',
-        'Série não pode ser excluída enquanto houver aulas associadas.',
-        409,
-      );
-    }
-    // Also block when it still has topics referencing it — FK is RESTRICT.
-    const topicCount = await prisma.lessonTopic.count({ where: { seriesId: id } });
-    if (topicCount > 0) {
-      throw httpError(
-        'series_referenced',
-        'Série possui tópicos vinculados.',
-        409,
-      );
-    }
-    await prisma.lessonSeries.delete({ where: { id } });
   },
 
   // ---------------- Topic mutations ----------------
@@ -291,19 +298,21 @@ export const catalogService = {
   },
 
   async deleteTopic(id: string): Promise<void> {
-    const existing = await prisma.lessonTopic.findUnique({ where: { id } });
-    if (!existing) {
-      throw httpError('not_found', 'Registro não encontrado.', 404);
-    }
-    const usageCount = await prisma.lessonInstance.count({ where: { topicId: id } });
-    if (usageCount > 0) {
-      throw httpError(
-        'topic_referenced',
-        'Tópico não pode ser excluído enquanto houver aulas associadas.',
-        409,
-      );
-    }
-    await prisma.lessonTopic.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.lessonTopic.findUnique({ where: { id } });
+      if (!existing) {
+        throw httpError('not_found', 'Registro não encontrado.', 404);
+      }
+      const usageCount = await tx.lessonInstance.count({ where: { topicId: id } });
+      if (usageCount > 0) {
+        throw httpError(
+          'topic_referenced',
+          'Tópico não pode ser excluído enquanto houver aulas associadas.',
+          409,
+        );
+      }
+      await tx.lessonTopic.delete({ where: { id } });
+    });
   },
 
   // ---------------- Professor mutations ----------------
@@ -352,18 +361,20 @@ export const catalogService = {
   },
 
   async deleteProfessor(id: string): Promise<void> {
-    const existing = await prisma.professor.findUnique({ where: { id } });
-    if (!existing) {
-      throw httpError('not_found', 'Registro não encontrado.', 404);
-    }
-    const usageCount = await prisma.lessonInstance.count({ where: { professorId: id } });
-    if (usageCount > 0) {
-      throw httpError(
-        'professor_referenced',
-        'Professor não pode ser excluído enquanto houver aulas associadas.',
-        409,
-      );
-    }
-    await prisma.professor.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.professor.findUnique({ where: { id } });
+      if (!existing) {
+        throw httpError('not_found', 'Registro não encontrado.', 404);
+      }
+      const usageCount = await tx.lessonInstance.count({ where: { professorId: id } });
+      if (usageCount > 0) {
+        throw httpError(
+          'professor_referenced',
+          'Professor não pode ser excluído enquanto houver aulas associadas.',
+          409,
+        );
+      }
+      await tx.professor.delete({ where: { id } });
+    });
   },
 };

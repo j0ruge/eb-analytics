@@ -7,7 +7,7 @@ Maps to US-1, FR-020, FR-021, FR-022, FR-023, FR-024, FR-025, EC-001, EC-002, EC
 **Auth**: required (any authenticated user — collectors submit their own, coordinators submit their own; the backend does not allow submitting on behalf of another user).
 
 **Body**: v2 export envelope (schema authoritative: `specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json`). Minimum required top-level keys:
-- `schema_version` — MUST equal `"2"`; anything else → 400 `schema_version_required` or `schema_version_unsupported` (EC-006).
+- `schema_version` — MUST equal `"2.0"` (the exact const fixed in `specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json`); anything else → 400 `schema_version_required` or `schema_version_unsupported` (EC-006).
 - `collections[]` — array of 1..500 collection objects (EC-007; total body also capped at 5 MB).
 
 Each collection object carries a client-generated `id` (idempotency key, FR-021), a `client_created_at`, a `client_updated_at`, the lesson triple (`date`, `series_id` or `series_code_fallback`, `topic_id` or `topic_title_fallback`), optional `professor_id` or `professor_name_fallback`, the three attendance counts, `includes_professor`, `unique_participants`, `expected_start/end`, optional `real_start/end`, `weather`, `notes`.

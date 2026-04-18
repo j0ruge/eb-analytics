@@ -191,23 +191,31 @@ async function resolveTopic(
   if (!fallback) {
     return null;
   }
-  const existing = await tx.lessonTopic.findFirst({
-    where: { seriesId, title: fallback },
+  // Prefer a curated row if one already exists with this title.
+  const curated = await tx.lessonTopic.findFirst({
+    where: { seriesId, title: fallback, isPending: false },
   });
-  if (existing) return existing.id;
+  if (curated) return curated.id;
+  // Atomic pending-row upsert, protected by the partial unique index
+  // `lesson_topic_pending_unique_series_title` added in 0002 migration.
   const maxOrder = await tx.lessonTopic.aggregate({
     where: { seriesId },
     _max: { sequenceOrder: true },
   });
-  const created = await tx.lessonTopic.create({
-    data: {
-      seriesId,
-      title: fallback,
-      sequenceOrder: (maxOrder._max.sequenceOrder ?? 0) + 1,
-      isPending: true,
-    },
-  });
-  return created.id;
+  const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+    `INSERT INTO "LessonTopic"
+       ("id", "seriesId", "title", "sequenceOrder", "isPending", "updatedAt")
+     VALUES (gen_random_uuid(), $1, $2, $3, TRUE, NOW())
+     ON CONFLICT ("seriesId", "title") WHERE "isPending" = true
+     DO UPDATE SET "title" = EXCLUDED."title"
+     RETURNING "id"`,
+    seriesId,
+    fallback,
+    (maxOrder._max.sequenceOrder ?? 0) + 1,
+  );
+  const row = rows[0];
+  if (!row) throw new Error('topic upsert returned no row');
+  return row.id;
 }
 
 async function resolveProfessor(
@@ -223,16 +231,24 @@ async function resolveProfessor(
   if (!fallback) {
     return null;
   }
-  const existing = await tx.professor.findFirst({ where: { name: fallback } });
-  if (existing) return existing.id;
-  const created = await tx.professor.create({
-    data: {
-      name: fallback,
-      email: null,
-      isPending: true,
-    },
+  // Prefer curated.
+  const curated = await tx.professor.findFirst({
+    where: { name: fallback, isPending: false },
   });
-  return created.id;
+  if (curated) return curated.id;
+  // Atomic pending upsert via partial unique index
+  // `professor_pending_unique_name` (0002 migration).
+  const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+    `INSERT INTO "Professor" ("id", "name", "email", "isPending", "updatedAt")
+     VALUES (gen_random_uuid(), $1, NULL, TRUE, NOW())
+     ON CONFLICT ("name") WHERE "isPending" = true
+     DO UPDATE SET "name" = EXCLUDED."name"
+     RETURNING "id"`,
+    fallback,
+  );
+  const row = rows[0];
+  if (!row) throw new Error('professor upsert returned no row');
+  return row.id;
 }
 
 // ---------------- LessonInstance upsert ----------------
@@ -241,32 +257,57 @@ async function upsertInstance(
   tx: Tx,
   args: { date: Date; seriesCode: string; topicId: string | null; professorId: string | null },
 ): Promise<string> {
-  const existing = await tx.lessonInstance.findFirst({
-    where: {
-      date: args.date,
-      seriesCode: args.seriesCode,
-      topicId: args.topicId,
-    },
-  });
-  if (existing) {
-    // If this instance was created without a professor and we now have one, patch it in.
-    if (!existing.professorId && args.professorId) {
+  // Atomic insert-or-return-existing. We have two unique indexes covering
+  // the (date, seriesCode, topicId) triple:
+  //   - @@unique([date, seriesCode, topicId]) when topicId IS NOT NULL
+  //   - lesson_instance_date_series_no_topic_key partial index when NULL
+  // Postgres handles the NULL case naturally only through the partial
+  // index. We issue two ON CONFLICT clauses in a DO-NOTHING branch and
+  // select the surviving row by its triple.
+  const dateStr = args.date.toISOString().slice(0, 10);
+  if (args.topicId === null) {
+    const rows = await tx.$queryRawUnsafe<Array<{ id: string; professorId: string | null }>>(
+      `INSERT INTO "LessonInstance"
+         ("id", "date", "seriesCode", "topicId", "professorId", "aggCollectorCount")
+       VALUES (gen_random_uuid(), $1::date, $2, NULL, $3, 0)
+       ON CONFLICT ("date", "seriesCode") WHERE "topicId" IS NULL
+       DO UPDATE SET "seriesCode" = EXCLUDED."seriesCode"
+       RETURNING "id", "professorId"`,
+      dateStr,
+      args.seriesCode,
+      args.professorId,
+    );
+    const row = rows[0];
+    if (!row) throw new Error('instance upsert (no-topic) returned no row');
+    if (!row.professorId && args.professorId) {
       await tx.lessonInstance.update({
-        where: { id: existing.id },
+        where: { id: row.id },
         data: { professorId: args.professorId },
       });
     }
-    return existing.id;
+    return row.id;
   }
-  const created = await tx.lessonInstance.create({
-    data: {
-      date: args.date,
-      seriesCode: args.seriesCode,
-      topicId: args.topicId,
-      professorId: args.professorId,
-    },
-  });
-  return created.id;
+  const rows = await tx.$queryRawUnsafe<Array<{ id: string; professorId: string | null }>>(
+    `INSERT INTO "LessonInstance"
+       ("id", "date", "seriesCode", "topicId", "professorId", "aggCollectorCount")
+     VALUES (gen_random_uuid(), $1::date, $2, $3, $4, 0)
+     ON CONFLICT ("date", "seriesCode", "topicId")
+     DO UPDATE SET "seriesCode" = EXCLUDED."seriesCode"
+     RETURNING "id", "professorId"`,
+    dateStr,
+    args.seriesCode,
+    args.topicId,
+    args.professorId,
+  );
+  const row = rows[0];
+  if (!row) throw new Error('instance upsert returned no row');
+  if (!row.professorId && args.professorId) {
+    await tx.lessonInstance.update({
+      where: { id: row.id },
+      data: { professorId: args.professorId },
+    });
+  }
+  return row.id;
 }
 
 // ---------------- Main entry point ----------------
@@ -274,11 +315,13 @@ async function upsertInstance(
 const MAX_SERIALIZATION_RETRIES = 5;
 
 function isSerializationFailure(err: unknown): boolean {
-  // Prisma maps Postgres 40001 (could not serialize) to P2034 and P2002/P2025
-  // can also surface under contention. P2034 is the one Serializable raises.
+  // Retry-worthy Postgres error codes surfaced by Prisma as `P2034` (SERIALIZATION_FAILURE),
+  // and raw driver errors with SQLSTATE 40001 (Serializable conflict) or 40P01 (deadlock).
   if (!err || typeof err !== 'object') return false;
-  const code = (err as { code?: string }).code;
-  return code === 'P2034';
+  const anyErr = err as { code?: string; meta?: { driverAdapterError?: { cause?: { originalCode?: string } } } };
+  if (anyErr.code === 'P2034') return true;
+  const original = anyErr.meta?.driverAdapterError?.cause?.originalCode;
+  return original === '40001' || original === '40P01';
 }
 
 export const syncService = {
@@ -309,14 +352,21 @@ async function runOnce(
 
     await prisma.$transaction(
       async (tx) => {
-        const touchedInstances = new Set<string>();
+        // Pass 1: validate structure, resolve catalog, upsert instance.
+        // We don't hold advisory locks yet — catalog upserts are atomic
+        // via ON CONFLICT, so there's nothing to protect here.
+        type Resolved = {
+          c: CollectionInput;
+          instanceId: string | null;
+          preInstanceError: PerCollectionError | null;
+          dataError: PerCollectionError | null;
+        };
+        const resolved: Resolved[] = [];
 
         for (const c of collections) {
           let instanceId: string | null = null;
           let preInstanceError: PerCollectionError | null = null;
           let dataError: PerCollectionError | null = null;
-
-          // Step 1: fields needed to pin this row to a LessonInstance.
           try {
             validateInstanceStructure(c);
             const series = await resolveSeries(
@@ -346,41 +396,62 @@ async function runOnce(
             preInstanceError = { code: err.code, message: err.message };
           }
 
-          if (instanceId === null) {
-            // Cannot persist without an instance id — response-only rejection.
-            const fallback = preInstanceError ?? {
+          if (instanceId !== null) {
+            try {
+              validateCollectionData(c);
+            } catch (err) {
+              if (!(err instanceof CollectionError)) throw err;
+              dataError = { code: err.code, message: err.message };
+            }
+          }
+          resolved.push({ c, instanceId, preInstanceError, dataError });
+        }
+
+        // Response-only rejections for rows that couldn't pin to an instance.
+        for (const r of resolved) {
+          if (r.instanceId === null) {
+            const fallback = r.preInstanceError ?? {
               code: 'invalid_collection_payload',
               message: 'Coleta inválida.',
             };
-            rejected.push({ id: c.id, ...fallback });
-            continue;
+            rejected.push({ id: r.c.id, ...fallback });
           }
+        }
 
-          // Step 2: validate remaining fields. Failure is persistable — the
-          // row is stored as REJECTED so FR-043 can surface the reason.
-          try {
-            validateCollectionData(c);
-          } catch (err) {
-            if (!(err instanceof CollectionError)) throw err;
-            dataError = { code: err.code, message: err.message };
-          }
-
-          // Serialize concurrent writers on this instance (research §9).
+        // Pass 2: acquire per-instance advisory locks in canonical ID order
+        // (matches moderationService.cascade). Deadlock-free.
+        const lockOrder = Array.from(
+          new Set(
+            resolved
+              .map((r) => r.instanceId)
+              .filter((id): id is string => id !== null),
+          ),
+        ).sort();
+        for (const id of lockOrder) {
           await tx.$executeRawUnsafe(
             `SELECT pg_advisory_xact_lock(hashtext($1))`,
-            instanceId,
+            id,
           );
-          touchedInstances.add(instanceId);
+        }
+
+        // Pass 3: insert/update each collection under its lock.
+        for (const { c, instanceId, dataError } of resolved) {
+          if (instanceId === null) continue;
 
           const existing = await tx.lessonCollection.findUnique({ where: { id: c.id } });
           const newUpdatedAt = new Date(c.client_updated_at);
 
           if (existing) {
             const existingUpdatedAt = existing.clientUpdatedAt;
-            if (newUpdatedAt.getTime() > existingUpdatedAt.getTime()) {
-              // Field-level merge — client-authored fields only.
-              // Server-only fields (acceptedOverride, status, rejectionReason,
-              // serverReceivedAt) are preserved per FR-021 + T028.
+            const isNewer = newUpdatedAt.getTime() > existingUpdatedAt.getTime();
+
+            if (isNewer) {
+              // Re-classify based on the new payload (data-model.md allows
+              // REJECTED → SYNCED flip when the client corrects malformed
+              // data). Server-only fields (acceptedOverride, serverReceivedAt)
+              // remain preserved.
+              const nextStatus = dataError ? 'REJECTED' : 'SYNCED';
+              const nextReason = dataError ? `${dataError.code}:${dataError.message}` : null;
               await tx.lessonCollection.update({
                 where: { id: c.id },
                 data: {
@@ -396,19 +467,26 @@ async function runOnce(
                   uniqueParticipants: c.unique_participants,
                   weather: c.weather,
                   notes: c.notes,
+                  status: nextStatus,
+                  rejectionReason: nextReason,
                 },
               });
-            }
-            // Older-or-equal clientUpdatedAt: idempotent no-op (FR-021).
-            // Report the id in accepted[] so the client sees it's durable.
-            if (existing.status === 'REJECTED') {
-              rejected.push({
-                id: c.id,
-                code: 'already_rejected_older',
-                message: existing.rejectionReason ?? 'Rejeitada anteriormente.',
-              });
+              if (nextStatus === 'REJECTED' && dataError) {
+                rejected.push({ id: c.id, ...dataError });
+              } else {
+                accepted.push(c.id);
+              }
             } else {
-              accepted.push(c.id);
+              // Older-or-equal clientUpdatedAt: idempotent no-op (FR-021).
+              if (existing.status === 'REJECTED') {
+                rejected.push({
+                  id: c.id,
+                  code: 'already_rejected_older',
+                  message: existing.rejectionReason ?? 'Rejeitada anteriormente.',
+                });
+              } else {
+                accepted.push(c.id);
+              }
             }
             continue;
           }
@@ -465,9 +543,12 @@ async function runOnce(
           }
         }
 
-        // Recompute every touched instance (FR-022) inside the same tx.
-        for (const instanceId of touchedInstances) {
-          await aggregateService.recompute(tx, instanceId);
+        // Pass 4: recompute every touched instance (FR-022) in the same
+        // canonical order so recompute respects the lock we're already
+        // holding. aggregateService.recompute re-acquires the advisory
+        // lock re-entrantly — harmless.
+        for (const id of lockOrder) {
+          await aggregateService.recompute(tx, id);
         }
       },
       // ReadCommitted (default) is sufficient — per-instance serialization

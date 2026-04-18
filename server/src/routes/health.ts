@@ -12,7 +12,16 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       await Promise.race([prisma.$queryRawUnsafe('SELECT 1'), timeout]);
       return reply.status(200).send({ status: 'ok', postgres: 'up' });
     } catch {
-      return reply.status(503).send({ status: 'degraded', postgres: 'down' });
+      // 503 body carries both the standard error envelope (FR-065) and the
+      // operator-visible probe state (research §13). The {code, message}
+      // pair is what monitoring dashboards branch on; `postgres: "down"`
+      // remains for human consumption in logs / `curl`.
+      return reply.status(503).send({
+        code: 'database_unavailable',
+        message: 'Banco de dados indisponível.',
+        status: 'degraded',
+        postgres: 'down',
+      });
     }
   });
 };

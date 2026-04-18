@@ -35,7 +35,14 @@ describe('GET /health (US-7)', () => {
     try {
       const res = await app.inject({ method: 'GET', url: '/health' });
       expect(res.statusCode).toBe(503);
-      expect(res.json()).toEqual({ status: 'degraded', postgres: 'down' });
+      // 503 body carries both the standard error envelope (FR-065 code
+      // `database_unavailable`) and the operator-visible probe state
+      // (research §13 status:degraded).
+      expect(res.json()).toMatchObject({
+        code: 'database_unavailable',
+        status: 'degraded',
+        postgres: 'down',
+      });
     } finally {
       spy.mockRestore();
     }

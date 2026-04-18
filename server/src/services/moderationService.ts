@@ -60,7 +60,15 @@ export const moderationService = {
         select: { lessonInstanceId: true },
       });
 
-      for (const { lessonInstanceId } of instances) {
+      // Canonical (sorted) order prevents deadlock with concurrent sync
+      // batches that also acquire per-instance advisory locks. Both paths
+      // must lock ids in the same order; lexicographic sort on the UUID
+      // id works for both.
+      const sorted = [...instances]
+        .map((i) => i.lessonInstanceId)
+        .sort();
+
+      for (const lessonInstanceId of sorted) {
         await aggregateService.recompute(tx, lessonInstanceId);
       }
 

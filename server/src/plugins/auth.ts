@@ -20,8 +20,11 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     try {
       const payload = verifyToken(token);
       request.user = { id: payload.sub, role: payload.role };
-    } catch {
-      // leave request.user = null — downstream handlers decide whether to reject
+    } catch (err) {
+      // A token was presented but failed verification — surface at warn
+      // level so forged/tampered attempts leave a trail. Request is still
+      // treated as anonymous (requireAuth rejects later if needed).
+      request.log.warn({ err }, 'jwt verification failed');
     }
   });
 };

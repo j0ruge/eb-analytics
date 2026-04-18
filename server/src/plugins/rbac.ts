@@ -23,7 +23,7 @@ const rbacPlugin: FastifyPluginAsync = async (fastify) => {
         throw httpError('unauthenticated', 'Credencial ausente ou inválida.', 401);
       }
       if (request.user.role !== role) {
-        throw httpError('forbidden', 'Acesso restrito a coordenadores.', 403);
+        throw httpError('forbidden', 'Acesso não autorizado.', 403);
       }
     };
   });

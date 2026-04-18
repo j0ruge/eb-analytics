@@ -22,13 +22,33 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const logLevel = process.env.LOG_LEVEL ?? 'info';
   const isProd = process.env.NODE_ENV === 'production';
 
+  // TRUST_PROXY controls whether Fastify derives request.ip from
+  // X-Forwarded-For. Required when the server sits behind a load balancer
+  // or reverse proxy — otherwise every client shares the same IP for
+  // rate-limit keying. Accepts a hop count ("1") or "true" for all proxies.
+  const trustProxyRaw = process.env.TRUST_PROXY;
+  const trustProxy: boolean | number =
+    trustProxyRaw === undefined || trustProxyRaw === ''
+      ? false
+      : trustProxyRaw === 'true'
+        ? true
+        : Number.isFinite(Number(trustProxyRaw))
+          ? Number(trustProxyRaw)
+          : true;
+
   const app = Fastify({
     bodyLimit: 5 * 1024 * 1024,
     genReqId: () => randomUUID(),
+    trustProxy,
     logger: {
       level: logLevel,
       redact: {
-        paths: ['req.headers.authorization', 'req.body.password'],
+        paths: [
+          'req.headers.authorization',
+          'req.body.password',
+          'res.payload.jwt',
+          'res.headers["set-cookie"]',
+        ],
         remove: false,
       },
       ...(isProd ? {} : { transport: { target: 'pino-pretty' } }),

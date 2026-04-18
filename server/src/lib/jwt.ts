@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import type { Role } from '../generated/client/enums.js';
+import { Role } from '../generated/client/enums.js';
 
 export interface JwtPayload {
   sub: string;
@@ -14,6 +14,7 @@ export interface JwtUser {
 }
 
 const JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
+const VALID_ROLES = new Set<string>(Object.values(Role));
 
 function getSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -32,9 +33,18 @@ export function signToken(user: { id: string; role: Role }): string {
 
 export function verifyToken(raw: string): JwtUser {
   const decoded = jwt.verify(raw, getSecret(), { algorithms: ['HS256'] });
-  if (typeof decoded === 'string') {
+  if (!decoded || typeof decoded !== 'object') {
     throw new Error('Invalid JWT payload');
   }
-  const payload = decoded as JwtPayload;
-  return { sub: payload.sub, role: payload.role };
+  // Validate claim shape after signature verification — defense in depth
+  // against secret compromise or jsonwebtoken version regressions.
+  const payload = decoded as Record<string, unknown>;
+  const sub = typeof payload.sub === 'string' && payload.sub.length > 0 ? payload.sub : null;
+  const role = typeof payload.role === 'string' && VALID_ROLES.has(payload.role)
+    ? (payload.role as Role)
+    : null;
+  if (!sub || !role) {
+    throw new Error('Invalid JWT claims');
+  }
+  return { sub, role };
 }

@@ -8,6 +8,69 @@ interface CatalogQuery {
   include_pending?: string;
 }
 
+// ---- Body schemas ----
+const seriesCreateSchema = {
+  type: 'object',
+  required: ['code', 'title'],
+  properties: {
+    code: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1 },
+    description: { type: ['string', 'null'] },
+  },
+  additionalProperties: false,
+} as const;
+
+const seriesPatchSchema = {
+  type: 'object',
+  properties: {
+    code: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1 },
+    description: { type: ['string', 'null'] },
+  },
+  additionalProperties: false,
+} as const;
+
+const topicCreateSchema = {
+  type: 'object',
+  required: ['series_id', 'title', 'sequence_order'],
+  properties: {
+    series_id: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1 },
+    sequence_order: { type: 'integer' },
+    suggested_date: { type: ['string', 'null'] },
+  },
+  additionalProperties: false,
+} as const;
+
+const topicPatchSchema = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    sequence_order: { type: 'integer' },
+    suggested_date: { type: ['string', 'null'] },
+  },
+  additionalProperties: false,
+} as const;
+
+const professorCreateSchema = {
+  type: 'object',
+  required: ['name'],
+  properties: {
+    name: { type: 'string', minLength: 1 },
+    email: { type: ['string', 'null'] },
+  },
+  additionalProperties: false,
+} as const;
+
+const professorPatchSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1 },
+    email: { type: ['string', 'null'] },
+  },
+  additionalProperties: false,
+} as const;
+
 const catalogRoutes: FastifyPluginAsync = async (fastify) => {
   const coordinatorOnly = fastify.requireRole(Role.COORDINATOR);
 
@@ -41,14 +104,14 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------- Series CRUD ----------------
 
-  fastify.post<{ Body: { code?: string; title?: string; description?: string | null } }>(
+  fastify.post<{ Body: { code: string; title: string; description?: string | null } }>(
     '/catalog/series',
-    { preHandler: [coordinatorOnly] },
+    { preHandler: [coordinatorOnly], schema: { body: seriesCreateSchema } },
     async (request, reply) => {
       const row = await catalogService.createSeries({
-        code: request.body?.code ?? '',
-        title: request.body?.title ?? '',
-        description: request.body?.description ?? null,
+        code: request.body.code,
+        title: request.body.title,
+        description: request.body.description ?? null,
       });
       return reply.status(201).send(row);
     },
@@ -59,7 +122,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { code?: string; title?: string; description?: string | null };
   }>(
     '/catalog/series/:id',
-    { preHandler: [coordinatorOnly] },
+    { preHandler: [coordinatorOnly], schema: { body: seriesPatchSchema } },
     async (request) => catalogService.updateSeries(request.params.id, request.body ?? {}),
   );
 
@@ -76,20 +139,20 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Body: {
-      series_id?: string;
-      title?: string;
-      sequence_order?: number;
+      series_id: string;
+      title: string;
+      sequence_order: number;
       suggested_date?: string | null;
     };
   }>(
     '/catalog/topics',
-    { preHandler: [coordinatorOnly] },
+    { preHandler: [coordinatorOnly], schema: { body: topicCreateSchema } },
     async (request, reply) => {
       const row = await catalogService.createTopic({
-        series_id: request.body?.series_id ?? '',
-        title: request.body?.title ?? '',
-        sequence_order: request.body?.sequence_order ?? NaN,
-        suggested_date: request.body?.suggested_date ?? null,
+        series_id: request.body.series_id,
+        title: request.body.title,
+        sequence_order: request.body.sequence_order,
+        suggested_date: request.body.suggested_date ?? null,
       });
       return reply.status(201).send(row);
     },
@@ -100,7 +163,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { title?: string; sequence_order?: number; suggested_date?: string | null };
   }>(
     '/catalog/topics/:id',
-    { preHandler: [coordinatorOnly] },
+    { preHandler: [coordinatorOnly], schema: { body: topicPatchSchema } },
     async (request) => catalogService.updateTopic(request.params.id, request.body ?? {}),
   );
 
@@ -115,13 +178,13 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------- Professor CRUD ----------------
 
-  fastify.post<{ Body: { name?: string; email?: string | null } }>(
+  fastify.post<{ Body: { name: string; email?: string | null } }>(
     '/catalog/professors',
-    { preHandler: [coordinatorOnly] },
+    { preHandler: [coordinatorOnly], schema: { body: professorCreateSchema } },
     async (request, reply) => {
       const row = await catalogService.createProfessor({
-        name: request.body?.name ?? '',
-        email: request.body?.email ?? null,
+        name: request.body.name,
+        email: request.body.email ?? null,
       });
       return reply.status(201).send(row);
     },
@@ -132,7 +195,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { name?: string; email?: string | null };
   }>(
     '/catalog/professors/:id',
-    { preHandler: [coordinatorOnly] },
+    { preHandler: [coordinatorOnly], schema: { body: professorPatchSchema } },
     async (request) => catalogService.updateProfessor(request.params.id, request.body ?? {}),
   );
 
