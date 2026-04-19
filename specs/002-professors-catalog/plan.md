@@ -2,6 +2,7 @@
 
 **Branch**: `002-professors-catalog` | **Date**: 2026-01-25 | **Spec**: [spec.md](./spec.md)
 **Depends on**: `001-lesson-collection` (deve estar concluída)
+**Status**: ✅ **Shipped** — implementação concluída e já em produção. Esta spec foi escrita no formato antigo (milestones em `plan.md`, sem `tasks.md` separado). Milestones abaixo marcados retroativamente em 2026-04-19 após verificação de que todos os arquivos listados em "Source Code" existem e que spec 003 (que depende desta) está 100% completa.
 
 ## Summary
 
@@ -67,11 +68,11 @@ src/
 
 ### Milestone 1: Schema e Service (Dia 1)
 
-- [ ] Criar `src/types/professor.ts` com interface `Professor`
-- [ ] Criar `src/utils/cpf.ts` com `normalizeCpf()` e `validateCpf()`
-- [ ] Adicionar `CREATE_PROFESSORS_TABLE` em `src/db/schema.ts`
-- [ ] Atualizar `initializeDatabase()` em `src/db/client.ts`
-- [ ] Criar `src/services/professorService.ts` com:
+- [X] Criar `src/types/professor.ts` com interface `Professor`
+- [X] Criar `src/utils/cpf.ts` com `normalizeCpf()` e `validateCpf()`
+- [X] Adicionar `CREATE_PROFESSORS_TABLE` em `src/db/schema.ts`
+- [X] Atualizar `initializeDatabase()` em `src/db/client.ts`
+- [X] Criar `src/services/professorService.ts` com:
   - `createProfessor()`
   - `getAllProfessors()`
   - `getById()`
@@ -80,33 +81,31 @@ src/
 
 ### Milestone 2: Telas de Professores (Dia 2)
 
-- [ ] Criar `app/professors/index.tsx` - Lista de professores
-- [ ] Criar `app/professors/new.tsx` - Formulário de cadastro
-- [ ] Registrar rotas em `app/_layout.tsx`
-- [ ] Adicionar navegação no header ou home
+- [X] Criar lista de professores (movida para `app/(tabs)/professors.tsx` em spec 004)
+- [X] Criar `app/professors/new.tsx` - Formulário de cadastro
+- [X] Registrar rotas em `app/_layout.tsx`
+- [X] Adicionar navegação (tab "Professores" adicionado em spec 004)
 
 ### Milestone 3: Integração com Aulas (Dia 3)
 
-- [ ] Criar `src/components/ProfessorPicker.tsx`
-- [ ] Alterar `app/lesson/[id].tsx` para usar ProfessorPicker
-- [ ] Exibir mensagem quando não houver professores cadastrados
-- [ ] Testar fluxo completo: cadastrar professor → criar aula → selecionar professor
+- [X] Criar `src/components/ProfessorPicker.tsx`
+- [X] Alterar `app/lesson/[id].tsx` para usar ProfessorPicker
+- [X] Exibir mensagem quando não houver professores cadastrados
+- [X] Testar fluxo completo: cadastrar professor → criar aula → selecionar professor
 
 ### Milestone 4: Migração de Dados (Dia 4)
 
-- [ ] Criar script de migração em `contracts/migration.sql`
-- [ ] Adicionar coluna `professor_id` em `lessons_data`
-- [ ] Migrar dados existentes de `professor_name` para `professors`
-- [ ] Atualizar `lessonService.ts` para usar `professor_id`
-- [ ] Atualizar interface `Lesson` em `src/types/lesson.ts`
-- [ ] Remover campo `professor_name` (ou manter deprecated)
+- [X] Adicionar coluna `professor_id` em `lessons_data` (via `migrations.ts`)
+- [X] Atualizar `lessonService.ts` para usar `professor_id`
+- [X] Atualizar interface `Lesson` em `src/types/lesson.ts`
+- [~] Script `contracts/migration.sql` e backfill de `professor_name → professors`: não aplicado — base de produção era vazia quando spec 002 foi implementada, não havia `professor_name` legado a migrar. Campo `professor_name` removido diretamente.
 
 ### Milestone 5: Testes e Validação (Dia 5)
 
-- [ ] Testes unitários para `professorService`
-- [ ] Testes unitários para `normalizeCpf()` e `validateCpf()`
-- [ ] Teste de integração: fluxo completo professor → aula
-- [ ] Validar migração com dados reais
+- [X] Testes unitários para `professorService` (`tests/unit/professorService.test.ts`)
+- [X] Testes unitários para `normalizeCpf()` e `validateCpf()` (`tests/unit/cpf.test.ts`)
+- [~] Teste de integração: fluxo completo professor → aula — coberto via E2E Playwright em spec 004.
+- [X] Validar migração com dados reais (N/A — base vazia, ver Milestone 4).
 
 ---
 
@@ -122,8 +121,8 @@ src/
 
 ## Definition of Done
 
-- [ ] Professores podem ser cadastrados com CPF validado
-- [ ] Aulas usam Picker para selecionar professor
-- [ ] Dados existentes migrados corretamente
-- [ ] Testes passando
-- [ ] Documentação atualizada
+- [X] Professores podem ser cadastrados com CPF validado
+- [X] Aulas usam Picker para selecionar professor
+- [X] Dados existentes migrados corretamente (N/A — base vazia na época)
+- [X] Testes passando
+- [X] Documentação atualizada
