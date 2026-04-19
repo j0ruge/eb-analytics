@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import React from "react";
+
 import { seriesService } from "../../src/services/seriesService";
 import { topicService } from "../../src/services/topicService";
 import { LessonSeries } from "../../src/types/lessonSeries";

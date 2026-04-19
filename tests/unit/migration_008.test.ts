@@ -6,14 +6,14 @@
  * (c) be safe to run a second time (no-op).
  */
 
+import { migrateAddSyncStatus } from '../../src/db/migrations';
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
 }));
 
 jest.mock('uuid', () => ({ v4: jest.fn(() => 'mig-test-uuid') }));
 jest.mock('react-native-get-random-values', () => ({}));
-
-import { migrateAddSyncStatus } from '../../src/db/migrations';
 
 type ColumnDef = { name: string };
 

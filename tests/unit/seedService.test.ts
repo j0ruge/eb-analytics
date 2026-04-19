@@ -1,5 +1,7 @@
 import { seedService } from '../../src/services/seedService';
 
+import { getDatabase } from '../../src/db/client';
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
 }));
@@ -58,8 +60,6 @@ jest.mock('../../src/data/seed-collections.json', () => ({
     },
   ],
 }));
-
-import { getDatabase } from '../../src/db/client';
 
 describe('Seed Service', () => {
   let mockDb: any;

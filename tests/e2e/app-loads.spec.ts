@@ -7,7 +7,7 @@ test.describe('Test A — App loads and renders (§8 baseline)', () => {
     await expect(page.getByRole('heading', { name: 'EB Insights' })).toBeVisible();
 
     await expect(page.getByRole('tab', { name: /Aulas/ })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Dashboard/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Painel/ })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Séries/ })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Professores/ })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Sincronizar/ })).toBeVisible();

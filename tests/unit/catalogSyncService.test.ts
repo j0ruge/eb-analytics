@@ -4,6 +4,8 @@
  * handling, and upsert idempotency.
  */
 
+import { catalogSyncService } from '../../src/services/catalogSyncService';
+
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 jest.mock('uuid', () => ({ v4: jest.fn(() => 'fixed') }));
 jest.mock('react-native-get-random-values', () => ({}));
@@ -34,8 +36,6 @@ jest.mock('../../src/services/apiClient', () => ({
 jest.mock('../../src/services/authService', () => ({
   authService: { getSession: (...args: unknown[]) => mockGetSession(...args) },
 }));
-
-import { catalogSyncService } from '../../src/services/catalogSyncService';
 
 interface UpsertRow {
   table: 'lesson_series' | 'lesson_topics' | 'professors';

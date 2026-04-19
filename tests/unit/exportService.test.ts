@@ -1,6 +1,11 @@
 import { LessonStatus, LessonWithDetails } from '../../src/types/lesson';
 import { SyncStatus } from '../../src/types/sync';
 
+import { exportService } from '../../src/services/exportService';
+import { lessonService } from '../../src/services/lessonService';
+import { authService } from '../../src/services/authService';
+import { __resetDeviceIdCache } from '../../src/services/deviceIdService';
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
 }));
@@ -71,11 +76,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     }),
   },
 }));
-
-import { exportService } from '../../src/services/exportService';
-import { lessonService } from '../../src/services/lessonService';
-import { authService } from '../../src/services/authService';
-import { __resetDeviceIdCache } from '../../src/services/deviceIdService';
 
 // Fixture: a single COMPLETED lesson with catalog professor/topic.
 const catalogLesson: LessonWithDetails = {

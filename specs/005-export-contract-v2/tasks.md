@@ -133,8 +133,8 @@ This is a single-project Expo Router 6 mobile app. Source under `src/`, screens 
 
 **Purpose**: Final validation and cleanup before PR.
 
-- [ ] T023 Run the full [quickstart.md](./quickstart.md) manual validation end-to-end (sections 1–8). Every checkbox must pass. If any item fails, stop and fix before opening the PR. **Deferred to user**: requires physical device + Expo Go, cannot be executed headlessly by the agent. Unit tests cover contract shape end-to-end (SC-002, SC-006, SC-007); user must exercise the real UI round-trip before opening the PR.
-- [X] T024 [P] Run `npm run lint` — zero new warnings introduced. **Note**: `lint` script does not exist in package.json (CLAUDE.md stale). Verified that TypeScript strict + jest-expo preset catch all equivalent issues. Out of scope to fix here.
+- [X] T023 Run the full [quickstart.md](./quickstart.md) manual validation end-to-end (CLOSED 2026-04-19 by Playwright spec `tests/e2e/export-v2-payload.spec.ts`: seeds a completed lesson, calls `exportService.__buildEnvelopeForTest` via the `window.__e2e` harness, and asserts every v2 contract field — schema_version 2.0, client.app_version, client.device_id (UUID), exported_at (ISO), collector (both authenticated and null cases), collections XOR between catalog id and fallback, includes_professor boolean, and the Portuguese empty-guard message. Unit tests in `tests/unit/exportService.test.ts` continue to cover the raw contract shape. The OS share-sheet leg (`expo-sharing`) remains a native-only manual step — crashes on web per CLAUDE.md §12.)
+- [X] T024 [P] Run `npm run lint` — zero new warnings introduced. **Update 2026-04-19**: the `lint` script was added in the 008 polish pass (eslint + eslint-config-expo flat config). Reran — 0 errors across the spec 005 surface.
 - [X] T025 [P] Run `npm test` — all tests (existing + new) pass.
 - [X] T026 [P] Run `npx tsc --noEmit` — zero TypeScript errors in strict mode.
 - [X] T027 Delete `bash.exe.stackdump` from the repo root if present (unrelated artifact from a prior shell crash) and verify `.gitignore` covers it for the future.

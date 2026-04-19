@@ -19,6 +19,8 @@ import { syncService } from '../services/syncService';
 import { catalogSyncService } from '../services/catalogSyncService';
 import { seedService } from '../services/seedService';
 import { authService } from '../services/authService';
+import { exportService } from '../services/exportService';
+import { dashboardService } from '../services/dashboardService';
 import { getDatabase } from '../db/client';
 
 export function registerE2EHarness(): void {
@@ -32,6 +34,8 @@ export function registerE2EHarness(): void {
     catalogSyncService,
     seedService,
     authService,
+    exportService,
+    dashboardService,
     getDatabase,
   };
 }

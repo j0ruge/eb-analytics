@@ -12,15 +12,15 @@ export interface SeedResult {
 }
 
 interface SeedCatalog {
-  series: Array<{ id: string; code: string; title: string; description: string | null }>;
-  topics: Array<{
+  series: { id: string; code: string; title: string; description: string | null }[];
+  topics: {
     id: string;
     series_id: string;
     title: string;
     sequence_order: number;
     suggested_date: string | null;
-  }>;
-  professors: Array<{ id: string; doc_id: string; name: string }>;
+  }[];
+  professors: { id: string; doc_id: string; name: string }[];
 }
 
 interface SeedCollection {

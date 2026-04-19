@@ -1,7 +1,7 @@
 import { View, Text, FlatList, StyleSheet, RefreshControl, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter , useFocusEffect } from "expo-router";
 import { useCallback, useState, useMemo } from "react";
-import { useFocusEffect } from "expo-router";
+
 import { professorService } from "../../src/services/professorService";
 import { Professor } from "../../src/types/professor";
 import { useTheme } from "../../src/hooks/useTheme";

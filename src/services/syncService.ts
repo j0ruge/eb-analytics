@@ -219,7 +219,7 @@ async function markSyncedInner(
 
 async function markRejectedInner(
   db: Awaited<ReturnType<typeof getDatabase>>,
-  rejections: Array<{ id: string; code: string; message: string }>,
+  rejections: { id: string; code: string; message: string }[],
 ): Promise<void> {
   for (const r of rejections) {
     const syncError = `${r.code}: ${r.message}`;
@@ -234,7 +234,7 @@ async function markRejectedInner(
 }
 
 async function markRejected(
-  rejections: Array<{ id: string; code: string; message: string }>,
+  rejections: { id: string; code: string; message: string }[],
 ): Promise<void> {
   if (rejections.length === 0) return;
   const db = await getDatabase();

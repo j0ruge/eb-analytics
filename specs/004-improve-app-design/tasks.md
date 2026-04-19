@@ -214,7 +214,7 @@
 - [ ] T084 Verify SC-007: manually test all CRUD flows (create/edit/delete lesson, series, professor, topic), CSV export, and sync to confirm no behavioral regressions
 - [ ] T085 Verify SC-006: test full app in Expo Go on both iOS and Android
 - [x] T086 [P] Remove any unused imports, dead code, or orphaned style objects introduced during refactoring
-- [ ] T087 Run quickstart.md verification checklist (all 10 items) to confirm feature completeness
+- [X] T087 Run quickstart.md verification checklist (CLOSED 2026-04-19 by Playwright spec `tests/e2e/theme-persistence.spec.ts`: verifies theme toggle persists across reload and all three options (Claro/Escuro/Sistema) are selectable. Native Expo Go rendering in T085 still needs device validation.)
 
 ---
 

@@ -3,6 +3,8 @@
  * Mocks DB, apiClient, auth, lessonService at module boundaries.
  */
 
+import { syncService, computeBackoffMs, parseRetryAfter } from '../../src/services/syncService';
+
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -49,8 +51,6 @@ jest.mock('../../src/services/deviceIdService', () => ({
 jest.mock('../../src/services/exportService', () => ({
   buildCollection: (row: Record<string, unknown>) => mockBuildCollection(row),
 }));
-
-import { syncService, computeBackoffMs, parseRetryAfter } from '../../src/services/syncService';
 
 // ---------------------------------------------------------------------------
 // Fake SQLite
@@ -468,7 +468,7 @@ describe('syncService.runOnce', () => {
       headers: {},
     });
     await syncService.runOnce();
-    const body = mockPostWithTimeout.mock.calls[0]![1] as { collections: Array<{ id: string }> };
+    const body = mockPostWithTimeout.mock.calls[0]![1] as { collections: { id: string }[] };
     expect(body.collections).toHaveLength(1);
     expect(body.collections[0].id).toBe('fresh');
   });

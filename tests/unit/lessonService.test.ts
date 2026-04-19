@@ -1,6 +1,9 @@
 import { lessonService } from '../../src/services/lessonService';
 import { LessonStatus } from '../../src/types/lesson';
 
+import { getDatabase } from '../../src/db/client';
+import { getIncludesProfessorDefault } from '../../src/hooks/useIncludesProfessorDefault';
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
 }));
@@ -18,9 +21,6 @@ jest.mock('../../src/db/client', () => ({
 jest.mock('../../src/hooks/useIncludesProfessorDefault', () => ({
   getIncludesProfessorDefault: jest.fn().mockResolvedValue(false),
 }));
-
-import { getDatabase } from '../../src/db/client';
-import { getIncludesProfessorDefault } from '../../src/hooks/useIncludesProfessorDefault';
 
 type RunAsyncCall = { sql: string; params: unknown[] };
 
