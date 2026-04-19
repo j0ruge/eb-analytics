@@ -6,7 +6,7 @@ test.describe('Test D — Settings default toggle (§7)', () => {
 
     // Step 1: enable the default in Settings
     await page.goto('/settings');
-    const toggle = page.getByRole('switch', { name: 'Incluir professor nas contagens por padrão' }).first();
+    const toggle = page.getByLabel('Incluir professor nas contagens por padrão');
     await toggle.click();
     await page.waitForTimeout(500);
 
@@ -22,7 +22,9 @@ test.describe('Test D — Settings default toggle (§7)', () => {
     await page.waitForTimeout(1000);
 
     // Step 3: verify the includes_professor checkbox is checked on the new lesson
-    const lessonSwitch = page.getByRole('switch', { name: 'Contei o professor nestas contagens' });
+    // react-native-web renders the Switch as a div + a hidden input. The
+    // input is the one `toBeChecked` understands.
+    const lessonSwitch = page.getByLabel('Contei o professor nestas contagens');
     await expect(lessonSwitch).toBeChecked();
   });
 });

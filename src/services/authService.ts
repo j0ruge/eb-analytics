@@ -46,6 +46,15 @@ export const authService = {
   async logout(): Promise<void> {
     await clearJwt();
     await AsyncStorage.removeItem(USER_STORAGE_KEY);
+    // Spec 008 — FR-044: logout clears the catalog cursor so the next login
+    // starts with a full pull. Import inline to avoid a circular dep between
+    // authService and catalogSyncService (which imports authService.getSession).
+    try {
+      const { catalogSyncService } = await import('./catalogSyncService');
+      await catalogSyncService.resetCursor();
+    } catch (err) {
+      console.error('[authService] resetCursor on logout failed:', err);
+    }
     pendingSessionPromise = null;
   },
 

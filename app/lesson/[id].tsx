@@ -12,6 +12,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { lessonService } from "../../src/services/lessonService";
 import { Lesson, LessonStatus, STATUS_LABELS } from "../../src/types/lesson";
+import { SyncStatus } from "../../src/types/sync";
+import { syncService } from "../../src/services/syncService";
+import { useAuth } from "../../src/hooks/useAuth";
+import { useSyncQueue } from "../../src/hooks/useSyncQueue";
 import { useTheme } from "../../src/hooks/useTheme";
 import { Theme } from "../../src/theme";
 import { CounterStepper } from "../../src/components/CounterStepper";
@@ -50,9 +54,13 @@ export default function LessonDetailScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { retryNow } = useSyncQueue();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sending, setSending] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const isFirstRender = useRef(true);
   const skipAutoSaveRef = useRef(false);
@@ -80,17 +88,24 @@ export default function LessonDetailScreen() {
   }, [debouncedLesson]);
 
   async function loadLesson() {
-    const data = await lessonService.getById(id);
-    setLesson(data);
+    try {
+      setLoadError(false);
+      setLoading(true);
+      const data = await lessonService.getById(id);
+      setLesson(data);
 
-    if (data?.lesson_topic_id) {
-      const topic = await topicService.getTopicById(data.lesson_topic_id);
-      if (topic) {
-        setSelectedSeriesId(topic.series_id);
+      if (data?.lesson_topic_id) {
+        const topic = await topicService.getTopicById(data.lesson_topic_id);
+        if (topic) {
+          setSelectedSeriesId(topic.series_id);
+        }
       }
+    } catch (err) {
+      console.error("Failed to load lesson:", err);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function saveChanges(updatedLesson: Lesson) {
@@ -187,10 +202,18 @@ export default function LessonDetailScreen() {
       {
         text: "Finalizar",
         onPress: async () => {
-          await lessonService.updateLesson(lesson.id, {
-            status: LessonStatus.COMPLETED,
-          });
-          router.replace("/" as any);
+          try {
+            await lessonService.updateLesson(lesson.id, {
+              status: LessonStatus.COMPLETED,
+            });
+            router.replace("/" as any);
+          } catch (err) {
+            console.error("Failed to complete lesson:", err);
+            Alert.alert(
+              "Erro",
+              err instanceof Error ? err.message : "Falha ao finalizar aula",
+            );
+          }
         },
       },
     ]);
@@ -210,6 +233,41 @@ export default function LessonDetailScreen() {
         },
       ],
     );
+  }
+
+  async function handleSendToCloud() {
+    if (!lesson) return;
+    setSending(true);
+    try {
+      await syncService.enqueue(lesson.id);
+      // Kick the loop through the hook so provider state refreshes.
+      await retryNow([lesson.id]);
+      const updated = await lessonService.getById(lesson.id);
+      if (updated) setLesson(updated);
+      if (updated?.sync_status === SyncStatus.SYNCED) {
+        Alert.alert("Sucesso", "Enviado para a nuvem");
+      } else if (updated?.sync_status === SyncStatus.REJECTED) {
+        Alert.alert(
+          "Erro",
+          updated.sync_error ?? "O servidor rejeitou esta aula",
+        );
+      } else {
+        // Still QUEUED or SENDING — the sync loop will finish in background.
+        // User sees the "Na fila para envio" / "Enviando..." banner on return.
+        Alert.alert(
+          "Na fila",
+          "Enviando em segundo plano. Acompanhe o status na tela de sincronização.",
+        );
+      }
+    } catch (err) {
+      console.error("handleSendToCloud failed:", err);
+      Alert.alert(
+        "Erro",
+        err instanceof Error ? err.message : "Falha ao enviar para a nuvem",
+      );
+    } finally {
+      setSending(false);
+    }
   }
 
   async function confirmDelete() {
@@ -238,6 +296,17 @@ export default function LessonDetailScreen() {
     );
   }
 
+  if (loadError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Erro ao carregar a aula.</Text>
+        <AnimatedPressable style={styles.retryButton} onPress={loadLesson}>
+          <Text style={styles.retryButtonText}>Tentar novamente</Text>
+        </AnimatedPressable>
+      </View>
+    );
+  }
+
   if (!lesson) {
     return (
       <View style={styles.errorContainer}>
@@ -246,7 +315,14 @@ export default function LessonDetailScreen() {
     );
   }
 
-  const isReadOnly = lesson.status !== LessonStatus.IN_PROGRESS;
+  // Lock when the lesson is no longer IN_PROGRESS. Spec 008 FR-012 also
+  // requires all inputs disabled once sync_status = SYNCED — implicitly
+  // covered because SYNCED rows are always COMPLETED, but enforce
+  // defensively so a future FR that relaxes the LessonStatus lock cannot
+  // unintentionally unlock a synced row.
+  const isReadOnly =
+    lesson.status !== LessonStatus.IN_PROGRESS ||
+    lesson.sync_status === SyncStatus.SYNCED;
 
   return (
     <ScrollView
@@ -272,6 +348,7 @@ export default function LessonDetailScreen() {
             size={12}
             color={theme.colors.background}
             style={styles.statusIconSpacer}
+            accessible={false}
           />
           <Text style={styles.statusText}>
             {STATUS_LABELS[lesson.status] ?? lesson.status}
@@ -457,6 +534,73 @@ export default function LessonDetailScreen() {
           </Text>
         </AnimatedPressable>
       )}
+
+      {/* Spec 008 FR-013 — REJECTED banner, no re-send affordance. */}
+      {lesson.sync_status === SyncStatus.REJECTED && (
+        <View style={styles.rejectedBanner}>
+          <Ionicons
+            name="alert-circle"
+            size={24}
+            color={theme.colors.background}
+            accessible={false}
+          />
+          <View style={styles.rejectedBannerText}>
+            <Text style={styles.rejectedBannerTitle}>
+              Rejeitada pelo servidor
+            </Text>
+            <Text style={styles.rejectedBannerBody}>
+              {lesson.sync_error ?? "Fale com o coordenador."}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Spec 008 FR-010 — "Enviar pra Nuvem" button only when
+          logged in + COMPLETED + sync_status = LOCAL. */}
+      {!authLoading &&
+        isAuthenticated &&
+        lesson.status === LessonStatus.COMPLETED &&
+        lesson.sync_status === SyncStatus.LOCAL && (
+          <AnimatedPressable
+            style={[styles.cloudButton, sending && styles.buttonDisabled]}
+            onPress={handleSendToCloud}
+            disabled={sending}
+            accessibilityLabel="Enviar aula para a nuvem"
+          >
+            {sending ? (
+              <ActivityIndicator color={theme.colors.background} />
+            ) : (
+              <>
+                <Ionicons
+                  name="cloud-upload-outline"
+                  size={20}
+                  color={theme.colors.background}
+                  style={styles.cloudButtonIcon}
+                  accessible={false}
+                />
+                <Text style={styles.cloudButtonText}>Enviar pra Nuvem</Text>
+              </>
+            )}
+          </AnimatedPressable>
+        )}
+
+      {/* QUEUED / SENDING indicator — read-only status cue. */}
+      {(lesson.sync_status === SyncStatus.QUEUED ||
+        lesson.sync_status === SyncStatus.SENDING) && (
+        <View style={styles.syncingBanner}>
+          <Ionicons
+            name="cloud-outline"
+            size={18}
+            color={theme.colors.textSecondary}
+            accessible={false}
+          />
+          <Text style={styles.syncingBannerText}>
+            {lesson.sync_status === SyncStatus.SENDING
+              ? "Enviando..."
+              : "Na fila para envio"}
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -497,11 +641,11 @@ const createStyles = (theme: Theme) =>
       alignItems: "center",
       backgroundColor: theme.colors.primary,
       paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
+      paddingVertical: theme.spacing.xs / 2,
       borderRadius: theme.borderRadius.sm,
     },
     statusIconSpacer: {
-      marginRight: 4,
+      marginRight: theme.spacing.xs,
     },
     statusText: {
       ...theme.typography.caption,
@@ -581,6 +725,72 @@ const createStyles = (theme: Theme) =>
     completeButtonText: {
       ...theme.typography.h3,
       color: theme.colors.background,
+    },
+    cloudButton: {
+      flexDirection: "row",
+      backgroundColor: theme.colors.primary,
+      marginHorizontal: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: theme.spacing.md,
+    },
+    cloudButtonIcon: {
+      marginRight: theme.spacing.sm,
+    },
+    cloudButtonText: {
+      ...theme.typography.h3,
+      color: theme.colors.background,
+    },
+    retryButton: {
+      marginTop: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.sm,
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.borderRadius.md,
+    },
+    retryButtonText: {
+      ...theme.typography.body,
+      color: theme.colors.background,
+      fontWeight: "bold",
+    },
+    rejectedBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.colors.danger,
+      marginHorizontal: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      marginTop: theme.spacing.md,
+      gap: theme.spacing.sm,
+    },
+    rejectedBannerText: {
+      flex: 1,
+    },
+    rejectedBannerTitle: {
+      ...theme.typography.body,
+      color: theme.colors.background,
+      fontWeight: "bold",
+    },
+    rejectedBannerBody: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.background,
+      marginTop: theme.spacing.xs / 2,
+    },
+    syncingBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginHorizontal: theme.spacing.md,
+      marginTop: theme.spacing.md,
+      padding: theme.spacing.md,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: theme.borderRadius.md,
+    },
+    syncingBannerText: {
+      ...theme.typography.bodySmall,
+      color: theme.colors.textSecondary,
     },
     deleteButton: {
       backgroundColor: theme.colors.danger,

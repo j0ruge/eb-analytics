@@ -2,8 +2,10 @@ import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { initializeDatabase } from "../src/db/client";
 import { AuthProvider } from "../src/contexts/AuthProvider";
+import { SyncProvider } from "../src/contexts/SyncProvider";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { useTheme } from "../src/hooks/useTheme";
+import { registerE2EHarness } from "../src/testing/e2eHarness";
 
 function RootStack() {
   const { theme } = useTheme();
@@ -57,14 +59,18 @@ function RootStack() {
 
 export default function RootLayout() {
   useEffect(() => {
-    initializeDatabase().catch((err) => console.error("DB Init Error:", err));
+    initializeDatabase()
+      .then(() => registerE2EHarness())
+      .catch((err) => console.error("DB Init Error:", err));
   }, []);
 
   return (
     <AuthProvider>
-      <ThemeProvider>
-        <RootStack />
-      </ThemeProvider>
+      <SyncProvider>
+        <ThemeProvider>
+          <RootStack />
+        </ThemeProvider>
+      </SyncProvider>
     </AuthProvider>
   );
 }

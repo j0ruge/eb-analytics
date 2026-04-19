@@ -8,6 +8,8 @@
 
 import { LessonStatus } from '../../src/types/lesson';
 
+import { applyMigrations } from '../../src/db/client';
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
 }));
@@ -17,8 +19,6 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('react-native-get-random-values', () => ({}));
-
-import { applyMigrations } from '../../src/db/client';
 
 type ColumnDef = { name: string; value: unknown; notNull?: boolean; defaultValue?: unknown };
 type Row = Record<string, unknown>;

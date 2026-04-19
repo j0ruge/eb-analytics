@@ -448,5 +448,5 @@ Procedimentos operacionais recorrentes têm runbooks detalhados em `.claude/rule
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan: `specs/007-sync-backend/plan.md`
+shell commands, and other important information, read the current plan: `specs/008-offline-sync-client/plan.md`
 <!-- SPECKIT END -->

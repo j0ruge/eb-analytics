@@ -21,11 +21,11 @@ export function AttendanceCurveRow({
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const renderItem = useCallback(({ item: datum }: { item: AttendanceCurveDatum }) => {
-    const points: Array<{
+    const points: {
       value: number;
       label: string;
       index: 0 | 1 | 2;
-    }> = [];
+    }[] = [];
     if (datum.start !== null)
       points.push({ value: datum.start, label: POINT_LABELS[0], index: 0 });
     if (datum.mid !== null)

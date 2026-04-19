@@ -5,6 +5,7 @@ import { normalizeText, extractSeriesCode, extractSeriesTitle } from '../utils/t
 
 const MIGRATION_FLAG_KEY = '003_schema_migration_complete';
 const MIGRATION_006_FLAG = '006_auth_identity_complete';
+const MIGRATION_008_FLAG = '008_offline_sync_complete';
 
 interface LegacyLessonRow {
   id: string;
@@ -282,6 +283,116 @@ export async function migrateAddAuthIdentity(db: SQLite.SQLiteDatabase): Promise
     console.log('Migration 006 completed successfully');
   } catch (error) {
     console.error('Migration 006 failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Spec 008: Add sync_* columns to lessons_data and updated_at/email columns
+ * to catalog tables for offline-first sync support. Idempotent — safe to re-run.
+ */
+export async function migrateAddSyncStatus(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS _migration_flags (
+      key TEXT PRIMARY KEY NOT NULL,
+      completed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const existing = await db.getFirstAsync<{ key: string }>(
+    'SELECT key FROM _migration_flags WHERE key = ?',
+    [MIGRATION_008_FLAG]
+  );
+  if (existing) {
+    console.log('Migration 008 already complete, skipping');
+    return;
+  }
+
+  console.log('Starting migration 008: Offline sync status...');
+
+  try {
+    // 1. Add sync_* columns to lessons_data. PRAGMA check guards against a
+    //    partial previous run that crashed between ALTER and flag insert.
+    const lessonsInfo = await db.getAllAsync<{ name: string }>(
+      'PRAGMA table_info(lessons_data)'
+    );
+    const lessonColumns = new Set(lessonsInfo.map(c => c.name));
+
+    if (!lessonColumns.has('sync_status')) {
+      await db.execAsync(
+        "ALTER TABLE lessons_data ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'LOCAL';"
+      );
+    }
+    if (!lessonColumns.has('sync_error')) {
+      await db.execAsync('ALTER TABLE lessons_data ADD COLUMN sync_error TEXT;');
+    }
+    if (!lessonColumns.has('sync_attempt_count')) {
+      await db.execAsync(
+        'ALTER TABLE lessons_data ADD COLUMN sync_attempt_count INTEGER NOT NULL DEFAULT 0;'
+      );
+    }
+    if (!lessonColumns.has('sync_next_attempt_at')) {
+      await db.execAsync('ALTER TABLE lessons_data ADD COLUMN sync_next_attempt_at TEXT;');
+    }
+    if (!lessonColumns.has('synced_at')) {
+      await db.execAsync('ALTER TABLE lessons_data ADD COLUMN synced_at TEXT;');
+    }
+
+    // 2. Indexes for the hot queries (pending badge, due-items scan).
+    await db.execAsync(
+      'CREATE INDEX IF NOT EXISTS idx_lessons_sync_status ON lessons_data(sync_status);'
+    );
+    // Partial index (WHERE clause) requires SQLite 3.8.0+. Standard on all
+    // current Expo SDK 54 targets (iOS, Android, wa-sqlite), but if an older
+    // runtime slips through we fall back to a full index rather than aborting
+    // the whole migration (which would leave the schema half-applied).
+    try {
+      await db.execAsync(
+        "CREATE INDEX IF NOT EXISTS idx_lessons_sync_next_attempt ON lessons_data(sync_next_attempt_at) WHERE sync_status = 'QUEUED';"
+      );
+    } catch (err) {
+      console.warn(
+        '[migration 008] partial index not supported — falling back to full index',
+        err,
+      );
+      await db.execAsync(
+        'CREATE INDEX IF NOT EXISTS idx_lessons_sync_next_attempt ON lessons_data(sync_next_attempt_at);'
+      );
+    }
+
+    // 3. Catalog tables: add updated_at for delta-pull cursor comparison
+    //    (spec 007 response includes updated_at per row). email on professors
+    //    per spec 007 catalog contract.
+    const profInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(professors)');
+    const profCols = new Set(profInfo.map(c => c.name));
+    if (!profCols.has('email')) {
+      await db.execAsync('ALTER TABLE professors ADD COLUMN email TEXT;');
+    }
+    if (!profCols.has('updated_at')) {
+      await db.execAsync('ALTER TABLE professors ADD COLUMN updated_at TEXT;');
+    }
+
+    const seriesInfo = await db.getAllAsync<{ name: string }>(
+      'PRAGMA table_info(lesson_series)'
+    );
+    if (!seriesInfo.some(c => c.name === 'updated_at')) {
+      await db.execAsync('ALTER TABLE lesson_series ADD COLUMN updated_at TEXT;');
+    }
+
+    const topicsInfo = await db.getAllAsync<{ name: string }>(
+      'PRAGMA table_info(lesson_topics)'
+    );
+    if (!topicsInfo.some(c => c.name === 'updated_at')) {
+      await db.execAsync('ALTER TABLE lesson_topics ADD COLUMN updated_at TEXT;');
+    }
+
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_008_FLAG]
+    );
+    console.log('Migration 008 completed successfully');
+  } catch (error) {
+    console.error('Migration 008 failed:', error);
     throw error;
   }
 }

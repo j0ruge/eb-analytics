@@ -1,5 +1,7 @@
 import { dashboardService } from '../../src/services/dashboardService';
 
+import { getDatabase } from '../../src/db/client';
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
 }));
@@ -7,8 +9,6 @@ jest.mock('expo-sqlite', () => ({
 jest.mock('../../src/db/client', () => ({
   getDatabase: jest.fn(),
 }));
-
-import { getDatabase } from '../../src/db/client';
 
 type Row = Record<string, unknown>;
 

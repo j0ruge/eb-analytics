@@ -1,5 +1,6 @@
 import { getDatabase } from '../db/client';
 import { Lesson, LessonStatus, LessonWithDetails } from '../types/lesson';
+import { SyncStatus } from '../types/sync';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { getIncludesProfessorDefault } from '../hooks/useIncludesProfessorDefault';
@@ -101,6 +102,13 @@ export const lessonService = {
       client_updated_at: now,
       includes_professor: includesProfessor,
       collector_user_id: collectorUserId ?? null,
+      // Spec 008 — every new row starts as LOCAL (never touched the cloud yet).
+      // These mirror the ALTER TABLE defaults in migration 008.
+      sync_status: SyncStatus.LOCAL,
+      sync_error: null,
+      sync_attempt_count: 0,
+      sync_next_attempt_at: null,
+      synced_at: null,
     };
 
     // FR-017: enforce XOR invariant defensively — catalog id wins, legacy field cleared.
@@ -254,6 +262,28 @@ export const lessonService = {
       [id]
     );
     return result ? normalizeLesson(result) : null;
+  },
+
+  async getByIdsWithDetails(ids: string[]): Promise<LessonWithDetails[]> {
+    if (ids.length === 0) return [];
+    const db = await getDatabase();
+    const placeholders = ids.map(() => '?').join(',');
+    const results = await db.getAllAsync<LessonWithDetails>(
+      `SELECT
+        ld.*,
+        lt.title as topic_title,
+        lt.series_id as resolved_series_id,
+        ls.code as series_code,
+        ls.title as series_title,
+        p.name as professor_name_resolved
+       FROM lessons_data ld
+       LEFT JOIN lesson_topics lt ON ld.lesson_topic_id = lt.id
+       LEFT JOIN lesson_series ls ON lt.series_id = ls.id
+       LEFT JOIN professors p ON ld.professor_id = p.id
+       WHERE ld.id IN (${placeholders})`,
+      ids,
+    );
+    return normalizeLessons(results);
   },
 
   async getAllLessonsWithDetails(): Promise<LessonWithDetails[]> {

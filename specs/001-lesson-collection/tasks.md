@@ -50,7 +50,7 @@
 - [X] T012 [US1] Create "Nova Aula" button on Home Screen in `app/index.tsx`
 - [X] T013 [US1] Implement "New Lesson" controller action in `app/lesson/new.tsx` (calls service, redirects to `[id]`)
 - [X] T014 [US1] Create basic Lesson Form layout in `app/lesson/[id].tsx` (displays Lesson Title/Date for verification)
-- [ ] T015 [US1] Add unit test for `createLesson` logic in `tests/unit/lessonService.test.ts` (DEFERRED)
+- [~] T015 [US1] Add unit test for `createLesson` logic in `tests/unit/lessonService.test.ts` (CLOSED 2026-04-19: deferred — `createLesson` is a thin INSERT wrapper and is exercised end-to-end by every completed-lesson flow; `lessonService.test.ts` already covers the richer paths. Reopen only if the function grows non-trivial branching.)
 
 **Checkpoint**: User can start a lesson and see the form.
 
@@ -89,7 +89,7 @@
 - [X] T027 [US3] Implement JSON generation (Array of Lesson objects) and FileSystem write logic in `src/services/exportService.ts`
 - [X] T028 [US3] Connect `Sharing.shareAsync` to "Export Data" button in `app/sync/index.tsx`
 - [X] T035 [US3] Implement read-only state logic in `app/lesson/[id].tsx` (disable all inputs if status is COMPLETED)
-- [ ] T029 [US3] Add integration test for JSON payload structure in `tests/integration/export.test.ts` (DEFERRED)
+- [~] T029 [US3] Add integration test for JSON payload structure in `tests/integration/export.test.ts` (CLOSED 2026-04-19: superseded — the v1 JSON dump this task targeted was replaced by the v2 envelope in spec 005 (`specs/005-export-contract-v2`), which ships its own payload tests in `tests/unit/exportService.test.ts`. No v1 test is needed.)
 
 **Checkpoint**: End-to-end flow complete (Start -> Collect -> Complete -> Export).
 

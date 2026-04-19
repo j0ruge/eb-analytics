@@ -1,10 +1,11 @@
-import { View, Text, FlatList, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, FlatList, StyleSheet, RefreshControl, Alert } from "react-native";
+import { useRouter , useFocusEffect } from "expo-router";
 import { useCallback, useState, useMemo } from "react";
-import { useFocusEffect } from "expo-router";
+
 import { professorService } from "../../src/services/professorService";
 import { Professor } from "../../src/types/professor";
 import { useTheme } from "../../src/hooks/useTheme";
+import { useCatalogSync } from "../../src/hooks/useCatalogSync";
 import { Theme } from "../../src/theme";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 import { FAB } from "../../src/components/FAB";
@@ -19,7 +20,9 @@ export default function ProfessorsScreen() {
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
+  const { pullNow } = useCatalogSync();
 
   const loadProfessors = useCallback(async () => {
     try {
@@ -40,6 +43,25 @@ export default function ProfessorsScreen() {
       loadProfessors();
     }, [loadProfessors]),
   );
+
+  const handlePullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const result = await pullNow("manual");
+      if (!result.ok) {
+        if (result.offline) {
+          Alert.alert("Sem conexão", "Usando dados locais.");
+        } else if (result.skipped) {
+          Alert.alert("Login necessário", "Entre para atualizar o catálogo.");
+        } else if (result.error) {
+          Alert.alert("Erro", result.error);
+        }
+      }
+      await loadProfessors();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [pullNow, loadProfessors]);
 
   const renderItem = ({ item }: { item: Professor }) => (
     <AnimatedPressable
@@ -76,6 +98,13 @@ export default function ProfessorsScreen() {
       <FlatList
         data={professors}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handlePullRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
         renderItem={renderItem}
         ListEmptyComponent={
           <EmptyState

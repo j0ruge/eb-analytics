@@ -1,21 +1,24 @@
-# Gemini Code Assist Review — PR #5
+# Gemini Code Assist Review — PR #6
 
 **Repository**: j0ruge/eb-analytics
-**PR**: feat(server): cloud sync backend (spec 007)
-**Branch**: `007-sync-backend` → `main`
 **Reviewer**: gemini-code-assist[bot]
-**Date**: 2026-04-18
-**Total findings**: 2
+**Date**: 2026-04-19
+**Total findings**: 3
+
+All three findings target `src/services/syncService.ts`. Two are N+1 query patterns; one is a UX issue around auth-failure retry timing.
 
 ---
 
-## HIGH (1)
+## Findings
 
-- [x] **1.** `server/src/server.ts:37` — `trustProxy` wrong for `TRUST_PROXY=false` — **Already fixed — see coderabbit-review.md #8** (parser is now fail-closed: `"false"`/`"0"`/empty → `false`; `"true"` → `true`; positive integer → hop count; any other value → `false`).
+- [x] **1. [HIGH] src/services/syncService.ts:494 — 401 auth failure leaves rows with future backoff** — Fixed
+  Severity recalibrated from MEDIUM to HIGH: broken feature flow, not just cosmetic. Added a dedicated `revertToQueuedClearBackoff` helper (and its `-Inner` transactional variant) that resets `sync_next_attempt_at = NULL` and `sync_attempt_count = 0`. The 401 branch now calls this instead of the backoff-applying revert, so items flush immediately after the user signs back in.
 
-## MEDIUM (1)
+- [x] **2. [MEDIUM] src/services/syncService.ts:150–157 — N+1 on lesson fetch during batch build** — Fixed
+  Added `lessonService.getByIdsWithDetails(ids)` that issues a single `WHERE id IN (?, ?, …)` query with the same joins as `getByIdWithDetails`. `syncService.loadLessonsByIds` now delegates to it. For a 20-item batch this collapses 20 round-trips into one.
 
-- [x] **2.** `server/src/services/syncService.ts:393` — N+1 per-collection catalog resolution — **Fixed (partial, data-preserving)** — the concern is real: a 500-item batch with the same `lesson_instance` target issues 4 resolve-queries per item. The current code relies on atomic `ON CONFLICT DO UPDATE` upserts (correct under concurrency) so grouping requires a non-trivial refactor that would also change the error-reporting contract per row. Left as-is with a documented note in `syncService.ts` header; the existing SC-003 load gate (p95 < 500ms over 30s of 10-connection traffic with per-request fresh batches after fix #24) is the functional guardrail — the test currently passes with the new per-request bodies. If SC-003 ever regresses, grouping becomes justified. The review comment is preserved in the file header for future triage.
+- [x] **3. [MEDIUM] src/services/syncService.ts:171–174 — N+1 on `sync_attempt_count` read inside requeue loop** — Fixed
+  `claimBatch` now returns `ClaimedItem[]` (`{ id, attemptCount }`) and its `SELECT` already pulls `sync_attempt_count`. `revertToQueuedWithBackoffInner` accepts the items directly and uses the pre-read count — no per-row `SELECT` inside the loop. All other revert call sites (401 clear-backoff, 413, 5xx, defensive, transient) now thread `ClaimedItem[]` too.
 
 ---
 
@@ -23,9 +26,9 @@
 
 | Status | Count |
 |--------|-------|
-| Fixed | 1 (partial with documented justification) |
-| Already fixed (cross-reviewer) | 1 |
+| Fixed | 3 |
+| Already fixed | 0 |
 | Not applicable | 0 |
 | Pending | 0 |
 
-Tests: **73 of 73 passed** — see coderabbit-review.md for details.
+**Tests**: `npm test` → 147/147 passing (13 suites). `npx playwright test` → 31/31 passing (1 skipped SOAK_REAL, by design). `npm run lint` → 0 errors.

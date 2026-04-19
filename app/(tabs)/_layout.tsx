@@ -1,7 +1,8 @@
 import { Tabs, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { TouchableOpacity } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { useTheme } from "../../src/hooks/useTheme";
+import { SyncBadge } from "../../src/components/SyncBadge";
 
 export default function TabsLayout() {
   const { theme } = useTheme();
@@ -24,16 +25,23 @@ export default function TabsLayout() {
         tabBarActiveTintColor: theme.colors.tabBarActive,
         tabBarInactiveTintColor: theme.colors.tabBarInactive,
         headerRight: () => (
-          <TouchableOpacity
-            onPress={() => router.push("/settings")}
-            style={{ marginRight: theme.spacing.md }}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginRight: theme.spacing.md,
+              gap: theme.spacing.sm,
+            }}
           >
-            <Ionicons
-              name="settings-outline"
-              size={22}
-              color={theme.colors.background}
-            />
-          </TouchableOpacity>
+            <SyncBadge />
+            <TouchableOpacity onPress={() => router.push("/settings")}>
+              <Ionicons
+                name="settings-outline"
+                size={22}
+                color={theme.colors.background}
+              />
+            </TouchableOpacity>
+          </View>
         ),
       }}
     >

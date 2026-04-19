@@ -1,5 +1,7 @@
 import { professorService } from '../../src/services/professorService';
 
+import { getDatabase } from '../../src/db/client';
+
 // Mock expo-sqlite module
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
@@ -15,8 +17,6 @@ jest.mock('uuid', () => ({
 
 // Mock react-native-get-random-values
 jest.mock('react-native-get-random-values', () => ({}));
-
-import { getDatabase } from '../../src/db/client';
 
 describe('Professor Service', () => {
   let mockDb: any;

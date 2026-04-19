@@ -6,7 +6,7 @@ test.describe('Test F — Includes professor toggle on Lesson Detail (FR-019)', 
 
     // Step 1: ensure Settings default is ON so new lessons start with it checked
     await page.goto('/settings');
-    const defaultToggle = page.getByRole('switch', { name: 'Incluir professor nas contagens por padrão' }).first();
+    const defaultToggle = page.getByLabel('Incluir professor nas contagens por padrão');
     // If not already on, toggle it on
     const isChecked = await defaultToggle.isChecked();
     if (!isChecked) {
@@ -23,7 +23,7 @@ test.describe('Test F — Includes professor toggle on Lesson Detail (FR-019)', 
     expect(lessonUrl).toContain('/lesson/');
 
     // Step 3: verify the toggle starts as checked (inherited from default)
-    const professorToggle = page.getByRole('switch', { name: 'Contei o professor nestas contagens' });
+    const professorToggle = page.getByLabel('Contei o professor nestas contagens');
     await expect(professorToggle).toBeChecked();
 
     // Step 4: toggle it OFF
@@ -41,7 +41,7 @@ test.describe('Test F — Includes professor toggle on Lesson Detail (FR-019)', 
 
     // Step 7: verify the toggle persisted as OFF
     await expect(
-      page.getByRole('switch', { name: 'Contei o professor nestas contagens' }),
+      page.getByLabel('Contei o professor nestas contagens'),
     ).not.toBeChecked();
   });
 });
