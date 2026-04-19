@@ -1,9 +1,12 @@
+import { SyncStatus } from './sync';
+
 export enum LessonStatus {
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
   // EXPORTED: legacy — preserved for backwards compatibility with rows created before
-  // spec 005. No longer written by application code. Will be removed by spec 008 when
-  // `sync_status` replaces `status` for tracking export lifecycle.
+  // spec 005. No longer written by application code. Spec 008 keeps both columns
+  // side by side (FR-005): `status` (LessonStatus) is the UX lifecycle; `sync_status`
+  // (SyncStatus) is the cloud-sync state. They are written independently.
   EXPORTED = 'EXPORTED',
   SYNCED = 'SYNCED',
 }
@@ -39,6 +42,12 @@ export interface Lesson {
   weather: string | null; // Free-text weather note; null when empty (FR-020)
   notes: string | null; // Free-text general notes; null when empty (FR-020)
   collector_user_id: string | null; // Authenticated user who created this lesson (spec 006 FR-006); null = anonymous
+  // Spec 008 — Offline-first sync state. See specs/008-offline-sync-client/data-model.md §1.
+  sync_status: SyncStatus;
+  sync_error: string | null;
+  sync_attempt_count: number;
+  sync_next_attempt_at: string | null; // ISO 8601 — next retry time
+  synced_at: string | null; // ISO 8601 — timestamp of SENDING→SYNCED transition, set once
 }
 
 // Tipo expandido para exibição (com JOINs)

@@ -1,11 +1,19 @@
 import { useState, useMemo } from "react";
-import { View, Text, FlatList, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  Alert,
+} from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import React from "react";
 import { seriesService } from "../../src/services/seriesService";
 import { topicService } from "../../src/services/topicService";
 import { LessonSeries } from "../../src/types/lessonSeries";
 import { useTheme } from "../../src/hooks/useTheme";
+import { useCatalogSync } from "../../src/hooks/useCatalogSync";
 import { Theme } from "../../src/theme";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 import { FAB } from "../../src/components/FAB";
@@ -21,9 +29,32 @@ export default function SeriesListScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
+  const { pullNow } = useCatalogSync();
   const [series, setSeries] = useState<SeriesWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handlePullRefresh() {
+    setRefreshing(true);
+    try {
+      // Spec 008 FR-045 — manual trigger toasts on failure.
+      const result = await pullNow("manual");
+      if (!result.ok) {
+        if (result.offline) {
+          Alert.alert("Sem conexão", "Usando dados locais.");
+        } else if (result.skipped) {
+          Alert.alert("Login necessário", "Entre para atualizar o catálogo.");
+        } else if (result.error) {
+          Alert.alert("Erro", result.error);
+        }
+      }
+      // Re-load from local DB (upserts land there on success).
+      await loadSeries();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function loadSeries() {
     try {
@@ -75,6 +106,13 @@ export default function SeriesListScreen() {
       <FlatList
         data={series}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handlePullRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
         renderItem={({ item }) => (
           <AnimatedPressable
             onPress={() => router.push(`/series/${item.id}` as any)}

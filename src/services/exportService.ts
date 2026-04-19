@@ -41,7 +41,8 @@ interface AttendanceBlock {
   includes_professor: boolean;
 }
 
-interface CollectionSubmission {
+// Exported for spec 008 syncService reuse — same shape flows to POST /sync/batch.
+export interface CollectionSubmission {
   id: string;
   client_created_at: string;
   client_updated_at: string;
@@ -54,12 +55,12 @@ interface CollectionSubmission {
   notes: string | null;
 }
 
-interface CollectorInfo {
+export interface CollectorInfo {
   user_id: string;
   display_name: string;
 }
 
-interface ExportEnvelopeV2 {
+export interface ExportEnvelopeV2 {
   schema_version: '2.0';
   client: ClientInfo;
   collector: CollectorInfo | null;
@@ -115,7 +116,9 @@ function buildLessonInstance(row: LessonWithDetails): LessonInstanceRef {
   };
 }
 
-function buildCollection(row: LessonWithDetails): CollectionSubmission {
+// Exported so spec 008 syncService can assemble an identical body per
+// contracts/server-endpoints.md. Pure function — no side effects.
+export function buildCollection(row: LessonWithDetails): CollectionSubmission {
   return {
     id: row.id,
     client_created_at: row.created_at,

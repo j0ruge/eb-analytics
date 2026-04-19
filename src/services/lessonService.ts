@@ -1,5 +1,6 @@
 import { getDatabase } from '../db/client';
 import { Lesson, LessonStatus, LessonWithDetails } from '../types/lesson';
+import { SyncStatus } from '../types/sync';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { getIncludesProfessorDefault } from '../hooks/useIncludesProfessorDefault';
@@ -101,6 +102,13 @@ export const lessonService = {
       client_updated_at: now,
       includes_professor: includesProfessor,
       collector_user_id: collectorUserId ?? null,
+      // Spec 008 — every new row starts as LOCAL (never touched the cloud yet).
+      // These mirror the ALTER TABLE defaults in migration 008.
+      sync_status: SyncStatus.LOCAL,
+      sync_error: null,
+      sync_attempt_count: 0,
+      sync_next_attempt_at: null,
+      synced_at: null,
     };
 
     // FR-017: enforce XOR invariant defensively — catalog id wins, legacy field cleared.

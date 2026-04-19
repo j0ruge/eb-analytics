@@ -1,4 +1,5 @@
 import { LessonStatus, LessonWithDetails } from '../../src/types/lesson';
+import { SyncStatus } from '../../src/types/sync';
 
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(),
@@ -101,6 +102,12 @@ const catalogLesson: LessonWithDetails = {
   weather: 'Ensolarado 28°C',
   notes: 'Tudo ok',
   collector_user_id: null,
+  // Spec 008 — sync state defaults (LOCAL row never sent).
+  sync_status: SyncStatus.LOCAL,
+  sync_error: null,
+  sync_attempt_count: 0,
+  sync_next_attempt_at: null,
+  synced_at: null,
   topic_title: 'Inveja',
   series_code: 'Eb356',
   series_title: 'Série EB356',

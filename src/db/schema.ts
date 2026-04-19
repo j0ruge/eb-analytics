@@ -76,3 +76,28 @@ export const CREATE_INDEX_TOPICS_SEQUENCE = `CREATE INDEX IF NOT EXISTS idx_less
 
 // Index for lesson_topic_id in lessons_data
 export const CREATE_INDEX_LESSON_TOPIC_ID = `CREATE INDEX IF NOT EXISTS idx_lessons_topic_id ON lessons_data(lesson_topic_id);`;
+
+// ============================================================================
+// 008-offline-sync-client
+// Columns added to `lessons_data` via ALTER TABLE in migrations.ts
+// (migrateAddSyncStatus). CHECK constraint enforced at runtime by
+// syncService writes; SQLite cannot add CHECK via ALTER TABLE.
+//
+// Columns:
+//   sync_status TEXT NOT NULL DEFAULT 'LOCAL' — LOCAL|QUEUED|SENDING|SYNCED|REJECTED
+//   sync_error TEXT NULL
+//   sync_attempt_count INTEGER NOT NULL DEFAULT 0
+//   sync_next_attempt_at TEXT NULL   — ISO 8601
+//   synced_at TEXT NULL              — ISO 8601, set once on SENDING→SYNCED
+//
+// Supporting catalog sync adds:
+//   professors.email TEXT NULL
+//   professors.updated_at TEXT NULL
+//   lesson_series.updated_at TEXT NULL
+//   lesson_topics.updated_at TEXT NULL
+// ============================================================================
+
+export const CREATE_INDEX_SYNC_STATUS = `CREATE INDEX IF NOT EXISTS idx_lessons_sync_status ON lessons_data(sync_status);`;
+
+// Partial index — only QUEUED rows are ever scheduled, so this stays small.
+export const CREATE_INDEX_SYNC_NEXT_ATTEMPT = `CREATE INDEX IF NOT EXISTS idx_lessons_sync_next_attempt ON lessons_data(sync_next_attempt_at) WHERE sync_status = 'QUEUED';`;

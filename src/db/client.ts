@@ -14,7 +14,11 @@ import {
   CREATE_INDEX_TOPICS_SEQUENCE,
   CREATE_INDEX_LESSON_TOPIC_ID,
 } from './schema';
-import { migrateLegacyData, migrateAddAuthIdentity } from './migrations';
+import {
+  migrateLegacyData,
+  migrateAddAuthIdentity,
+  migrateAddSyncStatus,
+} from './migrations';
 import { DB_NAME, DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 
 // Re-export constants for backward compatibility
@@ -279,6 +283,16 @@ async function _doInitializeDatabase() {
 
   // Add auth identity support (006-auth-identity)
   await migrateAddAuthIdentity(db);
+
+  // Add offline-sync columns and catalog updated_at/email (008-offline-sync-client)
+  await migrateAddSyncStatus(db);
+
+  // Boot reconciliation (008 EC-001): any row stuck in SENDING from a prior
+  // crash must return to QUEUED so the sync loop can retry it. Server
+  // idempotency (via collections[].id) guarantees the resend is safe.
+  await db.runAsync(
+    "UPDATE lessons_data SET sync_status = 'QUEUED' WHERE sync_status = 'SENDING'"
+  );
 
   console.log('Database initialized successfully');
 }
