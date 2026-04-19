@@ -31,6 +31,17 @@ jest.mock('../../src/services/lessonService', () => ({
   lessonService: {
     getById: (id: string) => mockGetById(id),
     getByIdWithDetails: (id: string) => mockGetByIdWithDetails(id),
+    // Bulk variant added for the N+1 fix. Loops `mockGetByIdWithDetails`
+    // so existing test arrangements (which configure the single variant)
+    // keep working unchanged.
+    getByIdsWithDetails: async (ids: string[]) => {
+      const out = [];
+      for (const id of ids) {
+        const r = await mockGetByIdWithDetails(id);
+        if (r) out.push(r);
+      }
+      return out;
+    },
   },
 }));
 jest.mock('../../src/services/authService', () => ({
@@ -66,7 +77,7 @@ function makeFakeDb() {
   return {
     async getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]> {
       const s = sql.replace(/\s+/g, ' ').trim();
-      if (s.startsWith('SELECT id FROM lessons_data')) {
+      if (s.startsWith('SELECT id, sync_attempt_count FROM lessons_data')) {
         const userId = params?.[0];
         const nowIso = params?.[1] as string;
         return state.rows
@@ -83,7 +94,10 @@ function makeFakeDb() {
             return (a.created_at as string).localeCompare(b.created_at as string);
           })
           .slice(0, 20)
-          .map((r) => ({ id: r.id })) as unknown as T[];
+          .map((r) => ({
+            id: r.id,
+            sync_attempt_count: r.sync_attempt_count ?? 0,
+          })) as unknown as T[];
       }
       throw new Error('Unexpected getAllAsync: ' + s);
     },
@@ -144,20 +158,47 @@ function makeFakeDb() {
         }
         return ok(0);
       }
-      // Enqueue (LOCAL→QUEUED) must match BEFORE the revert-with-backoff
-      // pattern because both start with "UPDATE lessons_data SET sync_status = 'QUEUED'".
+      // Enqueue (LOCAL→QUEUED) must match BEFORE the clear-backoff and
+      // revert-with-backoff patterns, since all three start with
+      // "UPDATE lessons_data SET sync_status = 'QUEUED'". Enqueue is the
+      // most specific — it's the only one that sets sync_error = NULL and
+      // writes collector_user_id via COALESCE.
       if (
         s.startsWith(
           "UPDATE lessons_data SET sync_status = 'QUEUED', sync_attempt_count = 0, sync_next_attempt_at = NULL, sync_error = NULL",
         )
       ) {
-        const id = params?.[0];
+        const userId = params?.[0] as string | null;
+        const id = params?.[1];
         const row = state.rows.find((r) => r.id === id && r.sync_status === 'LOCAL');
         if (row) {
           row.sync_status = 'QUEUED';
           row.sync_attempt_count = 0;
           row.sync_next_attempt_at = null;
           row.sync_error = null;
+          // COALESCE(collector_user_id, ?): if the row was created
+          // anonymously, stamp the current user now. Existing non-null
+          // values are preserved.
+          if (row.collector_user_id == null && userId != null) {
+            row.collector_user_id = userId;
+          }
+          return ok(1);
+        }
+        return ok(0);
+      }
+      // Clear-backoff revert (used on 401): sets QUEUED + resets both
+      // counters without touching sync_error or collector.
+      if (
+        s.startsWith(
+          "UPDATE lessons_data SET sync_status = 'QUEUED', sync_attempt_count = 0, sync_next_attempt_at = NULL WHERE id =",
+        )
+      ) {
+        const id = params?.[0];
+        const row = state.rows.find((r) => r.id === id);
+        if (row) {
+          row.sync_status = 'QUEUED';
+          row.sync_attempt_count = 0;
+          row.sync_next_attempt_at = null;
           return ok(1);
         }
         return ok(0);

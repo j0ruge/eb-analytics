@@ -542,6 +542,7 @@ export default function LessonDetailScreen() {
             name="alert-circle"
             size={24}
             color={theme.colors.background}
+            accessible={false}
           />
           <View style={styles.rejectedBannerText}>
             <Text style={styles.rejectedBannerTitle}>
@@ -591,6 +592,7 @@ export default function LessonDetailScreen() {
             name="cloud-outline"
             size={18}
             color={theme.colors.textSecondary}
+            accessible={false}
           />
           <Text style={styles.syncingBannerText}>
             {lesson.sync_status === SyncStatus.SENDING

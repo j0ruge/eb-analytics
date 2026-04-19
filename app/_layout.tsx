@@ -53,7 +53,6 @@ function RootStack() {
       <Stack.Screen name="settings" options={{ title: "Configurações" }} />
       <Stack.Screen name="login" options={{ title: "Entrar" }} />
       <Stack.Screen name="register" options={{ title: "Criar Conta" }} />
-      <Stack.Screen name="sync/index" options={{ title: "Sincronização" }} />
     </Stack>
   );
 }

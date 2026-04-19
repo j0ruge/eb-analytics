@@ -192,6 +192,7 @@ export default function SyncScreen() {
                 name="cloud-offline-outline"
                 size={20}
                 color={theme.colors.textSecondary}
+                accessible={false}
               />
               <Text style={styles.syncNoticeText}>
                 Faça login para sincronizar com a nuvem

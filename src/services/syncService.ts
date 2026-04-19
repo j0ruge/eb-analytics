@@ -118,17 +118,26 @@ async function currentUserId(): Promise<string | null> {
   return session?.user.id ?? null;
 }
 
-async function claimBatch(userId: string, now: Date): Promise<string[]> {
+// A claimed row carries its current `sync_attempt_count` so the requeue path
+// does not have to re-read it per id (eliminates an N+1 inside the revert
+// loop). `claimBatch` is the single source of truth; all downstream code
+// threads these objects instead of raw ids.
+interface ClaimedItem {
+  id: string;
+  attemptCount: number;
+}
+
+async function claimBatch(userId: string, now: Date): Promise<ClaimedItem[]> {
   const db = await getDatabase();
   const nowIso = now.toISOString();
 
   // Single transaction: SELECT + UPDATE so a concurrent invocation cannot
   // claim the same rows (FR-022). SQLite expo-sqlite is serial per connection
   // but still guarded via BEGIN to stay explicit.
-  const claimed: string[] = [];
+  const claimed: ClaimedItem[] = [];
   await db.withTransactionAsync(async () => {
-    const rows = await db.getAllAsync<{ id: string }>(
-      `SELECT id FROM lessons_data
+    const rows = await db.getAllAsync<{ id: string; sync_attempt_count: number }>(
+      `SELECT id, sync_attempt_count FROM lessons_data
         WHERE sync_status = 'QUEUED'
           AND collector_user_id = ?
           AND (sync_next_attempt_at IS NULL OR sync_next_attempt_at <= ?)
@@ -141,38 +150,31 @@ async function claimBatch(userId: string, now: Date): Promise<string[]> {
         "UPDATE lessons_data SET sync_status = 'SENDING' WHERE id = ? AND sync_status = 'QUEUED'",
         [r.id],
       );
-      claimed.push(r.id);
+      claimed.push({ id: r.id, attemptCount: r.sync_attempt_count ?? 0 });
     }
   });
   return claimed;
 }
 
+// Bulk fetch via a single `WHERE id IN (…)` — replaces the prior per-id loop
+// (20 round-trips for a full batch).
 async function loadLessonsByIds(ids: string[]): Promise<LessonWithDetails[]> {
-  if (ids.length === 0) return [];
-  const out: LessonWithDetails[] = [];
-  for (const id of ids) {
-    const lesson = await lessonService.getByIdWithDetails(id);
-    if (lesson) out.push(lesson);
-  }
-  return out;
+  return lessonService.getByIdsWithDetails(ids);
 }
 
-// Revert a set of ids from SENDING back to QUEUED, scheduling backoff.
+// Revert a set of claimed items from SENDING back to QUEUED, scheduling
+// backoff based on each item's already-known `attemptCount` (no re-read).
 // `-Inner` variant runs WITHOUT starting a transaction — callers must provide
 // one. See `revertToQueuedWithBackoff` for the standalone, tx-wrapped variant.
 async function revertToQueuedWithBackoffInner(
   db: Awaited<ReturnType<typeof getDatabase>>,
-  ids: string[],
+  items: ClaimedItem[],
   delayMsOverride: number | null,
   now: Date,
 ): Promise<void> {
-  if (ids.length === 0) return;
-  for (const id of ids) {
-    const row = await db.getFirstAsync<{ sync_attempt_count: number }>(
-      'SELECT sync_attempt_count FROM lessons_data WHERE id = ?',
-      [id],
-    );
-    const nextAttempt = (row?.sync_attempt_count ?? 0) + 1;
+  if (items.length === 0) return;
+  for (const item of items) {
+    const nextAttempt = item.attemptCount + 1;
     const delay = delayMsOverride ?? computeBackoffMs(nextAttempt);
     const nextAt = new Date(now.getTime() + delay).toISOString();
     await db.runAsync(
@@ -181,20 +183,49 @@ async function revertToQueuedWithBackoffInner(
               sync_attempt_count = ?,
               sync_next_attempt_at = ?
         WHERE id = ?`,
-      [nextAttempt, nextAt, id],
+      [nextAttempt, nextAt, item.id],
     );
   }
 }
 
 async function revertToQueuedWithBackoff(
-  ids: string[],
+  items: ClaimedItem[],
   delayMsOverride: number | null,
   now: Date,
 ): Promise<void> {
-  if (ids.length === 0) return;
+  if (items.length === 0) return;
   const db = await getDatabase();
   await db.withTransactionAsync(async () => {
-    await revertToQueuedWithBackoffInner(db, ids, delayMsOverride, now);
+    await revertToQueuedWithBackoffInner(db, items, delayMsOverride, now);
+  });
+}
+
+// Used only for 401 (session expired). Clears `sync_next_attempt_at` and
+// resets `sync_attempt_count` so that, as soon as the user signs back in,
+// `claimBatch` picks these rows up immediately instead of waiting out the
+// exponential backoff that was last applied.
+async function revertToQueuedClearBackoffInner(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  items: ClaimedItem[],
+): Promise<void> {
+  if (items.length === 0) return;
+  for (const item of items) {
+    await db.runAsync(
+      `UPDATE lessons_data
+          SET sync_status = 'QUEUED',
+              sync_attempt_count = 0,
+              sync_next_attempt_at = NULL
+        WHERE id = ?`,
+      [item.id],
+    );
+  }
+}
+
+async function revertToQueuedClearBackoff(items: ClaimedItem[]): Promise<void> {
+  if (items.length === 0) return;
+  const db = await getDatabase();
+  await db.withTransactionAsync(async () => {
+    await revertToQueuedClearBackoffInner(db, items);
   });
 }
 
@@ -259,15 +290,21 @@ export const syncService = {
       throw new Error('Aula já foi enviada ou está na fila');
     }
 
+    // First-time attribution: if the lesson was created anonymously and the
+    // user is now signed in, stamp the current user id via COALESCE so
+    // `claimBatch` can pick the row up. Preserves FR-006 immutability —
+    // already-set values are kept as-is.
+    const userId = await currentUserId();
     const db = await getDatabase();
     const result = await db.runAsync(
       `UPDATE lessons_data
           SET sync_status = 'QUEUED',
               sync_attempt_count = 0,
               sync_next_attempt_at = NULL,
-              sync_error = NULL
+              sync_error = NULL,
+              collector_user_id = COALESCE(collector_user_id, ?)
         WHERE id = ? AND sync_status = 'LOCAL'`,
-      [lessonId],
+      [userId, lessonId],
     );
     // Guard: the SQL predicate prevents double-enqueue. If 0 rows changed,
     // another flow (claimBatch) already advanced the row concurrently.
@@ -362,7 +399,7 @@ export const syncService = {
         WHERE ld.sync_status = 'SYNCED'
           AND ld.collector_user_id = ?
           AND ld.synced_at IS NOT NULL
-          AND ld.synced_at >= datetime('now','-7 days')
+          AND ld.synced_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')
         ORDER BY ld.synced_at DESC
         LIMIT 20`,
       [collectorUserId],
@@ -402,7 +439,8 @@ export const syncService = {
         return { accepted: 0, rejected: 0, retried: 0, sessionExpired: false, lastError: null };
       }
 
-      const lessons = await loadLessonsByIds(claimed);
+      const claimedIds = claimed.map((c) => c.id);
+      const lessons = await loadLessonsByIds(claimedIds);
       if (lessons.length === 0) {
         // Shouldn't happen — claimed ids must exist. Defensive revert.
         await revertToQueuedWithBackoff(claimed, null, now);
@@ -449,21 +487,24 @@ export const syncService = {
         const transientRejections = rejected.filter((r) =>
           TRANSIENT_REJECTION_CODES.has(r.code),
         );
+        const transientIdSet = new Set(transientRejections.map((r) => r.id));
 
         // Defensive requeue: ids not in accepted or rejected — use standard
         // backoff schedule, NOT the server's Retry-After.
-        const defensiveRequeue: string[] = [];
-        for (const id of claimed) {
-          if (!acceptedSet.has(id) && !rejectedIds.has(id)) {
+        const defensiveRequeue: ClaimedItem[] = [];
+        const transientRequeue: ClaimedItem[] = [];
+        for (const item of claimed) {
+          if (transientIdSet.has(item.id)) {
+            transientRequeue.push(item);
+          } else if (!acceptedSet.has(item.id) && !rejectedIds.has(item.id)) {
             console.warn(
-              `[syncService] id ${id} not in accepted or rejected — defensive requeue`,
+              `[syncService] id ${item.id} not in accepted or rejected — defensive requeue`,
             );
-            defensiveRequeue.push(id);
+            defensiveRequeue.push(item);
           }
         }
-        const transientIds = transientRejections.map((r) => r.id);
         const retryAfter =
-          transientIds.length > 0
+          transientRequeue.length > 0
             ? parseRetryAfter(response.headers['retry-after'] ?? null, now)
             : null;
 
@@ -476,22 +517,24 @@ export const syncService = {
           await markSyncedInner(db, accepted, server_now);
           await markRejectedInner(db, permanentRejections);
           await revertToQueuedWithBackoffInner(db, defensiveRequeue, null, now);
-          await revertToQueuedWithBackoffInner(db, transientIds, retryAfter, now);
+          await revertToQueuedWithBackoffInner(db, transientRequeue, retryAfter, now);
         });
 
         return {
           accepted: accepted.length,
           rejected: permanentRejections.length,
-          retried: defensiveRequeue.length + transientIds.length,
+          retried: defensiveRequeue.length + transientRequeue.length,
           sessionExpired: false,
           lastError: null,
         };
       }
 
       // ----- 401 — session expired -----
+      // Clear backoff so that items flush immediately after the user
+      // signs back in, instead of waiting out the last schedule step.
       if (response.status === 401) {
         await clearJwt();
-        await revertToQueuedWithBackoff(claimed, null, now);
+        await revertToQueuedClearBackoff(claimed);
         return {
           accepted: 0,
           rejected: 0,
@@ -531,8 +574,8 @@ export const syncService = {
 
       // ----- 4xx other than 401/413/429 — batch-level reject -----
       if (response.status >= 400 && response.status < 500) {
-        const rejections = claimed.map((id) => ({
-          id,
+        const rejections = claimed.map((item) => ({
+          id: item.id,
           code: `http_${response.status}`,
           message: response.error ?? `HTTP ${response.status}`,
         }));

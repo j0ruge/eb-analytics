@@ -264,6 +264,28 @@ export const lessonService = {
     return result ? normalizeLesson(result) : null;
   },
 
+  async getByIdsWithDetails(ids: string[]): Promise<LessonWithDetails[]> {
+    if (ids.length === 0) return [];
+    const db = await getDatabase();
+    const placeholders = ids.map(() => '?').join(',');
+    const results = await db.getAllAsync<LessonWithDetails>(
+      `SELECT
+        ld.*,
+        lt.title as topic_title,
+        lt.series_id as resolved_series_id,
+        ls.code as series_code,
+        ls.title as series_title,
+        p.name as professor_name_resolved
+       FROM lessons_data ld
+       LEFT JOIN lesson_topics lt ON ld.lesson_topic_id = lt.id
+       LEFT JOIN lesson_series ls ON lt.series_id = ls.id
+       LEFT JOIN professors p ON ld.professor_id = p.id
+       WHERE ld.id IN (${placeholders})`,
+      ids,
+    );
+    return normalizeLessons(results);
+  },
+
   async getAllLessonsWithDetails(): Promise<LessonWithDetails[]> {
     const db = await getDatabase();
     const results = await db.getAllAsync<LessonWithDetails>(
