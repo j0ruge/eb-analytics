@@ -81,12 +81,12 @@ describe('catalogSyncService.pullNow', () => {
     mockGetSession.mockResolvedValueOnce(null);
     const auto = await catalogSyncService.pullNow('auto');
     expect(auto.ok).toBe(false);
-    expect(auto.skipped).toBe(true);
+    if (!auto.ok) expect(auto.skipped).toBe(true);
     expect(mockGetWithTimeout).not.toHaveBeenCalled();
 
     mockGetSession.mockResolvedValueOnce(null);
     const manual = await catalogSyncService.pullNow('manual');
-    expect(manual.skipped).toBe(true);
+    if (!manual.ok) expect(manual.skipped).toBe(true);
   });
 
   it('first run fires GET /catalog without `since`', async () => {
@@ -108,7 +108,7 @@ describe('catalogSyncService.pullNow', () => {
 
     expect(mockGetWithTimeout).toHaveBeenCalledWith('/catalog', 30_000);
     expect(result.ok).toBe(true);
-    expect(result.counts).toEqual({ series: 1, topics: 0, professors: 0 });
+    if (result.ok) expect(result.counts).toEqual({ series: 1, topics: 0, professors: 0 });
     expect(mockSetItem).toHaveBeenCalledWith(
       '@eb-insights/last-catalog-sync',
       '2026-04-18T13:00:00.000Z',
@@ -156,8 +156,10 @@ describe('catalogSyncService.pullNow', () => {
     });
     const result = await catalogSyncService.pullNow('manual');
     expect(result.ok).toBe(false);
-    expect(result.offline).toBe(false);
-    expect(result.error).toBe('Servidor caiu');
+    if (!result.ok) {
+      expect(result.offline).toBe(false);
+      expect(result.error).toBe('Servidor caiu');
+    }
     expect(mockSetItem).not.toHaveBeenCalled();
   });
 

@@ -342,9 +342,23 @@ export async function migrateAddSyncStatus(db: SQLite.SQLiteDatabase): Promise<v
     await db.execAsync(
       'CREATE INDEX IF NOT EXISTS idx_lessons_sync_status ON lessons_data(sync_status);'
     );
-    await db.execAsync(
-      "CREATE INDEX IF NOT EXISTS idx_lessons_sync_next_attempt ON lessons_data(sync_next_attempt_at) WHERE sync_status = 'QUEUED';"
-    );
+    // Partial index (WHERE clause) requires SQLite 3.8.0+. Standard on all
+    // current Expo SDK 54 targets (iOS, Android, wa-sqlite), but if an older
+    // runtime slips through we fall back to a full index rather than aborting
+    // the whole migration (which would leave the schema half-applied).
+    try {
+      await db.execAsync(
+        "CREATE INDEX IF NOT EXISTS idx_lessons_sync_next_attempt ON lessons_data(sync_next_attempt_at) WHERE sync_status = 'QUEUED';"
+      );
+    } catch (err) {
+      console.warn(
+        '[migration 008] partial index not supported — falling back to full index',
+        err,
+      );
+      await db.execAsync(
+        'CREATE INDEX IF NOT EXISTS idx_lessons_sync_next_attempt ON lessons_data(sync_next_attempt_at);'
+      );
+    }
 
     // 3. Catalog tables: add updated_at for delta-pull cursor comparison
     //    (spec 007 response includes updated_at per row). email on professors

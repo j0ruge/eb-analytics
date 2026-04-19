@@ -12,6 +12,6 @@ module.exports = {
     "!**/jest.config.js",
   ],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
-  testPathIgnorePatterns: ["/node_modules/", "tests/e2e/"],
+  testPathIgnorePatterns: ["/node_modules/", "/tests/e2e/", "/server/"],
   setupFilesAfterEnv: ["./tests/jest-setup.ts"],
 };

@@ -158,6 +158,34 @@ async function loadLessonsByIds(ids: string[]): Promise<LessonWithDetails[]> {
 }
 
 // Revert a set of ids from SENDING back to QUEUED, scheduling backoff.
+// `-Inner` variant runs WITHOUT starting a transaction — callers must provide
+// one. See `revertToQueuedWithBackoff` for the standalone, tx-wrapped variant.
+async function revertToQueuedWithBackoffInner(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  ids: string[],
+  delayMsOverride: number | null,
+  now: Date,
+): Promise<void> {
+  if (ids.length === 0) return;
+  for (const id of ids) {
+    const row = await db.getFirstAsync<{ sync_attempt_count: number }>(
+      'SELECT sync_attempt_count FROM lessons_data WHERE id = ?',
+      [id],
+    );
+    const nextAttempt = (row?.sync_attempt_count ?? 0) + 1;
+    const delay = delayMsOverride ?? computeBackoffMs(nextAttempt);
+    const nextAt = new Date(now.getTime() + delay).toISOString();
+    await db.runAsync(
+      `UPDATE lessons_data
+          SET sync_status = 'QUEUED',
+              sync_attempt_count = ?,
+              sync_next_attempt_at = ?
+        WHERE id = ?`,
+      [nextAttempt, nextAt, id],
+    );
+  }
+}
+
 async function revertToQueuedWithBackoff(
   ids: string[],
   delayMsOverride: number | null,
@@ -165,45 +193,44 @@ async function revertToQueuedWithBackoff(
 ): Promise<void> {
   if (ids.length === 0) return;
   const db = await getDatabase();
-
   await db.withTransactionAsync(async () => {
-    for (const id of ids) {
-      const row = await db.getFirstAsync<{ sync_attempt_count: number }>(
-        'SELECT sync_attempt_count FROM lessons_data WHERE id = ?',
-        [id],
-      );
-      const nextAttempt = (row?.sync_attempt_count ?? 0) + 1;
-      const delay = delayMsOverride ?? computeBackoffMs(nextAttempt);
-      const nextAt = new Date(now.getTime() + delay).toISOString();
-      await db.runAsync(
-        `UPDATE lessons_data
-            SET sync_status = 'QUEUED',
-                sync_attempt_count = ?,
-                sync_next_attempt_at = ?
-          WHERE id = ?`,
-        [nextAttempt, nextAt, id],
-      );
-    }
+    await revertToQueuedWithBackoffInner(db, ids, delayMsOverride, now);
   });
 }
 
-async function markSynced(ids: string[], serverNow: string): Promise<void> {
-  if (ids.length === 0) return;
-  const db = await getDatabase();
-  await db.withTransactionAsync(async () => {
-    for (const id of ids) {
-      await db.runAsync(
-        `UPDATE lessons_data
-            SET sync_status = 'SYNCED',
-                sync_error = NULL,
-                sync_attempt_count = 0,
-                sync_next_attempt_at = NULL,
-                synced_at = ?
-          WHERE id = ? AND synced_at IS NULL`,
-        [serverNow, id],
-      );
-    }
-  });
+async function markSyncedInner(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  ids: string[],
+  serverNow: string,
+): Promise<void> {
+  for (const id of ids) {
+    await db.runAsync(
+      `UPDATE lessons_data
+          SET sync_status = 'SYNCED',
+              sync_error = NULL,
+              sync_attempt_count = 0,
+              sync_next_attempt_at = NULL,
+              synced_at = ?
+        WHERE id = ? AND synced_at IS NULL`,
+      [serverNow, id],
+    );
+  }
+}
+
+async function markRejectedInner(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  rejections: Array<{ id: string; code: string; message: string }>,
+): Promise<void> {
+  for (const r of rejections) {
+    const syncError = `${r.code}: ${r.message}`;
+    await db.runAsync(
+      `UPDATE lessons_data
+          SET sync_status = 'REJECTED',
+              sync_error = ?
+        WHERE id = ?`,
+      [syncError, r.id],
+    );
+  }
 }
 
 async function markRejected(
@@ -212,16 +239,7 @@ async function markRejected(
   if (rejections.length === 0) return;
   const db = await getDatabase();
   await db.withTransactionAsync(async () => {
-    for (const r of rejections) {
-      const syncError = `${r.code}: ${r.message}`;
-      await db.runAsync(
-        `UPDATE lessons_data
-            SET sync_status = 'REJECTED',
-                sync_error = ?
-          WHERE id = ?`,
-        [syncError, r.id],
-      );
-    }
+    await markRejectedInner(db, rejections);
   });
 }
 
@@ -242,7 +260,7 @@ export const syncService = {
     }
 
     const db = await getDatabase();
-    await db.runAsync(
+    const result = await db.runAsync(
       `UPDATE lessons_data
           SET sync_status = 'QUEUED',
               sync_attempt_count = 0,
@@ -251,6 +269,11 @@ export const syncService = {
         WHERE id = ? AND sync_status = 'LOCAL'`,
       [lessonId],
     );
+    // Guard: the SQL predicate prevents double-enqueue. If 0 rows changed,
+    // another flow (claimBatch) already advanced the row concurrently.
+    if (result.changes === 0) {
+      throw new Error('Aula já foi enviada ou está na fila');
+    }
   },
 
   /**
@@ -359,11 +382,15 @@ export const syncService = {
     }
     isSendingInFlight = true;
 
-    // Serialize all DB work through the global mutex so concurrent
-    // catalog pulls / sync loops on expo-sqlite web don't race inside
-    // withTransactionAsync.
-    return withDbMutex(async () => {
+    // Outer try/finally guarantees the flag is cleared even if withDbMutex
+    // itself rejects (e.g., a waiter-queue failure). Without this guard,
+    // a mutex-level failure would leave isSendingInFlight permanently true
+    // and silently disable all future syncs until app restart.
     try {
+      // Serialize all DB work through the global mutex so concurrent
+      // catalog pulls / sync loops on expo-sqlite web don't race inside
+      // withTransactionAsync.
+      return await withDbMutex(async () => {
       const userId = await currentUserId();
       if (!userId) {
         return { accepted: 0, rejected: 0, retried: 0, sessionExpired: false, lastError: null };
@@ -423,33 +450,39 @@ export const syncService = {
           TRANSIENT_REJECTION_CODES.has(r.code),
         );
 
-        await markSynced(accepted, server_now);
-        await markRejected(permanentRejections);
-
-        // Transient rejections + any claimed id not in either list go back to QUEUED.
-        const requeue: string[] = [];
+        // Defensive requeue: ids not in accepted or rejected — use standard
+        // backoff schedule, NOT the server's Retry-After.
+        const defensiveRequeue: string[] = [];
         for (const id of claimed) {
           if (!acceptedSet.has(id) && !rejectedIds.has(id)) {
             console.warn(
               `[syncService] id ${id} not in accepted or rejected — defensive requeue`,
             );
-            requeue.push(id);
+            defensiveRequeue.push(id);
           }
         }
-        for (const r of transientRejections) requeue.push(r.id);
+        const transientIds = transientRejections.map((r) => r.id);
+        const retryAfter =
+          transientIds.length > 0
+            ? parseRetryAfter(response.headers['retry-after'] ?? null, now)
+            : null;
 
-        // Handle per-item rate_limited via Retry-After header if present.
-        if (transientRejections.length > 0) {
-          const retryAfter = parseRetryAfter(response.headers['retry-after'] ?? null, now);
-          await revertToQueuedWithBackoff(requeue, retryAfter, now);
-        } else {
-          await revertToQueuedWithBackoff(requeue, null, now);
-        }
+        // Atomic outcome: all four mutations (synced / rejected / defensive-requeue
+        // / transient-requeue) happen in one transaction. Process kill mid-way
+        // used to strand some SENDING rows; now either all outcomes persist or
+        // none do, and the next runOnce reclaims the batch safely.
+        const db = await getDatabase();
+        await db.withTransactionAsync(async () => {
+          await markSyncedInner(db, accepted, server_now);
+          await markRejectedInner(db, permanentRejections);
+          await revertToQueuedWithBackoffInner(db, defensiveRequeue, null, now);
+          await revertToQueuedWithBackoffInner(db, transientIds, retryAfter, now);
+        });
 
         return {
           accepted: accepted.length,
           rejected: permanentRejections.length,
-          retried: requeue.length,
+          retried: defensiveRequeue.length + transientIds.length,
           sessionExpired: false,
           lastError: null,
         };
@@ -522,10 +555,10 @@ export const syncService = {
         sessionExpired: false,
         lastError: response.error ?? 'Sem conexão',
       };
+      }); // withDbMutex
     } finally {
       isSendingInFlight = false;
     }
-    }); // withDbMutex
   },
 
   // Exposed for tests — DO NOT use in production code.

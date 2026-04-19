@@ -24,13 +24,15 @@ export function SyncBadge() {
   return (
     <AnimatedPressable
       style={styles.container}
-      onPress={() => router.push('/(tabs)/sync' as never)}
+      onPress={() => router.push('/sync')}
       accessibilityLabel={`${pending} submissões pendentes`}
+      accessibilityRole="button"
     >
       <Ionicons
         name="cloud-upload-outline"
         size={18}
         color={theme.colors.background}
+        accessible={false}
       />
       <View style={styles.badge}>
         <Text style={styles.badgeText}>{pending}</Text>
@@ -38,6 +40,8 @@ export function SyncBadge() {
     </AnimatedPressable>
   );
 }
+
+const BADGE_SIZE = 18;
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
@@ -49,17 +53,17 @@ const createStyles = (theme: Theme) =>
       gap: theme.spacing.xs,
     },
     badge: {
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
+      minWidth: BADGE_SIZE,
+      height: BADGE_SIZE,
+      borderRadius: theme.borderRadius.full,
       backgroundColor: theme.colors.danger,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 4,
+      paddingHorizontal: theme.spacing.xs,
     },
     badgeText: {
+      ...theme.typography.caption,
       color: theme.colors.background,
-      fontSize: 11,
       fontWeight: 'bold',
     },
   });

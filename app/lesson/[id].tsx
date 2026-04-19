@@ -58,6 +58,7 @@ export default function LessonDetailScreen() {
   const { retryNow } = useSyncQueue();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sending, setSending] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
@@ -87,17 +88,24 @@ export default function LessonDetailScreen() {
   }, [debouncedLesson]);
 
   async function loadLesson() {
-    const data = await lessonService.getById(id);
-    setLesson(data);
+    try {
+      setLoadError(false);
+      setLoading(true);
+      const data = await lessonService.getById(id);
+      setLesson(data);
 
-    if (data?.lesson_topic_id) {
-      const topic = await topicService.getTopicById(data.lesson_topic_id);
-      if (topic) {
-        setSelectedSeriesId(topic.series_id);
+      if (data?.lesson_topic_id) {
+        const topic = await topicService.getTopicById(data.lesson_topic_id);
+        if (topic) {
+          setSelectedSeriesId(topic.series_id);
+        }
       }
+    } catch (err) {
+      console.error("Failed to load lesson:", err);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function saveChanges(updatedLesson: Lesson) {
@@ -194,10 +202,18 @@ export default function LessonDetailScreen() {
       {
         text: "Finalizar",
         onPress: async () => {
-          await lessonService.updateLesson(lesson.id, {
-            status: LessonStatus.COMPLETED,
-          });
-          router.replace("/" as any);
+          try {
+            await lessonService.updateLesson(lesson.id, {
+              status: LessonStatus.COMPLETED,
+            });
+            router.replace("/" as any);
+          } catch (err) {
+            console.error("Failed to complete lesson:", err);
+            Alert.alert(
+              "Erro",
+              err instanceof Error ? err.message : "Falha ao finalizar aula",
+            );
+          }
         },
       },
     ]);
@@ -235,6 +251,13 @@ export default function LessonDetailScreen() {
           "Erro",
           updated.sync_error ?? "O servidor rejeitou esta aula",
         );
+      } else {
+        // Still QUEUED or SENDING — the sync loop will finish in background.
+        // User sees the "Na fila para envio" / "Enviando..." banner on return.
+        Alert.alert(
+          "Na fila",
+          "Enviando em segundo plano. Acompanhe o status na tela de sincronização.",
+        );
       }
     } catch (err) {
       console.error("handleSendToCloud failed:", err);
@@ -269,6 +292,17 @@ export default function LessonDetailScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Erro ao carregar a aula.</Text>
+        <AnimatedPressable style={styles.retryButton} onPress={loadLesson}>
+          <Text style={styles.retryButtonText}>Tentar novamente</Text>
+        </AnimatedPressable>
       </View>
     );
   }
@@ -314,6 +348,7 @@ export default function LessonDetailScreen() {
             size={12}
             color={theme.colors.background}
             style={styles.statusIconSpacer}
+            accessible={false}
           />
           <Text style={styles.statusText}>
             {STATUS_LABELS[lesson.status] ?? lesson.status}
@@ -539,7 +574,8 @@ export default function LessonDetailScreen() {
                   name="cloud-upload-outline"
                   size={20}
                   color={theme.colors.background}
-                  style={{ marginRight: 8 }}
+                  style={styles.cloudButtonIcon}
+                  accessible={false}
                 />
                 <Text style={styles.cloudButtonText}>Enviar pra Nuvem</Text>
               </>
@@ -603,11 +639,11 @@ const createStyles = (theme: Theme) =>
       alignItems: "center",
       backgroundColor: theme.colors.primary,
       paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
+      paddingVertical: theme.spacing.xs / 2,
       borderRadius: theme.borderRadius.sm,
     },
     statusIconSpacer: {
-      marginRight: 4,
+      marginRight: theme.spacing.xs,
     },
     statusText: {
       ...theme.typography.caption,
@@ -698,9 +734,24 @@ const createStyles = (theme: Theme) =>
       justifyContent: "center",
       marginTop: theme.spacing.md,
     },
+    cloudButtonIcon: {
+      marginRight: theme.spacing.sm,
+    },
     cloudButtonText: {
       ...theme.typography.h3,
       color: theme.colors.background,
+    },
+    retryButton: {
+      marginTop: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.sm,
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.borderRadius.md,
+    },
+    retryButtonText: {
+      ...theme.typography.body,
+      color: theme.colors.background,
+      fontWeight: "bold",
     },
     rejectedBanner: {
       flexDirection: "row",
@@ -723,7 +774,7 @@ const createStyles = (theme: Theme) =>
     rejectedBannerBody: {
       ...theme.typography.bodySmall,
       color: theme.colors.background,
-      marginTop: 2,
+      marginTop: theme.spacing.xs / 2,
     },
     syncingBanner: {
       flexDirection: "row",

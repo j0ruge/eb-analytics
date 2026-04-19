@@ -5,8 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const AUTH_JWT_KEY = 'eb.auth.jwt';
 const ASYNC_JWT_KEY = '@eb-insights/auth-jwt';
 
+const apiUrlConfig = Constants.expoConfig?.extra?.apiUrl;
 const BASE_URL: string =
-  (Constants.expoConfig?.extra?.apiUrl as string) ||
+  (typeof apiUrlConfig === 'string' ? apiUrlConfig : '') ||
   (__DEV__ ? 'http://localhost:3000' : '');
 
 if (!BASE_URL && !__DEV__) {
@@ -19,6 +20,9 @@ export interface ApiResponse<T> {
   status: number;
 }
 
+// NOTE: on web, JWT lives in AsyncStorage → localStorage, which is readable by
+// any JS on the page (XSS exposure). The web target is dev-only today; if a
+// public web build is ever shipped, move to an httpOnly-cookie strategy.
 export async function getStoredJwt(): Promise<string | null> {
   if (Platform.OS === 'web') {
     return AsyncStorage.getItem(ASYNC_JWT_KEY);
@@ -131,7 +135,7 @@ export interface ApiResponseWithHeaders<T> extends ApiResponse<T> {
 async function requestWithTimeout<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
-  body: unknown,
+  body: unknown | undefined,
   timeoutMs: number,
 ): Promise<ApiResponseWithHeaders<T>> {
   const empty: Record<string, string> = {};
@@ -200,11 +204,13 @@ async function requestWithTimeout<T>(
 
     return { data: null, error: errorMessage, status, headers: responseHeaders };
   } catch (err) {
-    // AbortError (timeout) and network failures both land here.
+    // AbortError (timeout) and network failures both land here. Distinct
+    // messages let callers (and users) see whether the request was cut off
+    // by our 30s cap or by a connectivity failure.
     const aborted = err instanceof Error && err.name === 'AbortError';
     return {
       data: null,
-      error: aborted ? 'Sem conexão' : 'Sem conexão',
+      error: aborted ? 'Tempo limite atingido' : 'Sem conexão',
       status: 0,
       headers: empty,
     };

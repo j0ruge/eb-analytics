@@ -26,6 +26,7 @@ export function SyncHistoryRow({ lesson }: SyncHistoryRowProps) {
         name="checkmark-circle"
         size={20}
         color={theme.colors.success}
+        accessible={false}
       />
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
@@ -60,7 +61,7 @@ const createStyles = (theme: Theme) =>
     subtitle: {
       ...theme.typography.bodySmall,
       color: theme.colors.textSecondary,
-      marginTop: 2,
+      marginTop: theme.spacing.xs / 2,
     },
     status: {
       ...theme.typography.caption,

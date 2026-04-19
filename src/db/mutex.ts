@@ -11,6 +11,14 @@
  * `withDbMutex` to queue behind other in-flight transactions. Used by
  * `syncService` (claimBatch, revert, markSynced, markRejected) and
  * `catalogSyncService` (catalog upsert).
+ *
+ * **Contract — no re-entry.** Calling `withDbMutex` from inside a task already
+ * running under `withDbMutex` will deadlock: the inner call awaits a promise
+ * that can only resolve when the outer task completes. There is no runtime
+ * detection in production builds — callers must not nest. Helper functions
+ * invoked from a mutex-held section must NOT themselves wrap their work in
+ * `withDbMutex`. If a helper needs both modes, expose an `-Inner` variant that
+ * assumes the caller already holds the mutex.
  */
 
 let queue: Promise<unknown> = Promise.resolve();

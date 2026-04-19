@@ -94,10 +94,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setIsPulling(true);
       try {
         const result = await catalogSyncService.pullNow(trigger);
-        if (result.ok && result.server_now) {
+        // With the discriminated union, `ok: true` guarantees `server_now`.
+        if (result.ok) {
           setLastSyncAt(result.server_now);
         }
         return result;
+      } catch (err) {
+        console.error('[SyncProvider] pullCatalog threw unexpectedly:', err);
+        return { ok: false, offline: false, error: 'Erro inesperado ao atualizar catálogo' };
       } finally {
         setIsPulling(false);
       }

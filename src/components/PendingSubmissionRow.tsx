@@ -30,12 +30,22 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
   const professor =
     lesson.professor_name_resolved || lesson.professor_name || '';
 
+  const accessibilityProps = isRejected
+    ? {
+        accessibilityRole: 'alert' as const,
+        accessibilityLabel: `Envio rejeitado: ${title}${
+          lesson.sync_error ? `. ${lesson.sync_error}` : ''
+        }`,
+      }
+    : {};
+
   return (
     <View
       style={[
         styles.container,
         isRejected && styles.containerRejected,
       ]}
+      {...accessibilityProps}
     >
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
@@ -64,8 +74,9 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
               name="refresh"
               size={16}
               color={theme.colors.background}
+              accessible={false}
             />
-            <Text style={styles.retryText}>Retry agora</Text>
+            <Text style={styles.retryText}>Tentar agora</Text>
           </AnimatedPressable>
         )}
 
@@ -81,6 +92,7 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
               name="alert-circle"
               size={22}
               color={theme.colors.danger}
+              accessible={false}
             />
           </View>
         )}
@@ -115,7 +127,7 @@ const createStyles = (theme: Theme) =>
     subtitle: {
       ...theme.typography.bodySmall,
       color: theme.colors.textSecondary,
-      marginTop: 2,
+      marginTop: theme.spacing.xs / 2,
     },
     error: {
       ...theme.typography.caption,
@@ -132,7 +144,7 @@ const createStyles = (theme: Theme) =>
       paddingHorizontal: theme.spacing.sm,
       paddingVertical: theme.spacing.xs,
       borderRadius: theme.borderRadius.sm,
-      gap: 4,
+      gap: theme.spacing.xs,
     },
     retryText: {
       color: theme.colors.background,

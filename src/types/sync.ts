@@ -24,18 +24,30 @@ export interface SyncResult {
 
 export type CatalogPullTrigger = 'auto' | 'manual';
 
-export interface CatalogPullResult {
-  ok: boolean;
+export interface CatalogPullCounts {
+  series: number;
+  topics: number;
+  professors: number;
+}
+
+export interface CatalogPullSuccess {
+  ok: true;
+  offline: false;
+  counts: CatalogPullCounts;
+  server_now: string;
+}
+
+export interface CatalogPullFailure {
+  ok: false;
   offline: boolean;
   skipped?: boolean;
   error?: string;
-  counts?: {
-    series: number;
-    topics: number;
-    professors: number;
-  };
-  server_now?: string;
 }
+
+// Discriminated union on `ok` — callers that narrow on `result.ok === true`
+// get non-optional `counts` and `server_now`. Failure variants carry at most
+// one of `offline | skipped | error`.
+export type CatalogPullResult = CatalogPullSuccess | CatalogPullFailure;
 
 export interface SyncQueueSnapshot {
   pending: number;

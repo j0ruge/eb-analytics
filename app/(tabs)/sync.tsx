@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -69,9 +69,13 @@ export default function SyncScreen() {
     }, [loadAll]),
   );
 
-  // Refresh when the queue finishes sending.
-  React.useEffect(() => {
-    if (!queueSending) {
+  // Refresh only on the true → false transition of `queueSending` so mount
+  // (where it starts `false`) does not race the useFocusEffect load.
+  const prevSendingRef = useRef(queueSending);
+  useEffect(() => {
+    const wasSending = prevSendingRef.current;
+    prevSendingRef.current = queueSending;
+    if (wasSending && !queueSending) {
       loadAll().catch((err) =>
         console.error("queue-finished refresh failed:", err),
       );
@@ -114,7 +118,7 @@ export default function SyncScreen() {
     [retryNow],
   );
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <View style={styles.container}>
         <SkeletonLoader count={2} />
@@ -201,6 +205,7 @@ export default function SyncScreen() {
                 name="checkmark-done-circle"
                 size={22}
                 color={theme.colors.background}
+                accessible={false}
               />
               <Text style={styles.allDoneBannerText}>Tudo em dia</Text>
             </View>
@@ -232,6 +237,7 @@ export default function SyncScreen() {
                 name="cloud-done-outline"
                 size={48}
                 color={theme.colors.textSecondary}
+                accessible={false}
               />
               <Text style={styles.emptyStateText}>
                 Nenhuma submissão pendente.

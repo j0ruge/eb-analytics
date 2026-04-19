@@ -107,13 +107,17 @@ function makeFakeDb() {
       }
       return null;
     },
-    async runAsync(sql: string, params?: unknown[]): Promise<void> {
+    async runAsync(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowId: number }> {
       const s = sql.replace(/\s+/g, ' ').trim();
+      const ok = (changes: number) => ({ changes, lastInsertRowId: 0 });
       if (s.startsWith("UPDATE lessons_data SET sync_status = 'SENDING'")) {
         const id = params?.[0];
         const row = state.rows.find((r) => r.id === id && r.sync_status === 'QUEUED');
-        if (row) row.sync_status = 'SENDING';
-        return;
+        if (row) {
+          row.sync_status = 'SENDING';
+          return ok(1);
+        }
+        return ok(0);
       }
       if (s.startsWith("UPDATE lessons_data SET sync_status = 'SYNCED'")) {
         const serverNow = params?.[0];
@@ -125,8 +129,9 @@ function makeFakeDb() {
           row.sync_attempt_count = 0;
           row.sync_next_attempt_at = null;
           row.synced_at = serverNow;
+          return ok(1);
         }
-        return;
+        return ok(0);
       }
       if (s.startsWith("UPDATE lessons_data SET sync_status = 'REJECTED'")) {
         const syncError = params?.[0];
@@ -135,8 +140,9 @@ function makeFakeDb() {
         if (row) {
           row.sync_status = 'REJECTED';
           row.sync_error = syncError;
+          return ok(1);
         }
-        return;
+        return ok(0);
       }
       // Enqueue (LOCAL→QUEUED) must match BEFORE the revert-with-backoff
       // pattern because both start with "UPDATE lessons_data SET sync_status = 'QUEUED'".
@@ -152,8 +158,9 @@ function makeFakeDb() {
           row.sync_attempt_count = 0;
           row.sync_next_attempt_at = null;
           row.sync_error = null;
+          return ok(1);
         }
-        return;
+        return ok(0);
       }
       if (
         s.startsWith(
@@ -168,10 +175,12 @@ function makeFakeDb() {
           row.sync_status = 'QUEUED';
           row.sync_attempt_count = count;
           row.sync_next_attempt_at = nextAt;
+          return ok(1);
         }
-        return;
+        return ok(0);
       }
       if (s.startsWith('UPDATE lessons_data SET sync_attempt_count = 0')) {
+        let changes = 0;
         if (params && params.length === 2) {
           const id = params[0];
           const row = state.rows.find(
@@ -181,6 +190,7 @@ function makeFakeDb() {
             row.sync_attempt_count = 0;
             row.sync_next_attempt_at = null;
             row.sync_error = null;
+            changes = 1;
           }
         } else {
           const userId = params?.[0];
@@ -189,10 +199,11 @@ function makeFakeDb() {
               row.sync_attempt_count = 0;
               row.sync_next_attempt_at = null;
               row.sync_error = null;
+              changes++;
             }
           }
         }
-        return;
+        return ok(changes);
       }
       throw new Error('Unexpected runAsync: ' + s);
     },

@@ -135,6 +135,13 @@ export const catalogSyncService = {
     }
 
     if (response.status >= 200 && response.status < 300 && response.data) {
+      // Runtime guard — the generic cast does not enforce DTO shape, and a
+      // missing or non-string `server_now` would poison the cursor (next
+      // pull would skip the since-filter or set a literal "undefined").
+      if (typeof response.data.server_now !== 'string') {
+        console.error('[catalogSyncService] server_now missing or not a string');
+        return { ok: false, offline: false, error: 'Resposta inválida do servidor' };
+      }
       try {
         await upsertCatalog(response.data);
         await AsyncStorage.setItem(CURSOR_KEY, response.data.server_now);
