@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { topicService } from "../../src/services/topicService";
 import { LessonTopicWithSeries } from "../../src/types/lessonTopic";
 import { useTheme } from "../../src/hooks/useTheme";
@@ -24,22 +24,18 @@ export default function TopicDetailScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isCoordinator } = useAuth();
+  const { isCoordinator, isLoading: isAuthLoading } = useAuth();
   const [topic, setTopic] = useState<LessonTopicWithSeries | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [editing, setEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [editedDate, setEditedDate] = useState("");
   const [editedOrder, setEditedOrder] = useState("");
 
-  useEffect(() => {
-    loadTopic();
-  }, [id]);
-
-  async function loadTopic() {
+  const loadTopic = useCallback(async () => {
     try {
-      setError(false);
+      setError(null);
       setLoading(true);
       const data = await topicService.getTopicWithSeries(id);
       setTopic(data);
@@ -50,13 +46,20 @@ export default function TopicDetailScreen() {
       }
     } catch (err) {
       console.error("Error loading topic:", err);
-      setError(true);
+      setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTopic();
+    }, [loadTopic]),
+  );
 
   async function handleSaveEdit() {
+    if (!isCoordinator) return;
     if (!topic) return;
 
     if (!editedTitle.trim()) {
@@ -83,12 +86,17 @@ export default function TopicDetailScreen() {
         sequence_order: order,
       });
       setEditing(false);
-    } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível salvar.");
+    } catch (err) {
+      console.error("Error saving topic:", err);
+      Alert.alert(
+        "Erro",
+        err instanceof Error ? err.message : "Não foi possível salvar.",
+      );
     }
   }
 
   async function handleDelete() {
+    if (!isCoordinator) return;
     Alert.alert("Excluir Lição", `Deseja excluir a lição "${topic?.title}"?`, [
       { text: "Cancelar", style: "cancel" },
       {
@@ -98,8 +106,12 @@ export default function TopicDetailScreen() {
           try {
             await topicService.deleteTopic(id);
             router.back();
-          } catch (error: any) {
-            Alert.alert("Erro", error.message || "Não foi possível excluir.");
+          } catch (err) {
+            console.error("Error deleting topic:", err);
+            Alert.alert(
+              "Erro",
+              err instanceof Error ? err.message : "Não foi possível excluir.",
+            );
           }
         },
       },
@@ -118,7 +130,7 @@ export default function TopicDetailScreen() {
     return (
       <View style={styles.errorContainer}>
         <ErrorRetry
-          message="Não foi possível carregar a lição."
+          message={error.message || "Não foi possível carregar a lição."}
           onRetry={loadTopic}
         />
       </View>
@@ -128,7 +140,7 @@ export default function TopicDetailScreen() {
   if (!topic) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={{ color: theme.colors.text }}>Lição não encontrada.</Text>
+        <Text style={styles.errorText}>Lição não encontrada.</Text>
       </View>
     );
   }
@@ -155,6 +167,7 @@ export default function TopicDetailScreen() {
                 onChangeText={setEditedTitle}
                 placeholder="Título da lição"
                 placeholderTextColor={theme.colors.textSecondary}
+                accessibilityLabel="Título da lição"
               />
             </View>
 
@@ -167,6 +180,7 @@ export default function TopicDetailScreen() {
                 placeholder="1, 2, 3..."
                 placeholderTextColor={theme.colors.textSecondary}
                 keyboardType="number-pad"
+                accessibilityLabel="Ordem sequencial da lição"
               />
             </View>
 
@@ -209,17 +223,21 @@ export default function TopicDetailScreen() {
               </Text>
             )}
 
-            {isCoordinator && (
+            {!isAuthLoading && isCoordinator && (
               <View style={styles.actionButtons}>
                 <AnimatedPressable
                   style={styles.textButton}
                   onPress={() => setEditing(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar lição"
                 >
                   <Text style={styles.textButtonLabel}>Editar</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.textButton}
                   onPress={handleDelete}
+                  accessibilityRole="button"
+                  accessibilityLabel="Excluir lição"
                 >
                   <Text
                     style={[
@@ -307,10 +325,18 @@ const createStyles = (theme: Theme) =>
     },
     textButton: {
       marginRight: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      minHeight: 44,
+      justifyContent: "center",
     },
     textButtonLabel: {
       ...theme.typography.label,
       color: theme.colors.primary,
+    },
+    errorText: {
+      ...theme.typography.body,
+      color: theme.colors.text,
     },
     editForm: {
       marginTop: theme.spacing.sm,

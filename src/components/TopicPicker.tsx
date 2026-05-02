@@ -37,6 +37,22 @@ export function TopicPicker({
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<LessonTopic | null>(null);
 
+  const loadTopics = useCallback(async (sId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await topicService.getTopicsBySeries(sId);
+      setTopics(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao carregar lições";
+      console.error("Error loading topics:", err);
+      setError(message);
+      setTopics([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (seriesId) {
       loadTopics(seriesId);
@@ -44,7 +60,7 @@ export function TopicPicker({
       setTopics([]);
       setSelectedTopic(null);
     }
-  }, [seriesId]);
+  }, [seriesId, loadTopics]);
 
   useEffect(() => {
     if (selectedId && topics.length > 0) {
@@ -54,22 +70,6 @@ export function TopicPicker({
       setSelectedTopic(null);
     }
   }, [selectedId, topics]);
-
-  const loadTopics = async (sId: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await topicService.getTopicsBySeries(sId);
-      setTopics(data);
-    } catch (err: any) {
-      const message = err?.message || "Falha ao carregar lições";
-      console.error("Error loading topics:", err);
-      setError(message);
-      setTopics([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSelect = (item: LessonTopic) => {
     setSelectedTopic(item);

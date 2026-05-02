@@ -31,22 +31,12 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
   const professor =
     lesson.professor_name_resolved || lesson.professor_name || '';
 
-  const accessibilityProps = isRejected
-    ? {
-        accessibilityRole: 'alert' as const,
-        accessibilityLabel: `Envio rejeitado: ${title}${
-          lesson.sync_error ? `. ${lesson.sync_error}` : ''
-        }`,
-      }
-    : {};
-
   return (
     <View
       style={[
         styles.container,
         isRejected && styles.containerRejected,
       ]}
-      {...accessibilityProps}
     >
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
@@ -58,7 +48,12 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
         </Text>
 
         {isRejected && lesson.sync_error && (
-          <Text style={styles.error} numberOfLines={3}>
+          <Text
+            style={styles.error}
+            numberOfLines={3}
+            accessibilityRole="alert"
+            accessibilityLabel={`Envio rejeitado: ${title}. ${lesson.sync_error}`}
+          >
             {lesson.sync_error}
           </Text>
         )}
@@ -69,6 +64,7 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
           <AnimatedPressable
             onPress={() => onRetry(lesson.id)}
             style={styles.retryButton}
+            accessibilityRole="button"
             accessibilityLabel="Tentar enviar agora"
           >
             <Ionicons
@@ -98,6 +94,7 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
             <AnimatedPressable
               onPress={() => onRetry(lesson.id)}
               style={styles.retryButton}
+              accessibilityRole="button"
               accessibilityLabel="Tentar enviar novamente"
             >
               <Ionicons
@@ -166,9 +163,6 @@ const createStyles = (theme: Theme) =>
       fontWeight: '600',
     },
     sendingIndicator: {
-      paddingHorizontal: theme.spacing.sm,
-    },
-    rejectedIndicator: {
       paddingHorizontal: theme.spacing.sm,
     },
     rejectedAction: {

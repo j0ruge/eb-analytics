@@ -8,8 +8,8 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { useState, useEffect, useMemo } from "react";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import React, { useState, useMemo, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { professorService } from "../../src/services/professorService";
 import { useTheme } from "../../src/hooks/useTheme";
@@ -26,13 +26,9 @@ export default function EditProfessorScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const router = useRouter();
-  const { isCoordinator } = useAuth();
+  const { isCoordinator, isLoading: isAuthLoading } = useAuth();
 
-  useEffect(() => {
-    loadProfessor();
-  }, [id]);
-
-  async function loadProfessor() {
+  const loadProfessor = useCallback(async () => {
     if (!id) return;
 
     try {
@@ -45,14 +41,21 @@ export default function EditProfessorScreen() {
           { text: "OK", onPress: () => router.back() },
         ]);
       }
-    } catch (error) {
+    } catch (err) {
+      console.error("Error loading professor:", err);
       Alert.alert("Erro", "Erro ao carregar professor", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } finally {
       setInitialLoading(false);
     }
-  }
+  }, [id, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfessor();
+    }, [loadProfessor]),
+  );
 
   function formatCpfDisplay(cpf: string): string {
     const numbers = cpf.replace(/\D/g, "");
@@ -80,6 +83,7 @@ export default function EditProfessorScreen() {
   }
 
   async function handleSave() {
+    if (!isCoordinator) return;
     if (!name.trim()) {
       Alert.alert("Erro", "Nome é obrigatório");
       return;
@@ -100,10 +104,11 @@ export default function EditProfessorScreen() {
       Alert.alert("Sucesso", "Professor atualizado com sucesso", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    } catch (error) {
+    } catch (err) {
+      console.error("Error updating professor:", err);
       Alert.alert(
         "Erro",
-        error instanceof Error ? error.message : "Erro ao atualizar professor"
+        err instanceof Error ? err.message : "Erro ao atualizar professor"
       );
     } finally {
       setLoading(false);
@@ -126,6 +131,7 @@ export default function EditProfessorScreen() {
   }
 
   async function confirmDelete() {
+    if (!isCoordinator) return;
     setLoading(true);
     try {
       await professorService.deleteProfessor(id!);
@@ -133,10 +139,11 @@ export default function EditProfessorScreen() {
       Alert.alert("Sucesso", "Professor excluído com sucesso", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    } catch (error) {
+    } catch (err) {
+      console.error("Error deleting professor:", err);
       Alert.alert(
         "Erro",
-        error instanceof Error ? error.message : "Erro ao excluir professor"
+        err instanceof Error ? err.message : "Erro ao excluir professor"
       );
     } finally {
       setLoading(false);
@@ -186,7 +193,7 @@ export default function EditProfessorScreen() {
           editable={!loading && isCoordinator}
         />
 
-        {isCoordinator && (
+        {!isAuthLoading && isCoordinator && (
           <>
             <AnimatedPressable
               style={[styles.button, loading && styles.buttonDisabled]}

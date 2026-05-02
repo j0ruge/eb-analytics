@@ -30,7 +30,7 @@ export default function SeriesDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { pullNow } = useCatalogSync();
-  const { isCoordinator } = useAuth();
+  const { isCoordinator, isLoading: isAuthLoading } = useAuth();
   const [series, setSeries] = useState<LessonSeries | null>(null);
   const [topics, setTopics] = useState<LessonTopic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,12 +84,16 @@ export default function SeriesDetailScreen() {
         }
       }
       await loadData();
+    } catch (err) {
+      console.error("Pull refresh error:", err);
+      Alert.alert("Erro", "Não foi possível atualizar.");
     } finally {
       setRefreshing(false);
     }
   }
 
   async function handleSaveEdit() {
+    if (!isCoordinator) return;
     if (!series) return;
 
     if (!editedCode.trim()) {
@@ -115,12 +119,17 @@ export default function SeriesDetailScreen() {
         description: editedDescription.trim() || null,
       });
       setEditing(false);
-    } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível salvar.");
+    } catch (err) {
+      console.error("Error saving series:", err);
+      Alert.alert(
+        "Erro",
+        err instanceof Error ? err.message : "Não foi possível salvar.",
+      );
     }
   }
 
   async function handleDelete() {
+    if (!isCoordinator) return;
     Alert.alert(
       "Excluir Série",
       `Deseja excluir a série "${series?.title}"? Esta ação também excluirá todos os tópicos associados.`,
@@ -133,8 +142,12 @@ export default function SeriesDetailScreen() {
             try {
               await seriesService.deleteSeries(id);
               router.back();
-            } catch (error: any) {
-              Alert.alert("Erro", error.message || "Não foi possível excluir.");
+            } catch (err) {
+              console.error("Error deleting series:", err);
+              Alert.alert(
+                "Erro",
+                err instanceof Error ? err.message : "Não foi possível excluir.",
+              );
             }
           },
         },
@@ -161,7 +174,7 @@ export default function SeriesDetailScreen() {
   if (!series) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={{ color: theme.colors.text }}>Série não encontrada.</Text>
+        <Text style={styles.errorText}>Série não encontrada.</Text>
       </View>
     );
   }
@@ -191,6 +204,7 @@ export default function SeriesDetailScreen() {
                 placeholderTextColor={theme.colors.textSecondary}
                 autoCapitalize="characters"
                 maxLength={20}
+                accessibilityLabel="Código da série"
               />
               <TextInput
                 style={styles.input}
@@ -198,6 +212,7 @@ export default function SeriesDetailScreen() {
                 onChangeText={setEditedTitle}
                 placeholder="Título"
                 placeholderTextColor={theme.colors.textSecondary}
+                accessibilityLabel="Título da série"
               />
               <TextInput
                 style={[styles.input, styles.multiline]}
@@ -207,6 +222,7 @@ export default function SeriesDetailScreen() {
                 placeholderTextColor={theme.colors.textSecondary}
                 multiline
                 numberOfLines={3}
+                accessibilityLabel="Descrição da série"
               />
               <View style={styles.editButtons}>
                 <AnimatedPressable
@@ -234,17 +250,21 @@ export default function SeriesDetailScreen() {
               {series.description && (
                 <Text style={styles.description}>{series.description}</Text>
               )}
-              {isCoordinator && (
+              {!isAuthLoading && isCoordinator && (
                 <View style={styles.actionButtons}>
                   <AnimatedPressable
                     style={styles.textButton}
                     onPress={() => setEditing(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Editar série"
                   >
                     <Text style={styles.textButtonLabel}>Editar</Text>
                   </AnimatedPressable>
                   <AnimatedPressable
                     style={styles.textButton}
                     onPress={handleDelete}
+                    accessibilityRole="button"
+                    accessibilityLabel="Excluir série"
                   >
                     <Text
                       style={[
@@ -346,10 +366,18 @@ const createStyles = (theme: Theme) =>
     },
     textButton: {
       marginRight: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      minHeight: 44,
+      justifyContent: "center",
     },
     textButtonLabel: {
       ...theme.typography.label,
       color: theme.colors.primary,
+    },
+    errorText: {
+      ...theme.typography.body,
+      color: theme.colors.text,
     },
     editForm: {
       marginTop: theme.spacing.sm,
