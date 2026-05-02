@@ -237,4 +237,134 @@ describe('Coordinator catalog mutations (US-6)', () => {
       expect(res.json().code).toBe('professor_referenced');
     });
   });
+
+  // Tests for the idempotent-create divergence detection added alongside the
+  // catalog write-back queue work. The mobile client sends client-generated
+  // ids on POST so a replay of the same payload returns the existing row
+  // (idempotent), but a replay with a divergent payload now surfaces
+  // id_conflict instead of silently returning stale data.
+  describe('Idempotent CREATE with client-supplied id', () => {
+    it('series: same id, same payload → 201 returns existing row', async () => {
+      const coord = await registerUser(app);
+      const id = '11111111-1111-1111-1111-111111111111';
+      const first = await app.inject({
+        method: 'POST',
+        url: '/catalog/series',
+        headers: coord.authHeader,
+        payload: { id, code: 'EB400', title: 'Replay' },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const replay = await app.inject({
+        method: 'POST',
+        url: '/catalog/series',
+        headers: coord.authHeader,
+        payload: { id, code: 'EB400', title: 'Replay' },
+      });
+      expect(replay.statusCode).toBe(201);
+      expect(replay.json().id).toBe(id);
+    });
+
+    it('series: same id, different payload → 409 id_conflict', async () => {
+      const coord = await registerUser(app);
+      const id = '22222222-2222-2222-2222-222222222222';
+      await app.inject({
+        method: 'POST',
+        url: '/catalog/series',
+        headers: coord.authHeader,
+        payload: { id, code: 'EB401', title: 'Original' },
+      });
+
+      const divergent = await app.inject({
+        method: 'POST',
+        url: '/catalog/series',
+        headers: coord.authHeader,
+        payload: { id, code: 'EB401', title: 'Different Title' },
+      });
+      expect(divergent.statusCode).toBe(409);
+      expect(divergent.json().code).toBe('id_conflict');
+    });
+
+    it('series: different id, same code → 409 code_already_exists', async () => {
+      const coord = await registerUser(app);
+      await app.inject({
+        method: 'POST',
+        url: '/catalog/series',
+        headers: coord.authHeader,
+        payload: { code: 'EB402', title: 'A' },
+      });
+
+      const conflict = await app.inject({
+        method: 'POST',
+        url: '/catalog/series',
+        headers: coord.authHeader,
+        payload: { code: 'EB402', title: 'B' },
+      });
+      expect(conflict.statusCode).toBe(409);
+      expect(conflict.json().code).toBe('code_already_exists');
+    });
+
+    it('topic: same id, divergent series_id → 409 id_conflict', async () => {
+      const coord = await registerUser(app);
+      const seriesA = await prisma.lessonSeries.create({
+        data: { code: 'EB403', title: 'A', isPending: false },
+      });
+      const seriesB = await prisma.lessonSeries.create({
+        data: { code: 'EB404', title: 'B', isPending: false },
+      });
+      const id = '33333333-3333-3333-3333-333333333333';
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/catalog/topics',
+        headers: coord.authHeader,
+        payload: { id, series_id: seriesA.id, title: 'T', sequence_order: 1 },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const divergent = await app.inject({
+        method: 'POST',
+        url: '/catalog/topics',
+        headers: coord.authHeader,
+        payload: { id, series_id: seriesB.id, title: 'T', sequence_order: 1 },
+      });
+      expect(divergent.statusCode).toBe(409);
+      expect(divergent.json().code).toBe('id_conflict');
+    });
+
+    it('topic: missing series_id → 404 not_found (race-safe)', async () => {
+      const coord = await registerUser(app);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/catalog/topics',
+        headers: coord.authHeader,
+        payload: {
+          series_id: '99999999-9999-9999-9999-999999999999',
+          title: 'Orphan',
+          sequence_order: 1,
+        },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBe('not_found');
+    });
+
+    it('professor: same id, different name → 409 id_conflict', async () => {
+      const coord = await registerUser(app);
+      const id = '44444444-4444-4444-4444-444444444444';
+      await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { id, name: 'Original' },
+      });
+      const divergent = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { id, name: 'Renamed' },
+      });
+      expect(divergent.statusCode).toBe(409);
+      expect(divergent.json().code).toBe('id_conflict');
+    });
+  });
 });

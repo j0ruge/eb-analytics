@@ -153,6 +153,23 @@ function isPrismaForeignKeyViolation(err: unknown): boolean {
 }
 
 /**
+ * Extract `meta.target` from a Prisma `P2002` (unique violation) error.
+ * Tells us *which* unique constraint was hit so we can distinguish
+ * `id` collisions (idempotent replays) from `code`/`email` collisions
+ * (real conflicts deserving a 409 with a specific code).
+ */
+function prismaUniqueTarget(err: unknown): string[] {
+  if (!err || typeof err !== 'object') return [];
+  const meta = (err as { meta?: { target?: unknown } }).meta;
+  if (!meta || meta.target === undefined || meta.target === null) return [];
+  if (Array.isArray(meta.target)) {
+    return meta.target.filter((t): t is string => typeof t === 'string');
+  }
+  if (typeof meta.target === 'string') return [meta.target];
+  return [];
+}
+
+/**
  * Parse an optional ISO-date string into a Date or null.
  * Throws httpError(invalid_payload) if the string is non-empty but unparseable.
  * A bare `new Date(badString)` yields `Invalid Date` and would silently corrupt
@@ -206,11 +223,25 @@ export const catalogService = {
     if (!dto.code || !dto.title) {
       throw httpError('invalid_payload', 'code e title obrigatórios.', 400);
     }
-    // Idempotent create: if client supplies an `id` and the row already exists,
-    // return it as-is so mobile can replay a CREATE without 409 churn.
+    const description = dto.description ?? null;
+    // Idempotent create: if client supplies an `id` and the row already exists
+    // with the SAME payload, return it. If the payload diverges, surface
+    // id_conflict so the client doesn't silently see stale data on replay.
+    const checkDivergence = (existing: { code: string; title: string; description: string | null }) => {
+      if (
+        existing.code !== dto.code ||
+        existing.title !== dto.title ||
+        (existing.description ?? null) !== description
+      ) {
+        throw httpError('id_conflict', 'ID já existe com payload diferente.', 409);
+      }
+    };
     if (dto.id) {
       const existing = await prisma.lessonSeries.findUnique({ where: { id: dto.id } });
-      if (existing) return serializeSeries(existing);
+      if (existing) {
+        checkDivergence(existing);
+        return serializeSeries(existing);
+      }
     }
     try {
       const row = await prisma.lessonSeries.create({
@@ -218,13 +249,23 @@ export const catalogService = {
           ...(dto.id ? { id: dto.id } : {}),
           code: dto.code,
           title: dto.title,
-          description: dto.description ?? null,
+          description,
           isPending: false,
         },
       });
       return serializeSeries(row);
     } catch (err) {
       if (isPrismaUniqueViolation(err)) {
+        const target = prismaUniqueTarget(err);
+        // Race: dto.id was created concurrently between our findUnique and create.
+        // Re-fetch and treat as idempotent replay (with divergence check).
+        if (dto.id && target.includes('id')) {
+          const existing = await prisma.lessonSeries.findUnique({ where: { id: dto.id } });
+          if (existing) {
+            checkDivergence(existing);
+            return serializeSeries(existing);
+          }
+        }
         throw httpError('code_already_exists', 'Código já existe.', 409);
       }
       throw err;
@@ -314,25 +355,64 @@ export const catalogService = {
       );
     }
     const suggestedDate = parseOptionalDate(dto.suggested_date, 'suggested_date');
+    const checkDivergence = (existing: {
+      seriesId: string;
+      title: string;
+      sequenceOrder: number;
+      suggestedDate: Date | null;
+    }) => {
+      const existingDate = existing.suggestedDate ? existing.suggestedDate.toISOString() : null;
+      const incomingDate = suggestedDate ? suggestedDate.toISOString() : null;
+      if (
+        existing.seriesId !== dto.series_id ||
+        existing.title !== dto.title ||
+        existing.sequenceOrder !== dto.sequence_order ||
+        existingDate !== incomingDate
+      ) {
+        throw httpError('id_conflict', 'ID já existe com payload diferente.', 409);
+      }
+    };
     if (dto.id) {
       const existing = await prisma.lessonTopic.findUnique({ where: { id: dto.id } });
-      if (existing) return serializeTopic(existing);
+      if (existing) {
+        checkDivergence(existing);
+        return serializeTopic(existing);
+      }
     }
     const series = await prisma.lessonSeries.findUnique({ where: { id: dto.series_id } });
     if (!series) {
       throw httpError('not_found', 'Série não encontrada.', 404);
     }
-    const row = await prisma.lessonTopic.create({
-      data: {
-        ...(dto.id ? { id: dto.id } : {}),
-        seriesId: dto.series_id,
-        title: dto.title,
-        sequenceOrder: dto.sequence_order,
-        suggestedDate,
-        isPending: false,
-      },
-    });
-    return serializeTopic(row);
+    try {
+      const row = await prisma.lessonTopic.create({
+        data: {
+          ...(dto.id ? { id: dto.id } : {}),
+          seriesId: dto.series_id,
+          title: dto.title,
+          sequenceOrder: dto.sequence_order,
+          suggestedDate,
+          isPending: false,
+        },
+      });
+      return serializeTopic(row);
+    } catch (err) {
+      if (isPrismaUniqueViolation(err)) {
+        const target = prismaUniqueTarget(err);
+        if (dto.id && target.includes('id')) {
+          const existing = await prisma.lessonTopic.findUnique({ where: { id: dto.id } });
+          if (existing) {
+            checkDivergence(existing);
+            return serializeTopic(existing);
+          }
+        }
+        throw httpError('invalid_payload', 'Tópico já existe.', 409);
+      }
+      // Race: series was deleted between our findUnique and create — surface as 404.
+      if (isPrismaForeignKeyViolation(err)) {
+        throw httpError('not_found', 'Série não encontrada.', 404);
+      }
+      throw err;
+    }
   },
 
   async updateTopic(id: string, dto: UpdateTopicDto): Promise<SerializedTopic> {
@@ -392,22 +472,39 @@ export const catalogService = {
     if (!dto.name) {
       throw httpError('invalid_payload', 'name obrigatório.', 400);
     }
+    const email = dto.email ?? null;
+    const checkDivergence = (existing: { name: string; email: string | null }) => {
+      if (existing.name !== dto.name || (existing.email ?? null) !== email) {
+        throw httpError('id_conflict', 'ID já existe com payload diferente.', 409);
+      }
+    };
     if (dto.id) {
       const existing = await prisma.professor.findUnique({ where: { id: dto.id } });
-      if (existing) return serializeProfessor(existing);
+      if (existing) {
+        checkDivergence(existing);
+        return serializeProfessor(existing);
+      }
     }
     try {
       const row = await prisma.professor.create({
         data: {
           ...(dto.id ? { id: dto.id } : {}),
           name: dto.name,
-          email: dto.email ?? null,
+          email,
           isPending: false,
         },
       });
       return serializeProfessor(row);
     } catch (err) {
       if (isPrismaUniqueViolation(err)) {
+        const target = prismaUniqueTarget(err);
+        if (dto.id && target.includes('id')) {
+          const existing = await prisma.professor.findUnique({ where: { id: dto.id } });
+          if (existing) {
+            checkDivergence(existing);
+            return serializeProfessor(existing);
+          }
+        }
         throw httpError('email_already_exists', 'E-mail já existe.', 409);
       }
       throw err;
