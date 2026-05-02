@@ -13,7 +13,7 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 
 ---
 
-[Funcionalidades](#-funcionalidades-implementadas) · [Telas](#-telas-do-aplicativo) · [Arquitetura](#️-arquitetura) · [Modelo de Dados](#️-modelo-de-dados) · [Tecnologias](#️-tecnologias) · [Como Executar](#-como-executar) · [Roadmap](#-roadmap)
+[Funcionalidades](#-funcionalidades-implementadas) · [Telas](#-telas-do-aplicativo) · [Arquitetura](#️-arquitetura) · [Modelo de Dados](#️-modelo-de-dados) · [Tecnologias](#️-tecnologias) · [Como Executar](#-como-executar) · [Ambiente Integrado](#-ambiente-local-integrado-mobile--backend) · [API](#-documentação-da-api) · [Roadmap](#-roadmap)
 
 ---
 
@@ -71,6 +71,37 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 - Migração idempotente com backfill crash-safe de `client_updated_at`
 - Seed service estendido para carregar dados de exemplo com os novos campos
 
+### ✅ Autenticação e Identidade (Spec 006)
+
+- Auto-cadastro com o primeiro usuário assumindo o papel de coordenador automaticamente
+- Login opcional: o app continua funcionando offline e para usuários anônimos
+- Coletas marcadas com `collector_user_id` imutável no momento da criação
+- Lista de aulas filtrada pelo usuário logado; todas as coletas quando anônimo
+- Logout limpa credenciais sem apagar dados locais
+- Token JWT armazenado via `expo-secure-store` (keystore nativo)
+
+### ✅ Backend de Sincronização (Spec 007)
+
+- API Fastify 5 + Prisma 7 + PostgreSQL 16 em `server/`
+- Endpoints de auth (register/login), catálogo (series/topics/professors) e coleções v2
+- Agregação de coletas por mediana (com normalização de professor nas presenças)
+- Moderação do coordenador para aceitar/rejeitar coleções e catálogo submetido
+- JWT com 7 dias de validade; primeiro usuário registrado vira coordenador
+- Idempotência por UUID do cliente e versionamento de schema
+- Rate limiting, RBAC e tratamento de erros centralizados via plugins Fastify
+- Detalhes completos em [`server/CLAUDE.md`](./server/CLAUDE.md)
+
+### ✅ Cliente de Sincronização Offline (Spec 008)
+
+- Nova coluna `sync_status` em `lessons_data`: `LOCAL → QUEUED → SENDING → SYNCED | REJECTED`
+- Loop de sync em foreground com batches de até 20 itens por envio
+- Backoff exponencial de 30s a 30min com suporte ao header `Retry-After`
+- Aba `/sync` refeita: lista de pendentes + histórico dos últimos 7 dias
+- Badge no header da Home indicando quantidade de coletas pendentes
+- `catalogSyncService` puxa `/catalog?since=<timestamp>` no login e a cada 1 hora
+- Timeout de 30s por requisição via `AbortController`
+- 401 limpa JWT e redireciona; 4xx move o item para `REJECTED` com motivo
+
 ### ✅ Dashboard de Estatísticas (Spec 009)
 
 - Aba "Painel" com 5 gráficos interativos (react-native-gifted-charts)
@@ -109,6 +140,8 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 | `/series/[id]` | Detalhes da série com tópicos |
 | `/topics/new` | Cadastrar novo tópico |
 | `/topics/[id]` | Detalhes/edição do tópico |
+| `/login` | Login opcional do coletor |
+| `/register` | Auto-cadastro (primeiro usuário vira coordenador) |
 | `/settings` | Configurações: tema + padrão includes_professor + seed de dados |
 
 ---
@@ -117,34 +150,49 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│                ThemeProvider (Light / Dark / System)          │
+│     ThemeProvider (Light/Dark/System) + AuthProvider          │
 ├──────────────────────────────────────────────────────────────┤
 │              Expo Router (app/) + Bottom Tabs                │
 ├──────────────────────────────────────────────────────────────┤
 │  Screens         │  Components          │  Services          │
 │  - (tabs)/       │  - CounterStepper    │  - lessonService   │
 │  - (tabs)/dash   │  - TimeCaptureBtn    │  - professorSvc    │
-│  - lesson/[id]   │  - ProfessorPicker   │  - seriesService   │
-│  - professors/   │  - SeriesPicker      │  - topicService    │
-│  - series/       │  - TopicPicker       │  - exportService   │
-│  - topics/       │  - StatusFilterBar   │  - deviceIdSvc     │
-│  - settings      │  - DatePickerInput   │  - dashboardSvc    │
-│                  │  - AnimatedPressable │  - seedService     │
-│                  │  - FAB / EmptyState  │                    │
-│                  │  - SkeletonLoader    │  Hooks             │
-│                  │  - Charts (8 comps)  │  - useDebounce     │
-│                  │  - ChartTooltip      │  - useTheme        │
-│                  │  - ChartCard         │  - useChartCard    │
+│  - (tabs)/sync   │  - ProfessorPicker   │  - seriesService   │
+│  - lesson/[id]   │  - SeriesPicker      │  - topicService    │
+│  - professors/   │  - TopicPicker       │  - exportService   │
+│  - series/       │  - StatusFilterBar   │  - deviceIdSvc     │
+│  - topics/       │  - DatePickerInput   │  - dashboardSvc    │
+│  - login         │  - AnimatedPressable │  - seedService     │
+│  - register      │  - FAB / EmptyState  │  - authService     │
+│  - settings      │  - SkeletonLoader    │  - apiClient       │
+│                  │  - Charts (9 comps)  │  - syncService     │
+│                  │  - ChartTooltip      │  - catalogSyncSvc  │
+│                  │  - ChartCard         │                    │
+│                  │  - SyncBadge         │  Hooks             │
+│                  │  - PendingSubmission │  - useDebounce     │
+│                  │  - SyncHistoryRow    │  - useTheme        │
+│                  │                      │  - useChartCard    │
 │                  │                      │  - useIncludesProf │
+│                  │                      │  - useAuth         │
+│                  │                      │  - useSyncQueue    │
+│                  │                      │  - useCatalogSync  │
 ├──────────────────────────────────────────────────────────────┤
 │                     SQLite (expo-sqlite)                      │
 │                    📱 Local-First Storage                     │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                         HTTPS (JWT)
+                              │
+┌──────────────────────────────────────────────────────────────┐
+│         Backend — Fastify 5 + Prisma 7 + PostgreSQL 16       │
+│                       (pasta server/)                         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 **Princípios:**
 
-- **Local-First**: SQLite é a única fonte de verdade
+- **Local-First**: SQLite é a única fonte de verdade no cliente
+- **Offline-First Sync**: fila local com retry idempotente; backend como réplica eventual
 - **Zero-Friction UX**: Steppers e Pickers ao invés de teclado
 - **Auto-Save**: Mudanças salvas automaticamente (debounce 500ms)
 - **Fail-Safe**: Estado recuperável após fechar o app
@@ -180,6 +228,8 @@ Um aplicativo **mobile-first** para coleta de dados de frequência e engajamento
 | `includes_professor` | INTEGER | Se contagens incluem o professor (0/1) |
 | `weather` | TEXT | Clima (texto livre, nullable) |
 | `notes` | TEXT | Observações (texto livre, nullable) |
+| `collector_user_id` | TEXT (FK) | Autor da coleta (imutável, nullable para anônimos) |
+| `sync_status` | TEXT | LOCAL / QUEUED / SENDING / SYNCED / REJECTED |
 
 ### Tabela `lesson_series`
 
@@ -259,6 +309,8 @@ erDiagram
         INTEGER includes_professor "0 ou 1"
         TEXT weather "Nullable"
         TEXT notes "Nullable"
+        TEXT collector_user_id FK "Autor (nullable)"
+        TEXT sync_status "Enum sync"
     }
 
     lesson_series ||--|{ lesson_topics : contem
@@ -266,9 +318,15 @@ erDiagram
     professors ||--o{ lessons_data : ministra
 ```
 
+### Backend (PostgreSQL via Prisma)
+
+O servidor mantém um schema espelhado em `server/prisma/schema.prisma` com tabelas `User`, `LessonCollection`, `LessonInstance`, `LessonSeries`, `LessonTopic` e `Professor`. Coleções enviadas pelo cliente são agrupadas por aula e agregadas por mediana. Detalhes em [`server/CLAUDE.md`](./server/CLAUDE.md).
+
 ---
 
 ## 🛠️ Tecnologias
+
+### Mobile
 
 - **React Native** 0.81 + **Expo SDK 54**
 - **React** 19.1
@@ -276,33 +334,48 @@ erDiagram
 - **TypeScript** 5.9 (Strict mode)
 - **SQLite** (`expo-sqlite` 16.x) — Local-first storage
 - **React Native Reanimated** 4.x (Animações performáticas)
-- **react-native-gifted-charts** (Gráficos do dashboard)
+- **react-native-gifted-charts** + **react-native-svg** (Gráficos do dashboard)
 - **AsyncStorage** (`@react-native-async-storage`) — Preferências do usuário
+- **expo-secure-store** — Token JWT em keystore nativo (Spec 006)
+- **@react-native-community/netinfo** — Detecção de conectividade (Spec 008)
+- **expo-file-system** + **expo-sharing** — Exportação e compartilhamento de arquivos
+- **expo-linear-gradient** — Componentes de UI
 - **DateTimePicker** (`@react-native-community/datetimepicker`) — Seleção de datas nativa
 - **Jest** + **Testing Library** (Testes unitários)
 - **Playwright** (Testes E2E via Expo Web)
+
+### Backend (`server/`)
+
+- **Node.js** 22 + **Fastify** 5
+- **Prisma** 7 ORM + **PostgreSQL** 16
+- **Vitest** (Testes de integração e property-based)
+- Docker Compose para o ambiente local de desenvolvimento
 
 ---
 
 ## 🧪 Testes
 
 ```bash
-# Testes unitários (9 suites, 109 tests)
+# Testes unitários mobile (13 suites)
 npm test
 
 # Testes E2E (requer Expo Web rodando na porta 8082)
 npm run test:e2e
+
+# Testes do backend (dentro de server/)
+cd server && npm test
 ```
 
 ### Cobertura de Testes
 
 | Tipo | Suites | Arquivos |
 |------|--------|----------|
-| Unit — Services | 5 | exportService, lessonService, professorService, dashboardService, seedService |
-| Unit — Utilities | 2 | cpf, date |
-| Unit — Components | 1 | DatePickerInput |
-| Unit — Migrations | 1 | dbMigration (idempotência, backfill, preservação de status) |
-| E2E — UI Flows | 6 | app-loads, empty-export-guard, field-persistence, includes-professor-toggle, seed-and-lesson-detail, settings-default-toggle |
+| Mobile Unit — Services | 8 | exportService, lessonService, lessonServiceAuth, professorService, dashboardService, seedService, syncService, catalogSyncService |
+| Mobile Unit — Utilities | 2 | cpf, date |
+| Mobile Unit — Components | 1 | DatePickerInput |
+| Mobile Unit — Migrations | 2 | dbMigration, migration_008 (sync_status backfill) |
+| Mobile E2E — UI Flows | 19 | app-loads, empty-export-guard, field-persistence, includes-professor-toggle, seed-and-lesson-detail, settings-default-toggle, dashboard-render, export-v2-payload, theme-persistence, auth-anonymous, auth-login, auth-logout, catalog-pull, sync-badge, sync-screen, sync-screen-states, sync-online, sync-rejected, sync-soak |
+| Backend — Vitest | 13 | aggregation.property, auth, catalog.mutations, catalog.reads, collections.mine, concurrency, health, instances, moderation, rateLimit, sync, sync.idempotency.property, entre outros |
 
 ---
 
@@ -332,6 +405,87 @@ npm run test:e2e
 
 ---
 
+## 💻 Ambiente Local Integrado (mobile + backend)
+
+Para testar a app ponta-a-ponta contra o backend Fastify local, use o script `dev-up.ps1` (Windows/PowerShell 7+) ou `dev-up.sh` (macOS/Linux/WSL). Ele consolida toda a stack num único terminal:
+
+1. Valida pré-requisitos (Docker Desktop rodando, Node, npm)
+2. Gera ou completa `server/.env` com as chaves obrigatórias e um `JWT_SECRET` aleatório
+3. Sobe Postgres **e** o backend via `docker compose up -d` (o container do server aplica migrations Prisma no boot)
+4. Aguarda `http://localhost:3000/health` responder
+5. Inicia o Expo em foreground no mesmo terminal
+
+```powershell
+# Windows (PowerShell)
+.\dev-up.ps1              # sobe tudo e inicia Expo (atalho: npm run dev:up)
+```
+
+```bash
+# macOS / Linux / WSL / Git Bash
+./dev-up.sh               # atalho: npm run dev:up:sh
+```
+
+### Flags disponíveis
+
+| PowerShell | Bash | npm | Efeito |
+|------------|------|-----|--------|
+| (default) | (default) | `npm run dev:up` | Sobe infra Docker + inicia Expo no mesmo terminal |
+| `-NoExpo` | `--no-expo` | `npm run dev:up:noexpo` | Só a infra; não inicia Expo (útil se for rodar o server do host com hot-reload) |
+| `-Rebuild` | `--rebuild` | `npm run dev:up:rebuild` | `docker compose up --build --force-recreate` — use após mudar código do `server/` ou o `Dockerfile` |
+| `-Status` | `--status` | `npm run dev:status` | Mostra containers + resultado de `/health` |
+| `-Down` | `--down` | `npm run dev:down` | Para a stack (preserva o volume `pg_data`) |
+| `-Nuke` | `--nuke` | `npm run dev:nuke` | Para e **apaga** o volume `pg_data` (pede confirmação) |
+
+### Encerrar e retomar
+
+- `Ctrl+C` no terminal do Expo encerra **só o Expo** — o backend e o Postgres continuam rodando em Docker.
+- Rode `.\dev-up.ps1 -Down` (ou `npm run dev:down`) quando quiser liberar memória/portas.
+- Rode novamente `.\dev-up.ps1` quando quiser voltar (build cacheado, sobe em ~10-15s).
+
+### Celular físico (Expo Go)
+
+O script **autodetecta** o IP LAN do PC e expõe o backend via `EXPO_PUBLIC_API_URL` antes de iniciar o Expo. Basta rodar `.\dev-up.ps1` e escanear o QR do Expo Go — `localhost:3000` é substituído pelo IP real.
+
+Se o PC tiver múltiplas interfaces (ex: Wi-Fi + Ethernet + VPN), o autodetect avisa e você escolhe explicitamente:
+
+```powershell
+.\dev-up.ps1 -LanIp 192.168.0.42      # Windows
+./dev-up.sh --lan-ip 192.168.0.42     # macOS / Linux
+```
+
+**CORS**: o Expo Go faz requisições nativas (não via browser), então CORS não se aplica. Só mexa no `CORS_ORIGIN` do `server/.env` se for acessar o backend via browser no IP LAN.
+
+### Hot-reload do backend (modo dev do servidor)
+
+Se estiver mexendo em código do `server/` e quiser hot-reload, prefira:
+
+```powershell
+.\dev-up.ps1 -NoExpo      # sobe só db + server em Docker
+.\dev-up.ps1 -Down        # pare o container server (mantém o db)
+cd server
+# Carrega DATABASE_URL e JWT_SECRET do .env (fonte da verdade — gitignored):
+foreach ($line in Get-Content .env) {
+  if ($line -match '^([^=]+)=(.*)$' -and $Matches[1] -in 'DATABASE_URL','JWT_SECRET') {
+    $val = $Matches[2]
+    if ($Matches[1] -eq 'DATABASE_URL') { $val = $val -replace '@db:', '@localhost:' }
+    Set-Item "env:$($Matches[1])" $val
+  }
+}
+npm run dev               # tsx watch, reload a cada save
+```
+
+E rode `npm start` do mobile em outro terminal.
+
+---
+
+## 📚 Documentação da API
+
+O contrato completo do backend está em [`docs/api/openapi.json`](./docs/api/openapi.json) (OpenAPI 3.0.3, 21 endpoints em 7 tags). Pode ser importado direto no Insomnia, Postman, Bruno ou Swagger UI — veja [`docs/api/README.md`](./docs/api/README.md) pro passo a passo (inclui helper do Insomnia pra propagar o JWT automaticamente entre requests).
+
+Pro racional de cada decisão (autenticação, idempotência, agregação por mediana, moderação com recompute em cascata), os contratos por domínio ficam em [`specs/007-sync-backend/contracts/`](./specs/007-sync-backend/contracts/). O registro canônico de `code` de erro está em [`error-codes.md`](./specs/007-sync-backend/contracts/error-codes.md).
+
+---
+
 ## 📦 Gerar Build APK (Android)
 
 ### Método 1: EAS Build (Recomendado - Build na Nuvem)
@@ -358,36 +512,50 @@ npx expo run:android
 
 ```text
 app/                    # Telas (Expo Router)
-├── _layout.tsx         # Root layout (DB init, ThemeProvider)
+├── _layout.tsx         # Root layout (DB init, ThemeProvider, AuthProvider)
 ├── (tabs)/             # Bottom Tab Navigator
 │   ├── _layout.tsx     # Configuração das abas
 │   ├── index.tsx       # Aba Aulas — Lista com filtros
 │   ├── dashboard.tsx   # Aba Painel — 5 gráficos interativos
 │   ├── series.tsx      # Aba Séries — Lista de séries
 │   ├── professors.tsx  # Aba Professores — Lista
-│   └── sync.tsx        # Aba Sincronizar — Export JSON v2
+│   └── sync.tsx        # Aba Sincronizar — Pendentes + Histórico
 ├── lesson/             # Formulário de coleta
 ├── professors/         # CRUD de professores
 ├── series/             # CRUD de séries de lições
 ├── topics/             # CRUD de tópicos
+├── login.tsx           # Login opcional (Spec 006)
+├── register.tsx        # Auto-cadastro (Spec 006)
 └── settings.tsx        # Configurações (tema + padrões)
 
 src/
 ├── components/         # CounterStepper, TimeCaptureButton, Pickers,
 │   │                   # StatusFilterBar, AnimatedPressable, FAB,
-│   │                   # DatePickerInput, SkeletonLoader, EmptyState, ErrorRetry
+│   │                   # DatePickerInput, SkeletonLoader, EmptyState, ErrorRetry,
+│   │                   # SyncBadge, PendingSubmissionRow, SyncHistoryRow
 │   └── charts/         # ChartCard, ChartTooltip, DashboardEmptyState,
 │                       # PunctualityChart, TrendChart, AttendanceCurveRow,
 │                       # LateArrivalChart, EngagementChart
 ├── db/                 # Schema, migrations, cliente SQLite
 ├── hooks/              # useDebounce, useTheme, useThemePreference,
-│                       # useIncludesProfessorDefault, useChartCardState
+│                       # useIncludesProfessorDefault, useChartCardState,
+│                       # useAuth, useSyncQueue, useCatalogSync
 ├── services/           # lessonService, professorService, seriesService,
 │                       # topicService, exportService, deviceIdService,
-│                       # dashboardService, seedService
+│                       # dashboardService, seedService,
+│                       # authService, apiClient, syncService, catalogSyncService
 ├── theme/              # Tokens de design, cores, tipografia, ThemeProvider
 ├── types/              # Lesson, Professor, Series, Topic, dashboard types
 └── utils/              # CPF, normalização de texto, datas, cores
+
+server/                 # Backend (ver server/CLAUDE.md)
+├── src/
+│   ├── routes/         # auth, catalog, collections, health
+│   ├── services/       # Regras de negócio e agregação
+│   ├── plugins/        # auth, cors, errorHandler, rateLimit, rbac
+│   └── lib/            # Utilitários (jwt, median, prisma, errors)
+├── prisma/             # schema.prisma + migrações Postgres
+└── test/               # Suites Vitest (integração + property-based)
 
 specs/                  # Especificações (Spec-Driven Dev)
 ├── 001-lesson-collection/
@@ -395,14 +563,14 @@ specs/                  # Especificações (Spec-Driven Dev)
 ├── 003-migrate-schema-structure/
 ├── 004-improve-app-design/
 ├── 005-export-contract-v2/
-├── 006-auth-identity/         # Próxima
+├── 006-auth-identity/
 ├── 007-sync-backend/
 ├── 008-offline-sync-client/
 └── 009-statistics-dashboard/
 
 tests/
-├── unit/               # 9 suites, 109 testes
-└── e2e/                # 6 specs Playwright (Expo Web)
+├── unit/               # 13 suites (mobile)
+└── e2e/                # 19 specs Playwright (Expo Web)
 ```
 
 ---
@@ -414,9 +582,9 @@ tests/
 - [x] **Spec 003**: Migração para schema normalizado (lesson_series/lesson_topics)
 - [x] **Spec 004**: Design e experiência do usuário (temas, tabs, animações, filtros)
 - [x] **Spec 005**: Export Data Contract v2 (envelope tipado, XOR, device_id, includes_professor, weather/notes)
-- [ ] **Spec 006**: Autenticação e identidade do coletor
-- [ ] **Spec 007**: Backend de sincronização
-- [ ] **Spec 008**: Cliente de sincronização offline
+- [x] **Spec 006**: Autenticação e identidade do coletor
+- [x] **Spec 007**: Backend de sincronização (Fastify + Prisma + Postgres)
+- [x] **Spec 008**: Cliente de sincronização offline (fila, backoff, badge)
 - [x] **Spec 009**: Dashboard de estatísticas (5 gráficos interativos)
 
 ---
@@ -439,6 +607,10 @@ tests/
 | US12 | Coordenador | Indicar se contou o professor nas presenças | ✅ |
 | US13 | Coordenador | Registrar clima e observações livres sobre a aula | ✅ |
 | US14 | Diretor | Visualizar estatísticas de pontualidade, presença e engajamento | ✅ |
+| US15 | Coletor | Fazer login ou cadastro opcional para identificar suas coletas | ✅ |
+| US16 | Coordenador | Moderar coleções e itens de catálogo enviados pelos coletores | ✅ |
+| US17 | Coletor | Sincronizar coletas automaticamente quando houver conexão | ✅ |
+| US18 | Coletor | Ver o status de sincronização de cada coleta (pendente / enviada / rejeitada) | ✅ |
 
 ---
 
