@@ -15,6 +15,7 @@ import { professorService } from "../../src/services/professorService";
 import { useTheme } from "../../src/hooks/useTheme";
 import { Theme } from "../../src/theme";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
+import { useAuth } from "../../src/hooks/useAuth";
 
 export default function EditProfessorScreen() {
   const { theme } = useTheme();
@@ -25,6 +26,7 @@ export default function EditProfessorScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const router = useRouter();
+  const { isCoordinator } = useAuth();
 
   useEffect(() => {
     loadProfessor();
@@ -166,7 +168,7 @@ export default function EditProfessorScreen() {
           placeholder="Digite o nome completo"
           placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="words"
-          editable={!loading}
+          editable={!loading && isCoordinator}
         />
 
         <View style={styles.labelRow}>
@@ -181,28 +183,32 @@ export default function EditProfessorScreen() {
           placeholderTextColor={theme.colors.textSecondary}
           keyboardType="numeric"
           maxLength={14}
-          editable={!loading}
+          editable={!loading && isCoordinator}
         />
 
-        <AnimatedPressable
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleSave}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? "Salvando..." : "Salvar Alterações"}
-          </Text>
-        </AnimatedPressable>
+        {isCoordinator && (
+          <>
+            <AnimatedPressable
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSave}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? "Salvando..." : "Salvar Alterações"}
+              </Text>
+            </AnimatedPressable>
 
-        <AnimatedPressable
-          style={[styles.deleteButton, loading && styles.buttonDisabled]}
-          onPress={handleDelete}
-          disabled={loading}
-        >
-          <Text style={styles.deleteButtonText}>
-            {loading ? "Processando..." : "Excluir Professor"}
-          </Text>
-        </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.deleteButton, loading && styles.buttonDisabled]}
+              onPress={handleDelete}
+              disabled={loading}
+            >
+              <Text style={styles.deleteButtonText}>
+                {loading ? "Processando..." : "Excluir Professor"}
+              </Text>
+            </AnimatedPressable>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );

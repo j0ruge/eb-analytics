@@ -3,6 +3,7 @@ import { LessonSeries } from '../types/lessonSeries';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeText } from '../utils/text';
+import { apiClient } from './apiClient';
 
 export const seriesService = {
   async getAllSeries(): Promise<LessonSeries[]> {
@@ -56,6 +57,16 @@ export const seriesService = {
       [newSeries.id, newSeries.code, newSeries.title, newSeries.description]
     );
 
+    const r = await apiClient.post('/catalog/series', {
+      id: newSeries.id,
+      code: newSeries.code,
+      title: newSeries.title,
+      description: newSeries.description,
+    });
+    if (r.error) {
+      throw new Error(r.error);
+    }
+
     return newSeries;
   },
 
@@ -86,6 +97,32 @@ export const seriesService = {
 
     const query = `UPDATE lesson_series SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE id = ?`;
     await db.runAsync(query, [...values, id]);
+
+    // Push to backend (catalog write-back). Local UPDATE stays even on failure.
+    const body: Record<string, unknown> = {};
+    if (updates.code !== undefined) body.code = normalizeText(updates.code);
+    if (updates.title !== undefined) body.title = updates.title.trim();
+    if (updates.description !== undefined) {
+      body.description = updates.description?.trim() || null;
+    }
+    if (Object.keys(body).length > 0) {
+      const r = await apiClient.patch(`/catalog/series/${id}`, body);
+      if (r.status === 404) {
+        const local = await this.getSeriesById(id);
+        if (!local) throw new Error(r.error ?? 'Registro não encontrado.');
+        const post = await apiClient.post('/catalog/series', {
+          id: local.id,
+          code: local.code,
+          title: local.title,
+          description: local.description,
+        });
+        if (post.error) {
+          throw new Error(post.error);
+        }
+      } else if (r.error) {
+        throw new Error(r.error);
+      }
+    }
   },
 
   async deleteSeries(id: string): Promise<void> {

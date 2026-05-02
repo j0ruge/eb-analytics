@@ -18,6 +18,7 @@ import {
   migrateLegacyData,
   migrateAddAuthIdentity,
   migrateAddSyncStatus,
+  migrateNormalizeTopicSuggestedDate,
 } from './migrations';
 import { DB_NAME, DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 
@@ -40,7 +41,13 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return dbInstance!;
 }
 
-export async function applyMigrations(db: SQLite.SQLiteDatabase) {
+export interface MigrationCapableDb {
+  execAsync: (sql: string) => Promise<void>;
+  getAllAsync: <T>(sql: string) => Promise<T[]>;
+  getFirstAsync: <T>(sql: string) => Promise<T | null>;
+}
+
+export async function applyMigrations(db: MigrationCapableDb) {
   // Check if professor_id column exists in lessons_data
   const tableInfo = await db.getAllAsync<{ name: string }>(
     "PRAGMA table_info(lessons_data)"
@@ -110,7 +117,7 @@ export async function applyMigrations(db: SQLite.SQLiteDatabase) {
   }
 }
 
-async function checkIfStatusMigrationNeeded(db: SQLite.SQLiteDatabase): Promise<boolean> {
+async function checkIfStatusMigrationNeeded(db: MigrationCapableDb): Promise<boolean> {
   try {
     // Check table schema to see if migration was already applied
     const sql = await db.getFirstAsync<{ sql: string }>(
@@ -134,7 +141,7 @@ async function checkIfStatusMigrationNeeded(db: SQLite.SQLiteDatabase): Promise<
   }
 }
 
-async function migrateStatusConstraint(db: SQLite.SQLiteDatabase) {
+async function migrateStatusConstraint(db: MigrationCapableDb) {
   try {
     // Step 0: Clean up any incomplete previous migration
     await db.execAsync('DROP TABLE IF EXISTS lessons_data_new;');
@@ -286,6 +293,9 @@ async function _doInitializeDatabase() {
 
   // Add offline-sync columns and catalog updated_at/email (008-offline-sync-client)
   await migrateAddSyncStatus(db);
+
+  // Normalize lesson_topics.suggested_date that older pulls stored as full ISO.
+  await migrateNormalizeTopicSuggestedDate(db);
 
   // Boot reconciliation (008 EC-001): any row stuck in SENDING from a prior
   // crash must return to QUEUED so the sync loop can retry it. Server

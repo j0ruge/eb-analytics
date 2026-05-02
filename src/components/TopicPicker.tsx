@@ -12,6 +12,7 @@ import { useTheme } from "../hooks/useTheme";
 import { Theme } from "../theme";
 import { LessonTopic } from "../types/lessonTopic";
 import { topicService } from "../services/topicService";
+import { formatSuggestedDate } from "../utils/date";
 
 interface TopicPickerProps {
   seriesId: string | null;
@@ -176,7 +177,7 @@ export function TopicPicker({
                         <Text style={styles.itemTitle}>{item.title}</Text>
                         {item.suggested_date && (
                           <Text style={styles.itemDate}>
-                            Data sugerida: {item.suggested_date}
+                            Data sugerida: {formatSuggestedDate(item.suggested_date)}
                           </Text>
                         )}
                       </View>

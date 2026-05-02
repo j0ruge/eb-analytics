@@ -314,7 +314,10 @@ export const syncService = {
   },
 
   /**
-   * Force-advance items past any backoff (FR-031). Does not send by itself.
+   * Force-advance items past any backoff (FR-031). Also re-queues REJECTED
+   * rows so users can retry after fixing the underlying cause (e.g. a missing
+   * catalog row that was just pushed via catalog write-back). Does not send
+   * by itself — caller chains `runOnce` (SyncProvider already does).
    */
   async retryNow(lessonIds?: string[]): Promise<void> {
     const db = await getDatabase();
@@ -326,10 +329,13 @@ export const syncService = {
         for (const id of lessonIds) {
           await db.runAsync(
             `UPDATE lessons_data
-                SET sync_attempt_count = 0,
+                SET sync_status = 'QUEUED',
+                    sync_attempt_count = 0,
                     sync_next_attempt_at = NULL,
                     sync_error = NULL
-              WHERE id = ? AND sync_status = 'QUEUED' AND collector_user_id = ?`,
+              WHERE id = ?
+                AND sync_status IN ('QUEUED', 'REJECTED')
+                AND collector_user_id = ?`,
             [id, userId],
           );
         }
@@ -337,10 +343,11 @@ export const syncService = {
     } else {
       await db.runAsync(
         `UPDATE lessons_data
-            SET sync_attempt_count = 0,
+            SET sync_status = 'QUEUED',
+                sync_attempt_count = 0,
                 sync_next_attempt_at = NULL,
                 sync_error = NULL
-          WHERE sync_status = 'QUEUED' AND collector_user_id = ?`,
+          WHERE sync_status IN ('QUEUED', 'REJECTED') AND collector_user_id = ?`,
         [userId],
       );
     }

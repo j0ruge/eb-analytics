@@ -112,6 +112,18 @@ export function formatToYYYYMMMDD(date: Date): string {
 }
 
 /**
+ * Formata `suggested_date` para exibição "YYYY-MMM-DD" em PT-BR
+ * (ex: "2026-ABR-18"). Aceita "YYYY-MM-DD", "YYYY-MMM-DD" e ISO
+ * ("YYYY-MM-DDT…"). Retorna a string original se o parse falhar.
+ */
+export function formatSuggestedDate(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const datePart = raw.length >= 10 && raw[10] === 'T' ? raw.slice(0, 10) : raw;
+  const d = parseInputDate(datePart);
+  return d ? formatToYYYYMMMDD(d) : raw;
+}
+
+/**
  * Formata uma data (string YYYY-MM-DD ou YYYY-MMM-DD) para DD/MM.
  * Retorna a string original se o parse falha.
  */

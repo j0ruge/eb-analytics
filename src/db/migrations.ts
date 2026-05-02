@@ -6,6 +6,7 @@ import { normalizeText, extractSeriesCode, extractSeriesTitle } from '../utils/t
 const MIGRATION_FLAG_KEY = '003_schema_migration_complete';
 const MIGRATION_006_FLAG = '006_auth_identity_complete';
 const MIGRATION_008_FLAG = '008_offline_sync_complete';
+const MIGRATION_TOPIC_DATE_FLAG = '008_topic_suggested_date_normalize';
 
 interface LegacyLessonRow {
   id: string;
@@ -393,6 +394,45 @@ export async function migrateAddSyncStatus(db: SQLite.SQLiteDatabase): Promise<v
     console.log('Migration 008 completed successfully');
   } catch (error) {
     console.error('Migration 008 failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * One-shot fix for `lesson_topics.suggested_date` rows that were upserted
+ * by an older catalog pull which stored the full ISO string
+ * (e.g. "2026-04-18T00:00:00.000Z"). The mobile UI prints the column raw
+ * and locally-created topics use `YYYY-MM-DD`, so we truncate any ISO-shaped
+ * values to match. Idempotent.
+ */
+export async function migrateNormalizeTopicSuggestedDate(
+  db: SQLite.SQLiteDatabase,
+): Promise<void> {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS _migration_flags (
+      key TEXT PRIMARY KEY NOT NULL,
+      completed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const existing = await db.getFirstAsync<{ key: string }>(
+    'SELECT key FROM _migration_flags WHERE key = ?',
+    [MIGRATION_TOPIC_DATE_FLAG],
+  );
+  if (existing) return;
+
+  try {
+    await db.runAsync(
+      `UPDATE lesson_topics
+          SET suggested_date = substr(suggested_date, 1, 10)
+        WHERE suggested_date LIKE '____-__-__T%'`,
+    );
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_TOPIC_DATE_FLAG],
+    );
+  } catch (error) {
+    console.error('Migration topic suggested_date normalize failed:', error);
     throw error;
   }
 }

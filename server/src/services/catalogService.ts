@@ -43,6 +43,7 @@ export interface CatalogResponse {
 }
 
 export interface CreateSeriesDto {
+  id?: string;
   code: string;
   title: string;
   description?: string | null;
@@ -55,6 +56,7 @@ export interface UpdateSeriesDto {
 }
 
 export interface CreateTopicDto {
+  id?: string;
   series_id: string;
   title: string;
   sequence_order: number;
@@ -68,6 +70,7 @@ export interface UpdateTopicDto {
 }
 
 export interface CreateProfessorDto {
+  id?: string;
   name: string;
   email?: string | null;
 }
@@ -203,9 +206,16 @@ export const catalogService = {
     if (!dto.code || !dto.title) {
       throw httpError('invalid_payload', 'code e title obrigatórios.', 400);
     }
+    // Idempotent create: if client supplies an `id` and the row already exists,
+    // return it as-is so mobile can replay a CREATE without 409 churn.
+    if (dto.id) {
+      const existing = await prisma.lessonSeries.findUnique({ where: { id: dto.id } });
+      if (existing) return serializeSeries(existing);
+    }
     try {
       const row = await prisma.lessonSeries.create({
         data: {
+          ...(dto.id ? { id: dto.id } : {}),
           code: dto.code,
           title: dto.title,
           description: dto.description ?? null,
@@ -304,12 +314,17 @@ export const catalogService = {
       );
     }
     const suggestedDate = parseOptionalDate(dto.suggested_date, 'suggested_date');
+    if (dto.id) {
+      const existing = await prisma.lessonTopic.findUnique({ where: { id: dto.id } });
+      if (existing) return serializeTopic(existing);
+    }
     const series = await prisma.lessonSeries.findUnique({ where: { id: dto.series_id } });
     if (!series) {
       throw httpError('not_found', 'Série não encontrada.', 404);
     }
     const row = await prisma.lessonTopic.create({
       data: {
+        ...(dto.id ? { id: dto.id } : {}),
         seriesId: dto.series_id,
         title: dto.title,
         sequenceOrder: dto.sequence_order,
@@ -377,9 +392,14 @@ export const catalogService = {
     if (!dto.name) {
       throw httpError('invalid_payload', 'name obrigatório.', 400);
     }
+    if (dto.id) {
+      const existing = await prisma.professor.findUnique({ where: { id: dto.id } });
+      if (existing) return serializeProfessor(existing);
+    }
     try {
       const row = await prisma.professor.create({
         data: {
+          ...(dto.id ? { id: dto.id } : {}),
           name: dto.name,
           email: dto.email ?? null,
           isPending: false,

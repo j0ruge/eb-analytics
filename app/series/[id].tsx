@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { seriesService } from "../../src/services/seriesService";
@@ -14,6 +15,9 @@ import { topicService } from "../../src/services/topicService";
 import { LessonSeries } from "../../src/types/lessonSeries";
 import { LessonTopic } from "../../src/types/lessonTopic";
 import { useTheme } from "../../src/hooks/useTheme";
+import { useCatalogSync } from "../../src/hooks/useCatalogSync";
+import { formatSuggestedDate } from "../../src/utils/date";
+import { useAuth } from "../../src/hooks/useAuth";
 import { Theme } from "../../src/theme";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 import { FAB } from "../../src/components/FAB";
@@ -25,10 +29,13 @@ export default function SeriesDetailScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { pullNow } = useCatalogSync();
+  const { isCoordinator } = useAuth();
   const [series, setSeries] = useState<LessonSeries | null>(null);
   const [topics, setTopics] = useState<LessonTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editedCode, setEditedCode] = useState("");
   const [editedTitle, setEditedTitle] = useState("");
@@ -60,6 +67,25 @@ export default function SeriesDetailScreen() {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handlePullRefresh() {
+    setRefreshing(true);
+    try {
+      const result = await pullNow("manual");
+      if (!result.ok) {
+        if (result.offline) {
+          Alert.alert("Sem conexão", "Usando dados locais.");
+        } else if (result.skipped) {
+          Alert.alert("Login necessário", "Entre para atualizar o catálogo.");
+        } else if (result.error) {
+          Alert.alert("Erro", result.error);
+        }
+      }
+      await loadData();
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -142,7 +168,15 @@ export default function SeriesDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView>
+      <ScrollView
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handlePullRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
+      >
         {/* Header da série */}
         <View style={styles.header}>
           <Text style={styles.code}>{series.code}</Text>
@@ -200,27 +234,29 @@ export default function SeriesDetailScreen() {
               {series.description && (
                 <Text style={styles.description}>{series.description}</Text>
               )}
-              <View style={styles.actionButtons}>
-                <AnimatedPressable
-                  style={styles.textButton}
-                  onPress={() => setEditing(true)}
-                >
-                  <Text style={styles.textButtonLabel}>Editar</Text>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  style={styles.textButton}
-                  onPress={handleDelete}
-                >
-                  <Text
-                    style={[
-                      styles.textButtonLabel,
-                      { color: theme.colors.danger },
-                    ]}
+              {isCoordinator && (
+                <View style={styles.actionButtons}>
+                  <AnimatedPressable
+                    style={styles.textButton}
+                    onPress={() => setEditing(true)}
                   >
-                    Excluir
-                  </Text>
-                </AnimatedPressable>
-              </View>
+                    <Text style={styles.textButtonLabel}>Editar</Text>
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    style={styles.textButton}
+                    onPress={handleDelete}
+                  >
+                    <Text
+                      style={[
+                        styles.textButtonLabel,
+                        { color: theme.colors.danger },
+                      ]}
+                    >
+                      Excluir
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -251,7 +287,7 @@ export default function SeriesDetailScreen() {
                   <Text style={styles.topicTitle}>{topic.title}</Text>
                   {topic.suggested_date && (
                     <Text style={styles.topicDate}>
-                      Data sugerida: {topic.suggested_date}
+                      Data sugerida: {formatSuggestedDate(topic.suggested_date)}
                     </Text>
                   )}
                 </View>

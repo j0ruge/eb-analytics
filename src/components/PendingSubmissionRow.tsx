@@ -14,9 +14,10 @@ interface PendingSubmissionRowProps {
 
 // Spec 008 FR-015 + T026 — list row for /sync.
 // Action area varies by sync_status:
-//   QUEUED   → "Retry agora" button
+//   QUEUED   → "Tentar agora" button
 //   SENDING  → disabled spinner
-//   REJECTED → red indicator, no retry (FR-013 — permanent in MVP)
+//   REJECTED → red indicator + "Tentar novamente" (recoverable after
+//              catalog write-back; e.g. fix missing professor and re-enqueue)
 export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowProps) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -87,13 +88,26 @@ export function PendingSubmissionRow({ lesson, onRetry }: PendingSubmissionRowPr
         )}
 
         {isRejected && (
-          <View style={styles.rejectedIndicator}>
+          <View style={styles.rejectedAction}>
             <Ionicons
               name="alert-circle"
               size={22}
               color={theme.colors.danger}
               accessible={false}
             />
+            <AnimatedPressable
+              onPress={() => onRetry(lesson.id)}
+              style={styles.retryButton}
+              accessibilityLabel="Tentar enviar novamente"
+            >
+              <Ionicons
+                name="refresh"
+                size={16}
+                color={theme.colors.background}
+                accessible={false}
+              />
+              <Text style={styles.retryText}>Tentar novamente</Text>
+            </AnimatedPressable>
           </View>
         )}
       </View>
@@ -156,5 +170,10 @@ const createStyles = (theme: Theme) =>
     },
     rejectedIndicator: {
       paddingHorizontal: theme.spacing.sm,
+    },
+    rejectedAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.xs,
     },
   });

@@ -16,12 +16,15 @@ import { Theme } from "../../src/theme";
 import { DatePickerInput } from "../../src/components/DatePickerInput";
 import { AnimatedPressable } from "../../src/components/AnimatedPressable";
 import { ErrorRetry } from "../../src/components/ErrorRetry";
+import { formatSuggestedDate } from "../../src/utils/date";
+import { useAuth } from "../../src/hooks/useAuth";
 
 export default function TopicDetailScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { isCoordinator } = useAuth();
   const [topic, setTopic] = useState<LessonTopicWithSeries | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -202,31 +205,33 @@ export default function TopicDetailScreen() {
             <Text style={styles.title}>{topic.title}</Text>
             {topic.suggested_date && (
               <Text style={styles.date}>
-                Data sugerida: {topic.suggested_date}
+                Data sugerida: {formatSuggestedDate(topic.suggested_date)}
               </Text>
             )}
 
-            <View style={styles.actionButtons}>
-              <AnimatedPressable
-                style={styles.textButton}
-                onPress={() => setEditing(true)}
-              >
-                <Text style={styles.textButtonLabel}>Editar</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.textButton}
-                onPress={handleDelete}
-              >
-                <Text
-                  style={[
-                    styles.textButtonLabel,
-                    { color: theme.colors.danger },
-                  ]}
+            {isCoordinator && (
+              <View style={styles.actionButtons}>
+                <AnimatedPressable
+                  style={styles.textButton}
+                  onPress={() => setEditing(true)}
                 >
-                  Excluir
-                </Text>
-              </AnimatedPressable>
-            </View>
+                  <Text style={styles.textButtonLabel}>Editar</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.textButton}
+                  onPress={handleDelete}
+                >
+                  <Text
+                    style={[
+                      styles.textButtonLabel,
+                      { color: theme.colors.danger },
+                    ]}
+                  >
+                    Excluir
+                  </Text>
+                </AnimatedPressable>
+              </View>
+            )}
           </View>
         )}
       </View>

@@ -45,6 +45,15 @@ interface CatalogResponse {
   server_now: string;
 }
 
+// Server returns `suggested_date` as full ISO ("2026-04-18T00:00:00.000Z").
+// Topics created locally store just `YYYY-MM-DD`. Truncate so both paths
+// produce the same shape — the read-side just prints the raw column.
+function normalizeDateOnly(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const tIdx = iso.indexOf('T');
+  return tIdx === 10 ? iso.slice(0, 10) : iso;
+}
+
 async function upsertCatalog(resp: CatalogResponse): Promise<void> {
   const db = await getDatabase();
   // Serialize with syncService through the shared DB mutex — expo-sqlite web
@@ -72,7 +81,7 @@ async function upsertCatalog(resp: CatalogResponse): Promise<void> {
            sequence_order = excluded.sequence_order,
            suggested_date = excluded.suggested_date,
            updated_at = excluded.updated_at`,
-        [t.id, t.series_id, t.title, t.sequence_order, t.suggested_date ?? null, t.updated_at],
+        [t.id, t.series_id, t.title, t.sequence_order, normalizeDateOnly(t.suggested_date), t.updated_at],
       );
     }
     for (const p of resp.professors) {

@@ -13,6 +13,7 @@ const seriesCreateSchema = {
   type: 'object',
   required: ['code', 'title'],
   properties: {
+    id: { type: 'string', minLength: 1 },
     code: { type: 'string', minLength: 1 },
     title: { type: 'string', minLength: 1 },
     description: { type: ['string', 'null'] },
@@ -34,6 +35,7 @@ const topicCreateSchema = {
   type: 'object',
   required: ['series_id', 'title', 'sequence_order'],
   properties: {
+    id: { type: 'string', minLength: 1 },
     series_id: { type: 'string', minLength: 1 },
     title: { type: 'string', minLength: 1 },
     sequence_order: { type: 'integer' },
@@ -56,6 +58,7 @@ const professorCreateSchema = {
   type: 'object',
   required: ['name'],
   properties: {
+    id: { type: 'string', minLength: 1 },
     name: { type: 'string', minLength: 1 },
     email: { type: ['string', 'null'] },
   },
@@ -104,11 +107,12 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------- Series CRUD ----------------
 
-  fastify.post<{ Body: { code: string; title: string; description?: string | null } }>(
+  fastify.post<{ Body: { id?: string; code: string; title: string; description?: string | null } }>(
     '/catalog/series',
     { preHandler: [coordinatorOnly], schema: { body: seriesCreateSchema } },
     async (request, reply) => {
       const row = await catalogService.createSeries({
+        id: request.body.id,
         code: request.body.code,
         title: request.body.title,
         description: request.body.description ?? null,
@@ -139,6 +143,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Body: {
+      id?: string;
       series_id: string;
       title: string;
       sequence_order: number;
@@ -149,6 +154,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [coordinatorOnly], schema: { body: topicCreateSchema } },
     async (request, reply) => {
       const row = await catalogService.createTopic({
+        id: request.body.id,
         series_id: request.body.series_id,
         title: request.body.title,
         sequence_order: request.body.sequence_order,
@@ -178,11 +184,12 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------- Professor CRUD ----------------
 
-  fastify.post<{ Body: { name: string; email?: string | null } }>(
+  fastify.post<{ Body: { id?: string; name: string; email?: string | null } }>(
     '/catalog/professors',
     { preHandler: [coordinatorOnly], schema: { body: professorCreateSchema } },
     async (request, reply) => {
       const row = await catalogService.createProfessor({
+        id: request.body.id,
         name: request.body.name,
         email: request.body.email ?? null,
       });

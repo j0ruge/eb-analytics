@@ -3,6 +3,7 @@ import { LessonTopic, LessonTopicWithSeries } from '../types/lessonTopic';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeText } from '../utils/text';
+import { apiClient } from './apiClient';
 
 export const topicService = {
   async getTopicsBySeries(seriesId: string): Promise<LessonTopic[]> {
@@ -83,10 +84,21 @@ export const topicService = {
     };
 
     await db.runAsync(
-      `INSERT INTO lesson_topics (id, series_id, title, suggested_date, sequence_order) 
+      `INSERT INTO lesson_topics (id, series_id, title, suggested_date, sequence_order)
        VALUES (?, ?, ?, ?, ?)`,
       [newTopic.id, newTopic.series_id, newTopic.title, newTopic.suggested_date, newTopic.sequence_order]
     );
+
+    const r = await apiClient.post('/catalog/topics', {
+      id: newTopic.id,
+      series_id: newTopic.series_id,
+      title: newTopic.title,
+      sequence_order: newTopic.sequence_order,
+      suggested_date: newTopic.suggested_date,
+    });
+    if (r.error) {
+      throw new Error(r.error);
+    }
 
     return newTopic;
   },
@@ -126,6 +138,34 @@ export const topicService = {
 
     const query = `UPDATE lesson_topics SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE id = ?`;
     await db.runAsync(query, [...values, id]);
+
+    // Push to backend (catalog write-back). Local UPDATE stays even on failure;
+    // user retries by editing again, and the next catalog pull reconciles.
+    const body: Record<string, unknown> = {};
+    if (updates.title !== undefined) body.title = updates.title.trim();
+    if (updates.sequence_order !== undefined) body.sequence_order = updates.sequence_order;
+    if (updates.suggested_date !== undefined) {
+      body.suggested_date = updates.suggested_date?.trim() || null;
+    }
+    if (Object.keys(body).length > 0) {
+      const r = await apiClient.patch(`/catalog/topics/${id}`, body);
+      if (r.status === 404) {
+        const local = await this.getTopicById(id);
+        if (!local) throw new Error(r.error ?? 'Tópico não encontrado.');
+        const post = await apiClient.post('/catalog/topics', {
+          id: local.id,
+          series_id: local.series_id,
+          title: local.title,
+          sequence_order: local.sequence_order,
+          suggested_date: local.suggested_date,
+        });
+        if (post.error) {
+          throw new Error(post.error);
+        }
+      } else if (r.error) {
+        throw new Error(r.error);
+      }
+    }
   },
 
   async deleteTopic(id: string): Promise<void> {
