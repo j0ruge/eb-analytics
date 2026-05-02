@@ -19,6 +19,7 @@ import {
   migrateAddAuthIdentity,
   migrateAddSyncStatus,
   migrateNormalizeTopicSuggestedDate,
+  migrateAddCatalogPendingPushes,
 } from './migrations';
 import { DB_NAME, DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 
@@ -296,6 +297,9 @@ async function _doInitializeDatabase() {
 
   // Normalize lesson_topics.suggested_date that older pulls stored as full ISO.
   await migrateNormalizeTopicSuggestedDate(db);
+
+  // Catalog write-back retry queue (offline-first parity with lessons_outbox).
+  await migrateAddCatalogPendingPushes(db);
 
   // Boot reconciliation (008 EC-001): any row stuck in SENDING from a prior
   // crash must return to QUEUED so the sync loop can retry it. Server

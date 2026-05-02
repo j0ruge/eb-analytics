@@ -3,29 +3,23 @@ import { Professor } from '../types/professor';
 import { normalizeCpf, validateCpf } from '../utils/cpf';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
-import { apiClient } from './apiClient';
+import { apiClient, CATALOG_WRITE_TIMEOUT_MS } from './apiClient';
+import { enqueueCatalogPush } from './catalogPushQueue';
+
+// Whitelist of columns that may be patched via the dynamic UPDATE builder.
+// Closes the door on caller-supplied keys (e.g. `id`, `created_at`) being
+// silently rewritten through `Partial<Professor>`.
+const PROFESSOR_PATCHABLE_COLUMNS: readonly (keyof Professor)[] = ['doc_id', 'name'];
 
 export const professorService = {
   async createProfessor(data: { doc_id: string; name: string }): Promise<Professor> {
     const db = await getDatabase();
-    
-    // Validar CPF
+
     if (!validateCpf(data.doc_id)) {
       throw new Error('CPF inválido');
     }
 
-    // Normalizar CPF (remover pontos e traços)
     const cleanDocId = normalizeCpf(data.doc_id);
-
-    // Verificar se CPF já existe
-    const existing = await db.getFirstAsync<Professor>(
-      'SELECT * FROM professors WHERE doc_id = ?',
-      [cleanDocId]
-    );
-
-    if (existing) {
-      throw new Error('CPF já cadastrado');
-    }
 
     const newProfessor: Professor = {
       id: uuidv4(),
@@ -34,19 +28,37 @@ export const professorService = {
       created_at: new Date().toISOString(),
     };
 
-    await db.runAsync(
-      `INSERT INTO professors (id, doc_id, name, created_at) VALUES (?, ?, ?, ?)`,
-      [newProfessor.id, newProfessor.doc_id, newProfessor.name, newProfessor.created_at]
-    );
-
-    // Push to backend so the lesson `/sync/batch` can resolve professor_id.
-    // Backend ignores `doc_id` (no server counterpart) — only id + name go up.
-    const r = await apiClient.post('/catalog/professors', {
-      id: newProfessor.id,
-      name: newProfessor.name,
+    // Atomic: uniqueness check + insert in one transaction so two concurrent
+    // creates with the same CPF can't both pass the check.
+    await db.withTransactionAsync(async () => {
+      const existing = await db.getFirstAsync<Professor>(
+        'SELECT * FROM professors WHERE doc_id = ?',
+        [cleanDocId],
+      );
+      if (existing) {
+        throw new Error('CPF já cadastrado');
+      }
+      await db.runAsync(
+        `INSERT INTO professors (id, doc_id, name, created_at) VALUES (?, ?, ?, ?)`,
+        [newProfessor.id, newProfessor.doc_id, newProfessor.name, newProfessor.created_at],
+      );
     });
+
+    // Push to backend with timeout. Local row is committed; on failure we
+    // enqueue for the drainer to retry instead of throwing — offline-first.
+    const r = await apiClient.postWithTimeout(
+      '/catalog/professors',
+      { id: newProfessor.id, name: newProfessor.name },
+      CATALOG_WRITE_TIMEOUT_MS,
+    );
     if (r.error) {
-      throw new Error(r.error);
+      await enqueueCatalogPush(db, {
+        entityType: 'PROFESSOR',
+        entityId: newProfessor.id,
+        op: 'CREATE',
+        payload: { id: newProfessor.id, name: newProfessor.name },
+        lastError: r.error,
+      });
     }
 
     return newProfessor;
@@ -55,7 +67,7 @@ export const professorService = {
   async getAllProfessors(): Promise<Professor[]> {
     const db = await getDatabase();
     const results = await db.getAllAsync<Professor>(
-      'SELECT * FROM professors ORDER BY name ASC'
+      'SELECT * FROM professors ORDER BY name ASC',
     );
     return results;
   },
@@ -64,81 +76,102 @@ export const professorService = {
     const db = await getDatabase();
     const result = await db.getFirstAsync<Professor>(
       'SELECT * FROM professors WHERE id = ?',
-      [id]
+      [id],
     );
     return result;
   },
 
   async updateProfessor(id: string, updates: Partial<Professor>): Promise<void> {
     const db = await getDatabase();
-    
-    // Filter out ID and created_at
-    const entries = Object.entries(updates).filter(
-      ([key]) => key !== 'id' && key !== 'created_at'
+
+    // Filter to allowlisted columns only — protects against `Partial<Professor>`
+    // ever growing fields we don't intend to expose to the dynamic UPDATE.
+    const entries = Object.entries(updates).filter(([key]) =>
+      (PROFESSOR_PATCHABLE_COLUMNS as readonly string[]).includes(key),
     );
-    
     if (entries.length === 0) return;
 
-    // Se estiver atualizando doc_id, validar CPF
-    if (updates.doc_id) {
+    let cleanDocId: string | null = null;
+    if (updates.doc_id !== undefined) {
       if (!validateCpf(updates.doc_id)) {
         throw new Error('CPF inválido');
       }
-      
-      const cleanDocId = normalizeCpf(updates.doc_id);
-      
-      // Verificar se CPF já existe em outro professor
-      const existing = await db.getFirstAsync<Professor>(
-        'SELECT * FROM professors WHERE doc_id = ? AND id != ?',
-        [cleanDocId, id]
-      );
-
-      if (existing) {
-        throw new Error('CPF já cadastrado');
-      }
-
-      // Atualizar com CPF limpo
-      updates.doc_id = cleanDocId;
+      cleanDocId = normalizeCpf(updates.doc_id);
     }
 
-    const fields = entries.map(([key]) => key);
-    const values = entries.map(([_, value]) => value === undefined ? null : value);
+    const trimmedName = updates.name !== undefined ? updates.name.trim() : null;
 
-    const query = `UPDATE professors SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE id = ?`;
-    const params = [...values, id];
+    // Atomic: uniqueness check + UPDATE in one tx — closes TOCTOU on rapid
+    // duplicate calls (debounced autosave double-fire, network retry).
+    await db.withTransactionAsync(async () => {
+      if (cleanDocId !== null) {
+        const dup = await db.getFirstAsync<Professor>(
+          'SELECT * FROM professors WHERE doc_id = ? AND id != ?',
+          [cleanDocId, id],
+        );
+        if (dup) {
+          throw new Error('CPF já cadastrado');
+        }
+      }
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      if (cleanDocId !== null) {
+        fields.push('doc_id');
+        values.push(cleanDocId);
+      }
+      if (trimmedName !== null) {
+        fields.push('name');
+        values.push(trimmedName);
+      }
+      if (fields.length === 0) return;
+      await db.runAsync(
+        `UPDATE professors SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`,
+        [...values, id],
+      );
+    });
 
-    await db.runAsync(query, params);
-
-    // Push to backend. Local UPDATE stays even on failure.
-    // Only `name` maps to the backend Professor model — `doc_id` (CPF) is
-    // mobile-only and has no server counterpart.
-    if (updates.name !== undefined) {
-      const trimmed = updates.name.trim();
-      const r = await apiClient.patch(`/catalog/professors/${id}`, { name: trimmed });
+    // Push to backend (catalog write-back). Only `name` maps server-side.
+    if (trimmedName !== null) {
+      const r = await apiClient.patchWithTimeout(
+        `/catalog/professors/${id}`,
+        { name: trimmedName },
+        CATALOG_WRITE_TIMEOUT_MS,
+      );
       if (r.status === 404) {
-        // Row exists locally but not on server (created before catalog
-        // write-back shipped). Fall back to POST with the local id so
+        // Row exists locally but not on server — POST with the local id so
         // future sync_batch calls can resolve professor_id.
-        const post = await apiClient.post('/catalog/professors', {
-          id,
-          name: trimmed,
-        });
+        const post = await apiClient.postWithTimeout(
+          '/catalog/professors',
+          { id, name: trimmedName },
+          CATALOG_WRITE_TIMEOUT_MS,
+        );
         if (post.error) {
-          throw new Error(post.error);
+          await enqueueCatalogPush(db, {
+            entityType: 'PROFESSOR',
+            entityId: id,
+            op: 'CREATE',
+            payload: { id, name: trimmedName },
+            lastError: post.error,
+          });
         }
       } else if (r.error) {
-        throw new Error(r.error);
+        await enqueueCatalogPush(db, {
+          entityType: 'PROFESSOR',
+          entityId: id,
+          op: 'UPDATE',
+          payload: { name: trimmedName },
+          lastError: r.error,
+        });
       }
     }
   },
 
   async deleteProfessor(id: string): Promise<void> {
     const db = await getDatabase();
-    
-    // Verificar se o professor tem aulas vinculadas (por professor_id ou professor_name)
+
     const lessonsCount = await db.getFirstAsync<{ count: number }>(
       'SELECT COUNT(*) as count FROM lessons_data WHERE professor_id = ? OR professor_name = (SELECT name FROM professors WHERE id = ?)',
-      [id, id]
+      [id, id],
     );
 
     if (lessonsCount && lessonsCount.count > 0) {
@@ -146,5 +179,5 @@ export const professorService = {
     }
 
     await db.runAsync('DELETE FROM professors WHERE id = ?', [id]);
-  }
+  },
 };

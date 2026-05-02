@@ -77,6 +77,11 @@ function makeFakeDb() {
   return {
     async getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]> {
       const s = sql.replace(/\s+/g, ' ').trim();
+      // Catalog push drainer reads from catalog_pending_pushes at the start of
+      // every runOnce. Tests don't exercise the queue, so return empty.
+      if (s.startsWith('SELECT id, entity_type, entity_id, op, payload')) {
+        return [] as unknown as T[];
+      }
       if (s.startsWith('SELECT id, sync_attempt_count FROM lessons_data')) {
         const userId = params?.[0];
         const nowIso = params?.[1] as string;
@@ -168,21 +173,59 @@ function makeFakeDb() {
           "UPDATE lessons_data SET sync_status = 'QUEUED', sync_attempt_count = 0, sync_next_attempt_at = NULL, sync_error = NULL",
         )
       ) {
-        const userId = params?.[0] as string | null;
-        const id = params?.[1];
-        const row = state.rows.find((r) => r.id === id && r.sync_status === 'LOCAL');
-        if (row) {
-          row.sync_status = 'QUEUED';
-          row.sync_attempt_count = 0;
-          row.sync_next_attempt_at = null;
-          row.sync_error = null;
-          // COALESCE(collector_user_id, ?): if the row was created
-          // anonymously, stamp the current user now. Existing non-null
-          // values are preserved.
-          if (row.collector_user_id == null && userId != null) {
-            row.collector_user_id = userId;
+        // Enqueue: includes `collector_user_id = COALESCE(...)` and `sync_status = 'LOCAL'`.
+        if (s.includes("COALESCE(collector_user_id") && s.includes("sync_status = 'LOCAL'")) {
+          const userId = params?.[0] as string | null;
+          const id = params?.[1];
+          const row = state.rows.find((r) => r.id === id && r.sync_status === 'LOCAL');
+          if (row) {
+            row.sync_status = 'QUEUED';
+            row.sync_attempt_count = 0;
+            row.sync_next_attempt_at = null;
+            row.sync_error = null;
+            if (row.collector_user_id == null && userId != null) {
+              row.collector_user_id = userId;
+            }
+            return ok(1);
           }
-          return ok(1);
+          return ok(0);
+        }
+        // Targeted retryNow: WHERE id = ? AND sync_status IN ('QUEUED', 'REJECTED') AND collector_user_id = ?
+        if (s.includes("WHERE id = ?") && s.includes("sync_status IN ('QUEUED', 'REJECTED')")) {
+          const id = params?.[0];
+          const userId = params?.[1];
+          const row = state.rows.find(
+            (r) =>
+              r.id === id &&
+              (r.sync_status === 'QUEUED' || r.sync_status === 'REJECTED') &&
+              r.collector_user_id === userId,
+          );
+          if (row) {
+            row.sync_status = 'QUEUED';
+            row.sync_attempt_count = 0;
+            row.sync_next_attempt_at = null;
+            row.sync_error = null;
+            return ok(1);
+          }
+          return ok(0);
+        }
+        // Bulk retryNow: WHERE sync_status IN ('QUEUED', 'REJECTED') AND collector_user_id = ?
+        if (s.includes("sync_status IN ('QUEUED', 'REJECTED')")) {
+          const userId = params?.[0];
+          let changes = 0;
+          for (const row of state.rows) {
+            if (
+              (row.sync_status === 'QUEUED' || row.sync_status === 'REJECTED') &&
+              row.collector_user_id === userId
+            ) {
+              row.sync_status = 'QUEUED';
+              row.sync_attempt_count = 0;
+              row.sync_next_attempt_at = null;
+              row.sync_error = null;
+              changes++;
+            }
+          }
+          return ok(changes);
         }
         return ok(0);
       }

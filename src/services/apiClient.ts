@@ -244,4 +244,17 @@ export const apiClient = {
   ): Promise<ApiResponseWithHeaders<T>> {
     return requestWithTimeout<T>('POST', path, body, timeoutMs);
   },
+
+  patchWithTimeout<T>(
+    path: string,
+    body: unknown,
+    timeoutMs: number,
+  ): Promise<ApiResponseWithHeaders<T>> {
+    return requestWithTimeout<T>('PATCH', path, body, timeoutMs);
+  },
 };
+
+// Timeout used by catalog write-back calls (createProfessor/updateSeries/etc.).
+// Matches sync path FR-024b cap so a hung socket does not keep the radio on
+// past the 30-second mark.
+export const CATALOG_WRITE_TIMEOUT_MS = 30_000;

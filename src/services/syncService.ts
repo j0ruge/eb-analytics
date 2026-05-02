@@ -7,8 +7,16 @@
 import Constants from 'expo-constants';
 import { getDatabase } from '../db/client';
 import { withDbMutex } from '../db/mutex';
-import { apiClient, clearJwt } from './apiClient';
+import { apiClient, clearJwt, CATALOG_WRITE_TIMEOUT_MS } from './apiClient';
 import type { ApiResponseWithHeaders } from './apiClient';
+import {
+  bumpPushAttempt,
+  deletePendingPush,
+  listPendingPushes,
+  MAX_PUSH_ATTEMPTS,
+  type CatalogEntityType,
+  type CatalogPushOp,
+} from './catalogPushQueue';
 import { lessonService } from './lessonService';
 import { authService } from './authService';
 import { getDeviceId } from './deviceIdService';
@@ -274,6 +282,95 @@ async function markRejected(
   });
 }
 
+// Maps (entity_type, op) to the corresponding HTTP path. CREATE always POSTs
+// to the collection; UPDATE PATCHes the entity URL with id encoded.
+function catalogPushPath(
+  entityType: CatalogEntityType,
+  op: CatalogPushOp,
+  entityId: string,
+): { method: 'POST' | 'PATCH'; path: string } {
+  const collection =
+    entityType === 'PROFESSOR'
+      ? 'professors'
+      : entityType === 'SERIES'
+        ? 'series'
+        : 'topics';
+  if (op === 'CREATE') {
+    return { method: 'POST', path: `/catalog/${collection}` };
+  }
+  return { method: 'PATCH', path: `/catalog/${collection}/${entityId}` };
+}
+
+/**
+ * Drains pending catalog pushes (catalog_pending_pushes), enqueued by
+ * professorService / seriesService / topicService when their inline POST/PATCH
+ * failed. Bounded retries, skips rows past MAX_PUSH_ATTEMPTS. Runs serial,
+ * inside the global db mutex (caller-managed).
+ *
+ * Returns the number of pushes successfully drained (best-effort metric;
+ * the caller doesn't act on it directly).
+ */
+async function drainCatalogPushes(): Promise<number> {
+  const db = await getDatabase();
+  const pending = await listPendingPushes(db, 50);
+  let drained = 0;
+
+  for (const row of pending) {
+    if (row.attempts >= MAX_PUSH_ATTEMPTS) continue;
+
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(row.payload);
+    } catch (err) {
+      console.error(
+        `[catalogPushQueue] Corrupt payload for ${row.entity_type}/${row.entity_id}, deleting:`,
+        err,
+      );
+      await deletePendingPush(db, row.id);
+      continue;
+    }
+
+    const { method, path } = catalogPushPath(
+      row.entity_type,
+      row.op,
+      row.entity_id,
+    );
+    const r =
+      method === 'POST'
+        ? await apiClient.postWithTimeout(path, payload, CATALOG_WRITE_TIMEOUT_MS)
+        : await apiClient.patchWithTimeout(path, payload, CATALOG_WRITE_TIMEOUT_MS);
+
+    if (r.error === null) {
+      await deletePendingPush(db, row.id);
+      drained++;
+      continue;
+    }
+
+    // PATCH returning 404 means server doesn't have the row — promote to CREATE.
+    if (method === 'PATCH' && r.status === 404) {
+      // Caller stored only the patch fields. To CREATE, we need the full row;
+      // skip and bump attempts — next user edit on that entity will enqueue
+      // a fresh CREATE via the inline 404→POST fallback in the service.
+      await bumpPushAttempt(db, row.id, `404: ${r.error}`);
+      continue;
+    }
+
+    // 4xx (except 404) means the server explicitly rejected the payload —
+    // dropping is safer than retrying forever.
+    if (r.status >= 400 && r.status < 500 && r.status !== 404) {
+      console.warn(
+        `[catalogPushQueue] ${row.entity_type}/${row.entity_id} dropped due to ${r.status}: ${r.error}`,
+      );
+      await deletePendingPush(db, row.id);
+      continue;
+    }
+
+    // 5xx, network error, timeout — bump and retry next sync iteration.
+    await bumpPushAttempt(db, row.id, `${r.status}: ${r.error}`);
+  }
+  return drained;
+}
+
 export const syncService = {
   /**
    * Transition a LOCAL row to QUEUED. Enforces FR-010 preconditions.
@@ -438,6 +535,16 @@ export const syncService = {
       const userId = await currentUserId();
       if (!userId) {
         return { accepted: 0, rejected: 0, retried: 0, sessionExpired: false, lastError: null };
+      }
+
+      // Drain catalog write-back queue first so newly-created professor/series/topic
+      // rows reach the server before lessons that reference them are sent.
+      // Best-effort: errors are bumped per-row inside the drainer; we don't
+      // abort the sync run if the drainer can't make progress.
+      try {
+        await drainCatalogPushes();
+      } catch (err) {
+        console.error('[syncService] drainCatalogPushes threw:', err);
       }
 
       const now = new Date();

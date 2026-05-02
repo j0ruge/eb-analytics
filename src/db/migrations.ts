@@ -7,6 +7,7 @@ const MIGRATION_FLAG_KEY = '003_schema_migration_complete';
 const MIGRATION_006_FLAG = '006_auth_identity_complete';
 const MIGRATION_008_FLAG = '008_offline_sync_complete';
 const MIGRATION_TOPIC_DATE_FLAG = '008_topic_suggested_date_normalize';
+const MIGRATION_CATALOG_PUSHES_FLAG = '009_catalog_pending_pushes';
 
 interface LegacyLessonRow {
   id: string;
@@ -433,6 +434,67 @@ export async function migrateNormalizeTopicSuggestedDate(
     );
   } catch (error) {
     console.error('Migration topic suggested_date normalize failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Cria a tabela `catalog_pending_pushes` — fila offline-first para POST/PATCH
+ * de catálogo (professores, séries, tópicos) que falharam por rede ou 5xx.
+ * O drainer no syncService consome essa fila e tenta replay periodicamente.
+ *
+ * Espelha a semântica do `lessons_outbox` (já existente para aulas) — local
+ * sempre persiste, push é eventualmente consistente.
+ */
+export async function migrateAddCatalogPendingPushes(
+  db: SQLite.SQLiteDatabase,
+): Promise<void> {
+  console.log('Starting migration 009: catalog_pending_pushes');
+
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS _migration_flags (
+      key TEXT PRIMARY KEY NOT NULL,
+      completed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const existing = await db.getFirstAsync<{ key: string }>(
+    'SELECT key FROM _migration_flags WHERE key = ?',
+    [MIGRATION_CATALOG_PUSHES_FLAG],
+  );
+  if (existing) {
+    console.log('Migration 009 already complete, skipping');
+    return;
+  }
+
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS catalog_pending_pushes (
+        id TEXT PRIMARY KEY NOT NULL,
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('PROFESSOR', 'SERIES', 'TOPIC')),
+        entity_id TEXT NOT NULL,
+        op TEXT NOT NULL CHECK (op IN ('CREATE', 'UPDATE')),
+        payload TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_attempt_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_catalog_pending_pushes_attempts
+        ON catalog_pending_pushes (attempts ASC, created_at ASC);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_pending_pushes_entity
+        ON catalog_pending_pushes (entity_type, entity_id);
+    `);
+
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_CATALOG_PUSHES_FLAG],
+    );
+    console.log('Migration 009 complete');
+  } catch (error) {
+    console.error('Migration 009 failed:', error);
     throw error;
   }
 }
