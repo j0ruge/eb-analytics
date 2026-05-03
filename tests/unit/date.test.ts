@@ -191,6 +191,11 @@ describe("Date Utils", () => {
       expect(toIsoDateForWire("2026-05-30T15:30:00Z")).toBe("2026-05-30");
     });
 
+    it("strips time portion of Postgres-style space-separated timestamps", () => {
+      expect(toIsoDateForWire("2026-04-11 00:00:00")).toBe("2026-04-11");
+      expect(toIsoDateForWire("2026-05-30 15:30:00.123")).toBe("2026-05-30");
+    });
+
     it("returns null for empty/null/undefined", () => {
       expect(toIsoDateForWire(null)).toBeNull();
       expect(toIsoDateForWire(undefined)).toBeNull();

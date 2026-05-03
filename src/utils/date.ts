@@ -137,18 +137,23 @@ export function formatDayMonth(raw: string): string {
 
 /**
  * Converte qualquer formato aceito por `parseInputDate` (pt-BR `YYYY-MMM-DD`,
- * ISO `YYYY-MM-DD`, ISO completo `YYYY-MM-DDTHH:mm:ss…`) em ISO `YYYY-MM-DD`
- * para envio HTTP ao servidor. Retorna null para input vazio/nulo/inválido.
+ * ISO `YYYY-MM-DD`, ISO/Postgres timestamp `YYYY-MM-DD[T| ]HH:mm:ss…`) em
+ * ISO `YYYY-MM-DD` para envio HTTP ao servidor. Retorna null para input
+ * vazio/nulo/inválido.
  *
- * Necessário porque o backend valida `suggested_date` via `new Date(value)`,
- * que rejeita abreviações pt-BR não-coincidentes com o inglês (FEV/ABR/MAI/
- * AGO/SET/OUT/DEZ). Sempre normalizar na fronteira HTTP.
+ * Necessário porque o backend valida `suggested_date` via `new Date(value)`
+ * e o `/sync/batch` valida `date` via regex `/^\d{4}-\d{2}-\d{2}$/`. Ambos
+ * rejeitam abreviações pt-BR não-coincidentes com o inglês (FEV/ABR/MAI/
+ * AGO/SET/OUT/DEZ) e qualquer sufixo de hora. Sempre normalizar na fronteira HTTP.
  */
 export function toIsoDateForWire(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const datePart = trimmed.length >= 10 && trimmed[10] === 'T' ? trimmed.slice(0, 10) : trimmed;
+  // Strip a time suffix when the separator at position 10 is `T` (ISO 8601)
+  // or ` ` (Postgres-flavored `2026-04-11 00:00:00`).
+  const sep = trimmed.length > 10 ? trimmed[10] : '';
+  const datePart = sep === 'T' || sep === ' ' ? trimmed.slice(0, 10) : trimmed;
   const d = parseInputDate(datePart);
   if (!d) return null;
   const yyyy = d.getFullYear();

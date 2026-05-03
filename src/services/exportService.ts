@@ -5,6 +5,7 @@ import { lessonService } from './lessonService';
 import { getDeviceId } from './deviceIdService';
 import { authService } from './authService';
 import { LessonStatus, LessonWithDetails } from '../types/lesson';
+import { toIsoDateForWire } from '../utils/date';
 
 // ============================================================================
 // v2 envelope types — private to this service. See
@@ -105,8 +106,15 @@ function buildLessonInstance(row: LessonWithDetails): LessonInstanceRef {
   const professor_id = hasProfessor ? row.professor_id : null;
   const professor_name_fallback = hasProfessor ? null : emptyToNull(row.professor_name);
 
+  // `date` must reach the server as ISO `YYYY-MM-DD` — `/sync/batch`
+  // validates against /^\d{4}-\d{2}-\d{2}$/ before any parsing. Local
+  // SQLite stores whatever the picker produced (often pt-BR YYYY-MMM-DD);
+  // normalize on the wire boundary, falling back to the raw value if the
+  // string is unparseable so the server can surface a clear validation error.
+  const date = toIsoDateForWire(row.date) ?? row.date;
+
   return {
-    date: row.date,
+    date,
     series_id,
     series_code_fallback,
     topic_id,

@@ -366,6 +366,43 @@ describe('exportService v2 envelope', () => {
   });
 
   // ==================================================================
+  // Wire-format normalization — lesson date must reach /sync/batch as
+  // ISO YYYY-MM-DD even when SQLite stores pt-BR YYYY-MMM-DD from
+  // DatePickerInput. Server's syncService validates against
+  // /^\d{4}-\d{2}-\d{2}$/ before parsing, so pt-BR months would 400.
+  // ==================================================================
+  describe('date wire-format normalization', () => {
+    it('converts pt-BR date in storage to ISO YYYY-MM-DD on the wire', async () => {
+      const lessonInPtBr: LessonWithDetails = {
+        ...catalogLesson,
+        date: '2026-MAI-09',
+      };
+      (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([lessonInPtBr]);
+
+      const envelope = await exportService.__buildEnvelopeForTest();
+      expect(envelope.collections[0].lesson_instance.date).toBe('2026-05-09');
+    });
+
+    it('passes ISO date through unchanged', async () => {
+      (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([catalogLesson]);
+
+      const envelope = await exportService.__buildEnvelopeForTest();
+      expect(envelope.collections[0].lesson_instance.date).toBe('2026-04-11');
+    });
+
+    it('falls back to raw value when date is unparseable so server can surface error', async () => {
+      const garbage: LessonWithDetails = {
+        ...catalogLesson,
+        date: 'not-a-date',
+      };
+      (lessonService.getAllLessonsWithDetails as jest.Mock).mockResolvedValue([garbage]);
+
+      const envelope = await exportService.__buildEnvelopeForTest();
+      expect(envelope.collections[0].lesson_instance.date).toBe('not-a-date');
+    });
+  });
+
+  // ==================================================================
   // Collector identity (006 FR-009)
   // ==================================================================
   describe('collector identity', () => {

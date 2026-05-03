@@ -69,18 +69,38 @@ jest.mock('../../src/services/exportService', () => ({
 
 type Row = Record<string, unknown>;
 
+interface Push {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  op: string;
+  payload: string;
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+  last_attempt_at: string | null;
+}
+
 const state = {
   rows: [] as Row[],
+  pushes: [] as Push[],
 };
 
 function makeFakeDb() {
   return {
     async getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]> {
       const s = sql.replace(/\s+/g, ' ').trim();
-      // Catalog push drainer reads from catalog_pending_pushes at the start of
-      // every runOnce. Tests don't exercise the queue, so return empty.
+      // Catalog push drainer reads from catalog_pending_pushes at the start
+      // of every runOnce. Tests that don't seed pushes get an empty list.
       if (s.startsWith('SELECT id, entity_type, entity_id, op, payload')) {
-        return [] as unknown as T[];
+        const limit = (params?.[0] as number | undefined) ?? 50;
+        return state.pushes
+          .slice()
+          .sort((a, b) => {
+            if (a.attempts !== b.attempts) return a.attempts - b.attempts;
+            return a.created_at.localeCompare(b.created_at);
+          })
+          .slice(0, limit) as unknown as T[];
       }
       if (s.startsWith('SELECT id, sync_attempt_count FROM lessons_data')) {
         const userId = params?.[0];
@@ -129,6 +149,25 @@ function makeFakeDb() {
     async runAsync(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowId: number }> {
       const s = sql.replace(/\s+/g, ' ').trim();
       const ok = (changes: number) => ({ changes, lastInsertRowId: 0 });
+      // catalog_pending_pushes — drainer mutations
+      if (s.startsWith('UPDATE catalog_pending_pushes SET attempts = attempts + 1')) {
+        const lastError = params?.[0] as string;
+        const id = params?.[1] as string;
+        const push = state.pushes.find((p) => p.id === id);
+        if (push) {
+          push.attempts += 1;
+          push.last_error = lastError;
+          push.last_attempt_at = new Date().toISOString();
+          return ok(1);
+        }
+        return ok(0);
+      }
+      if (s.startsWith('DELETE FROM catalog_pending_pushes WHERE id =')) {
+        const id = params?.[0] as string;
+        const before = state.pushes.length;
+        state.pushes = state.pushes.filter((p) => p.id !== id);
+        return ok(before - state.pushes.length);
+      }
       if (s.startsWith("UPDATE lessons_data SET sync_status = 'SENDING'")) {
         const id = params?.[0];
         const row = state.rows.find((r) => r.id === id && r.sync_status === 'QUEUED');
@@ -321,8 +360,25 @@ function seed(lesson: Partial<Row>): Row {
   return row;
 }
 
+function seedPush(push: Partial<Push>): Push {
+  const row: Push = {
+    id: push.id ?? 'push-1',
+    entity_type: push.entity_type ?? 'TOPIC',
+    entity_id: push.entity_id ?? 'topic-1',
+    op: push.op ?? 'CREATE',
+    payload: push.payload ?? JSON.stringify({ id: 'topic-1' }),
+    attempts: push.attempts ?? 0,
+    last_error: push.last_error ?? null,
+    created_at: push.created_at ?? '2026-04-18T09:00:00.000Z',
+    last_attempt_at: push.last_attempt_at ?? null,
+  };
+  state.pushes.push(row);
+  return row;
+}
+
 beforeEach(() => {
   state.rows.length = 0;
+  state.pushes.length = 0;
   mockGetById.mockImplementation(async (id: string) => state.rows.find((r) => r.id === id) ?? null);
   mockGetByIdWithDetails.mockImplementation(async (id: string) =>
     state.rows.find((r) => r.id === id) ?? null,
@@ -598,5 +654,78 @@ describe('syncService.retryNow', () => {
     expect(a.sync_attempt_count).toBe(0);
     expect(a.sync_next_attempt_at).toBeNull();
     expect(a.sync_error).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drainCatalogPushes — exercised via runOnce. The drainer fires before lesson
+// claim, so a runOnce with no lessons exercises only the queue.
+// ---------------------------------------------------------------------------
+
+describe('drainCatalogPushes (via runOnce)', () => {
+  it('bumps attempts on 4xx-not-404 instead of deleting (data preserved for re-edit)', async () => {
+    const push = seedPush({ entity_type: 'TOPIC', op: 'CREATE', attempts: 0 });
+    mockPostWithTimeout.mockResolvedValueOnce({
+      status: 400,
+      data: null,
+      error: 'invalid_payload',
+      headers: {},
+    });
+
+    await syncService.runOnce();
+
+    expect(state.pushes).toHaveLength(1);
+    expect(state.pushes[0].attempts).toBe(1);
+    expect(state.pushes[0].last_error).toBe('400: invalid_payload');
+    // Verify the drainer reached the topics endpoint with the right body.
+    // Third arg is CATALOG_WRITE_TIMEOUT_MS — the apiClient mock factory
+    // doesn't re-export it, so it lands as undefined in the proxied call.
+    expect(mockPostWithTimeout).toHaveBeenCalledTimes(1);
+    const [calledPath, calledBody] = mockPostWithTimeout.mock.calls[0];
+    expect(calledPath).toBe('/catalog/topics');
+    expect(calledBody).toEqual({ id: 'topic-1' });
+    // entry must NOT have been deleted — that was the silent-loss bug
+    expect(state.pushes.find((p) => p.id === push.id)).toBeDefined();
+  });
+
+  it('deletes the entry on success (200/201)', async () => {
+    seedPush({ entity_type: 'PROFESSOR', op: 'CREATE' });
+    mockPostWithTimeout.mockResolvedValueOnce({
+      status: 201,
+      data: null,
+      error: null,
+      headers: {},
+    });
+
+    await syncService.runOnce();
+
+    expect(state.pushes).toHaveLength(0);
+  });
+
+  it('also bumps on 5xx (no behavior regression in transient-error path)', async () => {
+    seedPush({ entity_type: 'SERIES', op: 'CREATE' });
+    mockPostWithTimeout.mockResolvedValueOnce({
+      status: 503,
+      data: null,
+      error: 'service unavailable',
+      headers: {},
+    });
+
+    await syncService.runOnce();
+
+    expect(state.pushes).toHaveLength(1);
+    expect(state.pushes[0].attempts).toBe(1);
+    expect(state.pushes[0].last_error).toBe('503: service unavailable');
+  });
+
+  it('skips entries past MAX_PUSH_ATTEMPTS without calling the API', async () => {
+    seedPush({ entity_type: 'TOPIC', op: 'CREATE', attempts: 8 });
+
+    await syncService.runOnce();
+
+    expect(mockPostWithTimeout).not.toHaveBeenCalled();
+    // entry is preserved so a future enqueue (which resets attempts=0) destrava it
+    expect(state.pushes).toHaveLength(1);
+    expect(state.pushes[0].attempts).toBe(8);
   });
 });

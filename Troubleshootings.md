@@ -35,3 +35,17 @@ $env:EXPO_OFFLINE = '1'; npm start
 # macOS / Linux / Git Bash
 EXPO_OFFLINE=1 npm start
 ```
+
+## `npm run dev:up` falha com `pwsh: command not found`
+
+Os scripts `dev:up`, `dev:up:noexpo`, `dev:up:rebuild`, `dev:down`, `dev:nuke` e `dev:status` invocam `pwsh ./dev-up.ps1` por padrão (PowerShell Core). Em máquinas sem `pwsh` no PATH (macOS/Linux sem PowerShell instalado), eles falham.
+
+**Solução**: use as variantes `:sh` que delegam para `bash ./dev-up.sh`:
+
+```bash
+npm run dev:up:sh      # equivalente a dev:up
+npm run dev:down:sh    # equivalente a dev:down
+npm run dev:status:sh  # equivalente a dev:status
+```
+
+Para usar `pwsh` no macOS/Linux, instale via `brew install --cask powershell` ou `apt install powershell`.
