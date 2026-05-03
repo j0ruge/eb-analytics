@@ -1,0 +1,1101 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EB Insights API",
+    "version": "2.0.0",
+    "description": "Backend REST API do EB Insights — sincronização multi-coletor de coletas de Escola Bíblica (Spec 007).\n\n**Fonte canônica**: este arquivo. Rationale por domínio: [`specs/007-sync-backend/contracts/`](../../specs/007-sync-backend/contracts/). Envelope de export v2: [`specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json`](../../specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json).\n\n**Convenções**:\n- Autenticação por `Authorization: Bearer <jwt>` (JWT HS256, TTL 7 dias).\n- Erros seguem `{ code, message }` com `code` em snake_case (registro em `specs/007-sync-backend/contracts/error-codes.md`). Mensagens em pt-BR.\n- Primeiro usuário registrado é auto-promovido a `COORDINATOR`; demais entram como `COLLECTOR`."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Dev local (mesma máquina)"
+    },
+    {
+      "url": "http://{lanIp}:3000",
+      "description": "Dev local via LAN (Expo Go em celular físico)",
+      "variables": {
+        "lanIp": {
+          "default": "192.168.0.42",
+          "description": "IPv4 da máquina na LAN. No Windows, obter via `ipconfig`."
+        }
+      }
+    }
+  ],
+  "tags": [
+    { "name": "auth", "description": "Registro, login e sessão atual." },
+    { "name": "health", "description": "Liveness/readiness probe." },
+    { "name": "sync", "description": "Ingestão de batches v2 (coletor → backend)." },
+    { "name": "collections", "description": "Leitura das coletas submetidas pelo próprio usuário." },
+    { "name": "catalog", "description": "Séries, tópicos e professores (leitura pública; mutações só coordinator)." },
+    { "name": "instances", "description": "Agregados de aulas (coordinator only)." },
+    { "name": "users", "description": "Moderação de coletores (coordinator only)." }
+  ],
+  "security": [{ "BearerAuth": [] }],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Liveness + readiness",
+        "description": "Retorna 200 se o Postgres estiver acessível, 503 caso contrário. Endpoint público.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Servidor e Postgres no ar.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthOk" },
+                "example": { "status": "ok", "postgres": "up" }
+              }
+            }
+          },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Auto-cadastro",
+        "description": "Cria um novo usuário. O primeiro a registrar no sistema vira `COORDINATOR` automaticamente (FR-013).",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" },
+              "example": {
+                "email": "coord@example.com",
+                "password": "troque-isso-8+",
+                "display_name": "Coordenador"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuário criado; JWT pronto pra uso.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Login",
+        "description": "Autentica e devolve um novo JWT (rotaciona a sessão). O antigo continua válido até expirar.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" },
+              "example": { "email": "coord@example.com", "password": "troque-isso-8+" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credenciais ok.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "429": { "$ref": "#/components/responses/Error429" }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Sessão atual",
+        "description": "Dados do usuário dono do JWT. Útil pra rehidratar UI após reload.",
+        "responses": {
+          "200": {
+            "description": "Perfil do usuário autenticado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" },
+                "example": {
+                  "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                  "email": "coord@example.com",
+                  "display_name": "Coordenador",
+                  "role": "COORDINATOR",
+                  "accepted": true
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/sync/batch": {
+      "post": {
+        "tags": ["sync"],
+        "summary": "Ingesta batch v2",
+        "description": "Recebe envelope de export v2 (até 500 coletas, 5 MB). Idempotente via `collections[].id`. Sucesso parcial retorna 200 com `rejected[]` preenchido.\n\nProcessamento: transação Serializable, advisory lock por `lesson_instance.id`, upsert de catálogo faltante, recompute de agregados por mediana ao final. Ver `specs/007-sync-backend/contracts/sync.md` §Processing algorithm.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SyncBatchRequest" },
+              "examples": {
+                "minimal": {
+                  "summary": "Uma coleta mínima com fallbacks",
+                  "value": {
+                    "schema_version": "2.0",
+                    "client": { "app_version": "demo", "device_id": "11111111-1111-1111-1111-111111111111" },
+                    "collector": null,
+                    "exported_at": "2026-04-18T18:00:00.000Z",
+                    "collections": [
+                      {
+                        "id": "aaaa0000-0000-4000-8000-000000000001",
+                        "client_created_at": "2026-04-11T10:00:00.000Z",
+                        "client_updated_at": "2026-04-11T10:07:00.000Z",
+                        "status": "COMPLETED",
+                        "lesson_instance": {
+                          "date": "2026-04-11",
+                          "series_id": null,
+                          "series_code_fallback": "EB400",
+                          "topic_id": null,
+                          "topic_title_fallback": "Licao 1",
+                          "professor_id": null,
+                          "professor_name_fallback": "Prof Teste"
+                        },
+                        "times": {
+                          "expected_start": "10:00",
+                          "expected_end": "11:00",
+                          "real_start": null,
+                          "real_end": null
+                        },
+                        "attendance": { "start": 10, "mid": 12, "end": 11, "includes_professor": false },
+                        "unique_participants": 13,
+                        "weather": null,
+                        "notes": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Processado. Pode incluir `rejected[]` mesmo com HTTP 200 (partial success, EC-003).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SyncBatchResponse" },
+                "example": {
+                  "accepted": ["aaaa0000-0000-4000-8000-000000000001"],
+                  "rejected": [],
+                  "server_now": "2026-04-18T18:00:15.123Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Lote inteiro rejeitado — `schema_version` ausente/inválido.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "schema_version_required": {
+                    "value": { "code": "schema_version_required", "message": "O campo schema_version é obrigatório." }
+                  },
+                  "schema_version_unsupported": {
+                    "value": { "code": "schema_version_unsupported", "message": "Versão de schema não suportada — esperada v2." }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" }
+        }
+      }
+    },
+    "/collections": {
+      "get": {
+        "tags": ["collections"],
+        "summary": "Minhas coletas",
+        "description": "Lista coletas (SYNCED ou REJECTED) submetidas pelo usuário autenticado. Suporta `?since=` pra leitura incremental.",
+        "parameters": [
+          {
+            "name": "mine",
+            "in": "query",
+            "required": true,
+            "description": "Deve ser literalmente `true` no MVP. Qualquer outro valor retorna 400.",
+            "schema": { "type": "string", "enum": ["true"] }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 para filtrar por `client_updated_at > since`.",
+            "schema": { "type": "string", "format": "date-time" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de coletas.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListedCollectionsResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/catalog": {
+      "get": {
+        "tags": ["catalog"],
+        "summary": "Catálogo (séries + tópicos + professores)",
+        "description": "Retorna as 3 coleções de catálogo. `?since=` filtra por `updated_at > since` (leitura incremental). `?include_pending=true` inclui itens criados automaticamente via `/sync/batch` e ainda não moderados — só coordinator tem permissão.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601. Filtra por `updated_at > since`.",
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "include_pending",
+            "in": "query",
+            "required": false,
+            "description": "`true` inclui itens `is_pending = true`. Requer `role = COORDINATOR`.",
+            "schema": { "type": "string", "enum": ["true", "false"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catálogo completo (ou filtrado).",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CatalogResponse" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/catalog/series": {
+      "post": {
+        "tags": ["catalog"],
+        "summary": "Criar série",
+        "description": "Cria uma nova série de lições. Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SeriesCreate" },
+              "example": { "code": "EB400", "title": "Gálatas", "description": "Série de estudos em Gálatas" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Série criada.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SeriesItem" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      }
+    },
+    "/catalog/series/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "minLength": 1 }
+        }
+      ],
+      "patch": {
+        "tags": ["catalog"],
+        "summary": "Atualizar série",
+        "description": "Atualização parcial. Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SeriesPatch" },
+              "example": { "title": "Gálatas — revisado" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Série atualizada.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SeriesItem" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      },
+      "delete": {
+        "tags": ["catalog"],
+        "summary": "Excluir série",
+        "description": "Só permitido se não houver tópicos vinculados (409 `series_referenced` caso contrário). Requer `role = COORDINATOR`.",
+        "responses": {
+          "204": { "description": "Série excluída." },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      }
+    },
+    "/catalog/topics": {
+      "post": {
+        "tags": ["catalog"],
+        "summary": "Criar tópico",
+        "description": "Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TopicCreate" },
+              "example": {
+                "series_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                "title": "Lição 1 — Introdução",
+                "sequence_order": 1,
+                "suggested_date": "2026-04-11"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tópico criado.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TopicItem" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/catalog/topics/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+      ],
+      "patch": {
+        "tags": ["catalog"],
+        "summary": "Atualizar tópico",
+        "description": "Atualização parcial. Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TopicPatch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tópico atualizado.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TopicItem" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      },
+      "delete": {
+        "tags": ["catalog"],
+        "summary": "Excluir tópico",
+        "description": "409 `topic_referenced` se há coletas apontando pra ele. Requer `role = COORDINATOR`.",
+        "responses": {
+          "204": { "description": "Tópico excluído." },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      }
+    },
+    "/catalog/professors": {
+      "post": {
+        "tags": ["catalog"],
+        "summary": "Criar professor",
+        "description": "Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProfessorCreate" },
+              "example": { "name": "João Silva", "email": "joao@example.com" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Professor criado.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ProfessorItem" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      }
+    },
+    "/catalog/professors/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+      ],
+      "patch": {
+        "tags": ["catalog"],
+        "summary": "Atualizar professor",
+        "description": "Atualização parcial. Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProfessorPatch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Professor atualizado.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ProfessorItem" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      },
+      "delete": {
+        "tags": ["catalog"],
+        "summary": "Excluir professor",
+        "description": "409 `professor_referenced` se há coletas apontando pra ele. Requer `role = COORDINATOR`.",
+        "responses": {
+          "204": { "description": "Professor excluído." },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" }
+        }
+      }
+    },
+    "/instances": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Listar aulas agregadas",
+        "description": "Retorna `lesson_instance` no intervalo `[from, to]` com agregados por mediana. Requer `role = COORDINATOR`.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "Data inicial (YYYY-MM-DD).",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "Data final (YYYY-MM-DD).",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de aulas com agregados.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/InstancesResponse" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/instances/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+      ],
+      "get": {
+        "tags": ["instances"],
+        "summary": "Detalhe de uma aula agregada",
+        "description": "Inclui coletas individuais que contribuíram pro agregado. Requer `role = COORDINATOR`.",
+        "responses": {
+          "200": {
+            "description": "Detalhe da aula.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/InstanceDetail" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/instances/{id}/recompute": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+      ],
+      "post": {
+        "tags": ["instances"],
+        "summary": "Forçar recompute dos agregados",
+        "description": "Útil após mudanças manuais no banco (dev/debug). Requer `role = COORDINATOR`.",
+        "responses": {
+          "204": { "description": "Agregados recomputados." },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Listar usuários",
+        "description": "Requer `role = COORDINATOR`.",
+        "responses": {
+          "200": {
+            "description": "Lista de usuários.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/UsersResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/users/{id}/accepted": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } }
+      ],
+      "patch": {
+        "tags": ["users"],
+        "summary": "Aceitar/rejeitar coletor",
+        "description": "Virar um coletor para `accepted = false` dispara recompute em cascata de todas as lesson instances em que ele contribuiu (FR-051, SC-006). Requer `role = COORDINATOR`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["accepted"],
+                "properties": { "accepted": { "type": "boolean" } }
+              },
+              "example": { "accepted": false }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Usuário atualizado; agregados recomputados.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/User" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT HS256 obtido via `POST /auth/register` ou `POST /auth/login`. Validade: 7 dias."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Código estável em snake_case. Registro completo: `specs/007-sync-backend/contracts/error-codes.md`.",
+            "example": "unauthenticated"
+          },
+          "message": {
+            "type": "string",
+            "description": "Mensagem em pt-BR, segura pra exibir ao usuário.",
+            "example": "Credencial ausente ou inválida."
+          }
+        }
+      },
+      "HealthOk": {
+        "type": "object",
+        "required": ["status", "postgres"],
+        "properties": {
+          "status": { "type": "string", "enum": ["ok"] },
+          "postgres": { "type": "string", "enum": ["up"] }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": ["id", "email", "display_name", "role", "accepted"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "display_name": { "type": "string" },
+          "role": { "type": "string", "enum": ["COORDINATOR", "COLLECTOR"] },
+          "accepted": {
+            "type": "boolean",
+            "description": "Se `false`, as coletas do usuário são excluídas dos agregados (FR-051)."
+          },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "password", "display_name"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 8, "description": "Mínimo 8 caracteres." },
+          "display_name": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "required": ["jwt", "user"],
+        "properties": {
+          "jwt": { "type": "string", "description": "JWT HS256, TTL 7 dias." },
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "SeriesItem": {
+        "type": "object",
+        "required": ["id", "code", "title", "is_pending", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "code": { "type": "string", "description": "Código único (ex: EB400)." },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "is_pending": {
+            "type": "boolean",
+            "description": "`true` quando a série foi auto-criada via `/sync/batch` e aguarda moderação."
+          },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SeriesCreate": {
+        "type": "object",
+        "required": ["code", "title"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "nullable": true }
+        }
+      },
+      "SeriesPatch": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "nullable": true }
+        }
+      },
+      "TopicItem": {
+        "type": "object",
+        "required": ["id", "series_id", "title", "sequence_order", "is_pending", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "series_id": { "type": "string", "format": "uuid" },
+          "title": { "type": "string" },
+          "sequence_order": { "type": "integer" },
+          "suggested_date": { "type": "string", "format": "date", "nullable": true },
+          "is_pending": { "type": "boolean" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TopicCreate": {
+        "type": "object",
+        "required": ["series_id", "title", "sequence_order"],
+        "properties": {
+          "series_id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "sequence_order": { "type": "integer" },
+          "suggested_date": { "type": "string", "format": "date", "nullable": true }
+        }
+      },
+      "TopicPatch": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "sequence_order": { "type": "integer" },
+          "suggested_date": { "type": "string", "format": "date", "nullable": true }
+        }
+      },
+      "ProfessorItem": {
+        "type": "object",
+        "required": ["id", "name", "is_pending", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email", "nullable": true },
+          "is_pending": { "type": "boolean" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProfessorCreate": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "format": "email", "nullable": true }
+        }
+      },
+      "ProfessorPatch": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "format": "email", "nullable": true }
+        }
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "required": ["series", "topics", "professors", "server_now"],
+        "properties": {
+          "series": { "type": "array", "items": { "$ref": "#/components/schemas/SeriesItem" } },
+          "topics": { "type": "array", "items": { "$ref": "#/components/schemas/TopicItem" } },
+          "professors": { "type": "array", "items": { "$ref": "#/components/schemas/ProfessorItem" } },
+          "server_now": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SyncBatchRequest": {
+        "type": "object",
+        "required": ["schema_version", "collections"],
+        "description": "Envelope v2 — authoritative schema em `specs/005-export-contract-v2/contracts/export-envelope.v2.schema.json`.",
+        "properties": {
+          "schema_version": { "type": "string", "enum": ["2.0"] },
+          "client": {
+            "type": "object",
+            "properties": {
+              "app_version": { "type": "string" },
+              "device_id": { "type": "string", "format": "uuid" }
+            }
+          },
+          "collector": {
+            "nullable": true,
+            "type": "object",
+            "description": "Opcional; quando presente, identifica o coletor (redundante se o JWT já identifica)."
+          },
+          "exported_at": { "type": "string", "format": "date-time" },
+          "collections": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "items": { "$ref": "#/components/schemas/SyncCollectionItem" }
+          }
+        }
+      },
+      "SyncCollectionItem": {
+        "type": "object",
+        "required": ["id", "client_created_at", "client_updated_at", "status", "lesson_instance", "attendance", "unique_participants"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "description": "Chave de idempotência gerada no cliente." },
+          "client_created_at": { "type": "string", "format": "date-time" },
+          "client_updated_at": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["COMPLETED"] },
+          "lesson_instance": {
+            "type": "object",
+            "required": ["date"],
+            "properties": {
+              "date": { "type": "string", "format": "date" },
+              "series_id": { "type": "string", "format": "uuid", "nullable": true },
+              "series_code_fallback": { "type": "string", "description": "Usado quando `series_id` é null — auto-cria série `is_pending`." },
+              "topic_id": { "type": "string", "format": "uuid", "nullable": true },
+              "topic_title_fallback": { "type": "string" },
+              "professor_id": { "type": "string", "format": "uuid", "nullable": true },
+              "professor_name_fallback": { "type": "string", "nullable": true }
+            }
+          },
+          "times": {
+            "type": "object",
+            "properties": {
+              "expected_start": { "type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$", "example": "10:00" },
+              "expected_end": { "type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$", "example": "11:00" },
+              "real_start": { "type": "string", "nullable": true, "pattern": "^[0-2][0-9]:[0-5][0-9]$" },
+              "real_end": { "type": "string", "nullable": true, "pattern": "^[0-2][0-9]:[0-5][0-9]$" }
+            }
+          },
+          "attendance": {
+            "type": "object",
+            "required": ["start", "mid", "end", "includes_professor"],
+            "properties": {
+              "start": { "type": "integer", "minimum": 0 },
+              "mid": { "type": "integer", "minimum": 0 },
+              "end": { "type": "integer", "minimum": 0 },
+              "includes_professor": { "type": "boolean" }
+            }
+          },
+          "unique_participants": { "type": "integer", "minimum": 0 },
+          "weather": { "type": "string", "nullable": true },
+          "notes": { "type": "string", "nullable": true }
+        }
+      },
+      "SyncBatchResponse": {
+        "type": "object",
+        "required": ["accepted", "rejected", "server_now"],
+        "properties": {
+          "accepted": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "rejected": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SyncRejection" }
+          },
+          "server_now": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SyncRejection": {
+        "type": "object",
+        "required": ["id", "code", "message"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "code": {
+            "type": "string",
+            "enum": ["missing_catalog_reference", "invalid_collection_payload", "already_rejected_older"]
+          },
+          "message": { "type": "string" }
+        }
+      },
+      "ListedCollection": {
+        "type": "object",
+        "required": ["id", "lesson_instance_id", "status", "client_updated_at", "server_received_at", "attendance_start", "attendance_mid", "attendance_end", "includes_professor", "unique_participants"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "lesson_instance_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["SYNCED", "REJECTED"] },
+          "rejection_reason": { "type": "string", "nullable": true, "description": "Formato `<code>:<message>` quando status = REJECTED." },
+          "client_updated_at": { "type": "string", "format": "date-time" },
+          "server_received_at": { "type": "string", "format": "date-time" },
+          "attendance_start": { "type": "integer" },
+          "attendance_mid": { "type": "integer" },
+          "attendance_end": { "type": "integer" },
+          "includes_professor": { "type": "boolean" },
+          "unique_participants": { "type": "integer" }
+        }
+      },
+      "ListedCollectionsResponse": {
+        "type": "object",
+        "required": ["collections", "server_now"],
+        "properties": {
+          "collections": { "type": "array", "items": { "$ref": "#/components/schemas/ListedCollection" } },
+          "server_now": { "type": "string", "format": "date-time" }
+        }
+      },
+      "InstanceSummary": {
+        "type": "object",
+        "required": ["id", "date", "agg_collector_count"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "date": { "type": "string", "format": "date" },
+          "series_id": { "type": "string", "format": "uuid", "nullable": true },
+          "topic_id": { "type": "string", "format": "uuid", "nullable": true },
+          "professor_id": { "type": "string", "format": "uuid", "nullable": true },
+          "agg_attendance_start": { "type": "integer", "nullable": true },
+          "agg_attendance_mid": { "type": "integer", "nullable": true },
+          "agg_attendance_end": { "type": "integer", "nullable": true },
+          "agg_unique_participants": { "type": "integer", "nullable": true },
+          "agg_collector_count": {
+            "type": "integer",
+            "description": "Quantidade de coletores que contribuíram (excluindo `accepted = false`)."
+          }
+        }
+      },
+      "InstanceSubmission": {
+        "type": "object",
+        "description": "Coleta individual que contribuiu pro agregado.",
+        "required": ["id", "collector_user_id", "status", "attendance_start", "attendance_mid", "attendance_end", "includes_professor", "unique_participants"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "collector_user_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["SYNCED"] },
+          "attendance_start": { "type": "integer" },
+          "attendance_mid": { "type": "integer" },
+          "attendance_end": { "type": "integer" },
+          "includes_professor": { "type": "boolean" },
+          "unique_participants": { "type": "integer" }
+        }
+      },
+      "InstanceDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/InstanceSummary" },
+          {
+            "type": "object",
+            "required": ["collections"],
+            "properties": {
+              "collections": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/InstanceSubmission" }
+              }
+            }
+          }
+        ]
+      },
+      "InstancesResponse": {
+        "type": "object",
+        "required": ["instances"],
+        "properties": {
+          "instances": { "type": "array", "items": { "$ref": "#/components/schemas/InstanceSummary" } }
+        }
+      },
+      "UsersResponse": {
+        "type": "object",
+        "required": ["users"],
+        "properties": {
+          "users": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+        }
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Bad request — payload ou query inválidos.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "invalid_payload": { "value": { "code": "invalid_payload", "message": "Payload inválido." } },
+              "invalid_query": { "value": { "code": "invalid_query", "message": "Parâmetros de consulta inválidos." } },
+              "password_too_short": { "value": { "code": "password_too_short", "message": "A senha deve ter no mínimo 8 caracteres." } },
+              "invalid_email": { "value": { "code": "invalid_email", "message": "E-mail inválido." } }
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Não autenticado ou credenciais inválidas.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "unauthenticated": { "value": { "code": "unauthenticated", "message": "Credencial ausente ou inválida." } },
+              "invalid_credentials": { "value": { "code": "invalid_credentials", "message": "E-mail ou senha inválidos." } }
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Autenticado mas sem permissão (role insuficiente).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "code": "forbidden", "message": "Acesso restrito a coordenadores." }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Recurso não encontrado.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "code": "not_found", "message": "Registro não encontrado." }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Conflito — duplicado ou com referências.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "email_already_registered": { "value": { "code": "email_already_registered", "message": "Este e-mail já está cadastrado." } },
+              "code_already_exists": { "value": { "code": "code_already_exists", "message": "Código já existe." } },
+              "series_referenced": { "value": { "code": "series_referenced", "message": "Série não pode ser excluída enquanto houver aulas associadas." } },
+              "topic_referenced": { "value": { "code": "topic_referenced", "message": "Tópico não pode ser excluído enquanto houver aulas associadas." } },
+              "professor_referenced": { "value": { "code": "professor_referenced", "message": "Professor não pode ser excluído enquanto houver aulas associadas." } }
+            }
+          }
+        }
+      },
+      "Error413": {
+        "description": "Payload muito grande — `/sync/batch` limita 500 coletas ou 5 MB.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "code": "batch_too_large", "message": "Lote excede o limite (máx. 500 coletas ou 5 MB)." }
+          }
+        }
+      },
+      "Error429": {
+        "description": "Rate limit. Cabeçalho `Retry-After` indica em quantos segundos tentar novamente.",
+        "headers": {
+          "Retry-After": {
+            "description": "Segundos até a próxima tentativa permitida.",
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "code": "rate_limited", "message": "Muitas requisições. Aguarde um instante." }
+          }
+        }
+      },
+      "Error503": {
+        "description": "Banco de dados indisponível.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "code": "database_unavailable", "message": "Banco de dados indisponível." }
+          }
+        }
+      }
+    }
+  }
+}

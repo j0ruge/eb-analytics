@@ -4,7 +4,7 @@
 
 - **Stack (Mobile)**: React Native 0.81 + Expo SDK 54 + Expo Router 6 + TypeScript 5.9 (strict) + SQLite (expo-sqlite 16)
 - **Architecture**: Local-first, offline-first mobile app
-- **Backend**: Node 22 + Fastify 5 + Prisma 7 + PostgreSQL 16 — lives in `server/` with its own rules → see [`server/CLAUDE.md`](server/CLAUDE.md)
+- **Backend**: Node 22 + Fastify 5 + Prisma 7 + PostgreSQL 16 — lives in `server/` with its own rules → see [`server/CLAUDE.md`](server/CLAUDE.md). HTTP contract em [`docs/api/openapi.json`](docs/api/openapi.json).
 - **Language**: UI text and error messages in Brazilian Portuguese (pt-BR)
 - **Path Alias**: Use `@/` for imports from `src/` (e.g., `@/hooks/useTheme`)
 
@@ -445,6 +445,7 @@ tests/                  # Mobile unit and E2E tests
 Procedimentos operacionais recorrentes têm runbooks detalhados em `.claude/rules/`. Leia o arquivo correspondente antes de executar.
 
 - **Sincronização com Google Sheets** (`.claude/rules/google-sheets-sync.md`) — atualizar a planilha `eb_insights` com novas coletas do `EB-Insights.md` (Obsidian). Cobre credenciais OAuth, estilo de consolidação do dono da planilha, e fluxo dry-run → apply.
+- **Testar a API no Insomnia/Postman** ([`docs/api/README.md`](docs/api/README.md)) — importa o OpenAPI 3.0.3 de [`docs/api/openapi.json`](docs/api/openapi.json) (21 endpoints, auth JWT). Fonte canônica pro contrato operacional; rationale e `code` de erro ficam em [`specs/007-sync-backend/contracts/`](specs/007-sync-backend/contracts/).
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
