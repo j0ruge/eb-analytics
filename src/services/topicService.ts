@@ -3,6 +3,7 @@ import { LessonTopic, LessonTopicWithSeries } from '../types/lessonTopic';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeText } from '../utils/text';
+import { toIsoDateForWire } from '../utils/date';
 import { apiClient, CATALOG_WRITE_TIMEOUT_MS } from './apiClient';
 import { enqueueCatalogPush } from './catalogPushQueue';
 
@@ -106,12 +107,15 @@ export const topicService = {
     });
 
     // Push to backend with timeout — enqueue on failure.
+    // suggested_date is normalized to ISO YYYY-MM-DD on the wire because the
+    // server's parseOptionalDate uses `new Date()`, which rejects pt-BR
+    // abbreviations that don't overlap with English (FEV/ABR/MAI/AGO/SET/OUT/DEZ).
     const payload = {
       id: newTopic.id,
       series_id: newTopic.series_id,
       title: newTopic.title,
       sequence_order: newTopic.sequence_order,
-      suggested_date: newTopic.suggested_date,
+      suggested_date: toIsoDateForWire(newTopic.suggested_date),
     };
     const r = await apiClient.postWithTimeout(
       '/catalog/topics',
@@ -205,7 +209,7 @@ export const topicService = {
     const body: Record<string, unknown> = {};
     if (trimmedTitle !== null) body.title = trimmedTitle;
     if (newOrder !== null) body.sequence_order = newOrder;
-    if (trimmedDate !== undefined) body.suggested_date = trimmedDate;
+    if (trimmedDate !== undefined) body.suggested_date = toIsoDateForWire(trimmedDate);
     if (Object.keys(body).length === 0) return;
 
     const r = await apiClient.patchWithTimeout(
@@ -221,7 +225,7 @@ export const topicService = {
         series_id: local.series_id,
         title: local.title,
         sequence_order: local.sequence_order,
-        suggested_date: local.suggested_date,
+        suggested_date: toIsoDateForWire(local.suggested_date),
       };
       const post = await apiClient.postWithTimeout(
         '/catalog/topics',

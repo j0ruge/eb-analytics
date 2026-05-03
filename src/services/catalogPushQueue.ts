@@ -31,6 +31,10 @@ export interface EnqueueParams {
  * wins — earlier queued ops for the same entity are superseded. This matches
  * the offline-first semantic where the local row is source of truth and the
  * push is just trying to mirror it server-side.
+ *
+ * `attempts` is reset to 0 on conflict so an entry that hit MAX_PUSH_ATTEMPTS
+ * (and was being skipped by the drainer) is destravado as soon as the user
+ * re-edits the entity or the client resends a fresh payload.
  */
 export async function enqueueCatalogPush(
   db: SQLite.SQLiteDatabase,
@@ -44,6 +48,7 @@ export async function enqueueCatalogPush(
      ON CONFLICT(entity_type, entity_id) DO UPDATE SET
        op = excluded.op,
        payload = excluded.payload,
+       attempts = 0,
        last_error = excluded.last_error,
        last_attempt_at = NULL`,
     [id, params.entityType, params.entityId, params.op, payloadJson, params.lastError ?? null],

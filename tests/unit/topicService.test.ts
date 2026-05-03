@@ -96,6 +96,44 @@ describe('Topic Service', () => {
         lastError: 'Sem conexão',
       });
     });
+
+    it('normalizes pt-BR suggested_date to ISO YYYY-MM-DD on POST', async () => {
+      mockDb.getFirstAsync
+        .mockResolvedValueOnce({ max_seq: 8 })
+        .mockResolvedValueOnce(null); // no duplicate
+
+      await topicService.createTopic({
+        series_id: 'series-1',
+        title: 'GULA — Fazendo da comida um deus',
+        sequence_order: 0,
+        suggested_date: '2026-MAI-02',
+      } as any);
+
+      expect(apiClient.postWithTimeout).toHaveBeenCalledWith(
+        '/catalog/topics',
+        expect.objectContaining({ suggested_date: '2026-05-02' }),
+        expect.any(Number),
+      );
+    });
+
+    it('keeps suggested_date null when input is empty', async () => {
+      mockDb.getFirstAsync
+        .mockResolvedValueOnce({ max_seq: null })
+        .mockResolvedValueOnce(null);
+
+      await topicService.createTopic({
+        series_id: 'series-1',
+        title: 'No date',
+        sequence_order: 0,
+        suggested_date: null,
+      } as any);
+
+      expect(apiClient.postWithTimeout).toHaveBeenCalledWith(
+        '/catalog/topics',
+        expect.objectContaining({ suggested_date: null }),
+        expect.any(Number),
+      );
+    });
   });
 
   describe('updateTopic', () => {
@@ -145,6 +183,67 @@ describe('Topic Service', () => {
         payload: { title: 'New Title' },
         lastError: 'Tempo limite atingido',
       });
+    });
+
+    it('normalizes pt-BR suggested_date to ISO on PATCH body', async () => {
+      mockDb.getFirstAsync
+        .mockResolvedValueOnce({
+          id: 't1',
+          series_id: 's1',
+          title: 'IDOLATRIA',
+          sequence_order: 9,
+          suggested_date: null,
+        });
+
+      await topicService.updateTopic('t1', { suggested_date: '2026-MAI-30' });
+
+      expect(apiClient.patchWithTimeout).toHaveBeenCalledWith(
+        '/catalog/topics/t1',
+        { suggested_date: '2026-05-30' },
+        expect.any(Number),
+      );
+    });
+
+    it('normalizes suggested_date to ISO in 404 → CREATE fallback POST', async () => {
+      // currentTopic lookup; then re-read for fallback fullPayload
+      mockDb.getFirstAsync
+        .mockResolvedValueOnce({
+          id: 't1',
+          series_id: 's1',
+          title: 'old',
+          sequence_order: 4,
+          suggested_date: '2026-ABR-25',
+        })
+        .mockResolvedValueOnce({
+          id: 't1',
+          series_id: 's1',
+          title: 'old',
+          sequence_order: 4,
+          suggested_date: '2026-ABR-25',
+        });
+      (apiClient.patchWithTimeout as jest.Mock).mockResolvedValue({
+        data: null,
+        error: 'Não encontrado',
+        status: 404,
+        headers: {},
+      });
+      (apiClient.postWithTimeout as jest.Mock).mockResolvedValue({
+        data: null,
+        error: null,
+        status: 201,
+        headers: {},
+      });
+
+      await topicService.updateTopic('t1', { sequence_order: 4 });
+
+      expect(apiClient.postWithTimeout).toHaveBeenCalledWith(
+        '/catalog/topics',
+        expect.objectContaining({
+          id: 't1',
+          suggested_date: '2026-04-25',
+        }),
+        expect.any(Number),
+      );
     });
   });
 });

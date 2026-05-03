@@ -2,6 +2,7 @@ import {
   parseInputDate,
   formatToYYYYMMMDD,
   isValidDateFormat,
+  toIsoDateForWire,
 } from "../../src/utils/date";
 
 describe("Date Utils", () => {
@@ -156,6 +157,56 @@ describe("Date Utils", () => {
     it("should handle leap year February 29", () => {
       const leapDay = new Date(2024, 1, 29);
       expect(formatToYYYYMMMDD(leapDay)).toBe("2024-FEV-29");
+    });
+  });
+
+  describe("toIsoDateForWire", () => {
+    it("converts pt-BR YYYY-MMM-DD to ISO YYYY-MM-DD for all 12 months", () => {
+      const cases: [string, string][] = [
+        ["2026-JAN-15", "2026-01-15"],
+        ["2026-FEV-15", "2026-02-15"],
+        ["2026-MAR-15", "2026-03-15"],
+        ["2026-ABR-15", "2026-04-15"],
+        ["2026-MAI-09", "2026-05-09"],
+        ["2026-JUN-06", "2026-06-06"],
+        ["2026-JUL-04", "2026-07-04"],
+        ["2026-AGO-15", "2026-08-15"],
+        ["2026-SET-12", "2026-09-12"],
+        ["2026-OUT-10", "2026-10-10"],
+        ["2026-NOV-07", "2026-11-07"],
+        ["2026-DEZ-25", "2026-12-25"],
+      ];
+      for (const [input, expected] of cases) {
+        expect(toIsoDateForWire(input)).toBe(expected);
+      }
+    });
+
+    it("passes through ISO YYYY-MM-DD unchanged", () => {
+      expect(toIsoDateForWire("2026-04-11")).toBe("2026-04-11");
+      expect(toIsoDateForWire("2026-12-31")).toBe("2026-12-31");
+    });
+
+    it("strips time portion of full ISO timestamps", () => {
+      expect(toIsoDateForWire("2026-04-11T00:00:00.000Z")).toBe("2026-04-11");
+      expect(toIsoDateForWire("2026-05-30T15:30:00Z")).toBe("2026-05-30");
+    });
+
+    it("returns null for empty/null/undefined", () => {
+      expect(toIsoDateForWire(null)).toBeNull();
+      expect(toIsoDateForWire(undefined)).toBeNull();
+      expect(toIsoDateForWire("")).toBeNull();
+      expect(toIsoDateForWire("   ")).toBeNull();
+    });
+
+    it("returns null for unparseable input", () => {
+      expect(toIsoDateForWire("not a date")).toBeNull();
+      expect(toIsoDateForWire("2026-FEB-15")).toBeNull(); // English abbr not accepted
+      expect(toIsoDateForWire("15/02/2026")).toBeNull();
+      expect(toIsoDateForWire("2026-13-01")).toBeNull();
+    });
+
+    it("trims surrounding whitespace before parsing", () => {
+      expect(toIsoDateForWire("  2026-MAI-09  ")).toBe("2026-05-09");
     });
   });
 

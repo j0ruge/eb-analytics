@@ -134,3 +134,25 @@ export function formatDayMonth(raw: string): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   return `${dd}/${mm}`;
 }
+
+/**
+ * Converte qualquer formato aceito por `parseInputDate` (pt-BR `YYYY-MMM-DD`,
+ * ISO `YYYY-MM-DD`, ISO completo `YYYY-MM-DDTHH:mm:ss…`) em ISO `YYYY-MM-DD`
+ * para envio HTTP ao servidor. Retorna null para input vazio/nulo/inválido.
+ *
+ * Necessário porque o backend valida `suggested_date` via `new Date(value)`,
+ * que rejeita abreviações pt-BR não-coincidentes com o inglês (FEV/ABR/MAI/
+ * AGO/SET/OUT/DEZ). Sempre normalizar na fronteira HTTP.
+ */
+export function toIsoDateForWire(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const datePart = trimmed.length >= 10 && trimmed[10] === 'T' ? trimmed.slice(0, 10) : trimmed;
+  const d = parseInputDate(datePart);
+  if (!d) return null;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}

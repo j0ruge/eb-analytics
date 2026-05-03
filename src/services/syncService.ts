@@ -355,17 +355,13 @@ async function drainCatalogPushes(): Promise<number> {
       continue;
     }
 
-    // 4xx (except 404) means the server explicitly rejected the payload —
-    // dropping is safer than retrying forever.
-    if (r.status >= 400 && r.status < 500 && r.status !== 404) {
-      console.warn(
-        `[catalogPushQueue] ${row.entity_type}/${row.entity_id} dropped due to ${r.status}: ${r.error}`,
-      );
-      await deletePendingPush(db, row.id);
-      continue;
-    }
-
-    // 5xx, network error, timeout — bump and retry next sync iteration.
+    // 4xx (except 404), 5xx, network error, timeout — bump and let
+    // MAX_PUSH_ATTEMPTS act as the retry ceiling. Previously 4xx-not-404
+    // deleted the row, which silently lost data when the server's payload
+    // validation rejected something (e.g. pt-BR date strings the server
+    // can't parse). Bumping keeps the row alive so a subsequent client-side
+    // fix or re-edit (which resets attempts via enqueueCatalogPush
+    // ON CONFLICT) can flush it.
     await bumpPushAttempt(db, row.id, `${r.status}: ${r.error}`);
   }
   return drained;
