@@ -40,6 +40,8 @@ jest.mock('../../src/services/authService', () => ({
 interface UpsertRow {
   table: 'lesson_series' | 'lesson_topics' | 'professors';
   id: string;
+  params?: unknown[];
+  sql?: string;
 }
 
 function makeFakeDb() {
@@ -50,15 +52,15 @@ function makeFakeDb() {
       async runAsync(sql: string, params?: unknown[]) {
         const s = sql.replace(/\s+/g, ' ').trim();
         if (s.startsWith('INSERT INTO lesson_series')) {
-          upserts.push({ table: 'lesson_series', id: params?.[0] as string });
+          upserts.push({ table: 'lesson_series', id: params?.[0] as string, params, sql: s });
           return;
         }
         if (s.startsWith('INSERT INTO lesson_topics')) {
-          upserts.push({ table: 'lesson_topics', id: params?.[0] as string });
+          upserts.push({ table: 'lesson_topics', id: params?.[0] as string, params, sql: s });
           return;
         }
         if (s.startsWith('INSERT INTO professors')) {
-          upserts.push({ table: 'professors', id: params?.[0] as string });
+          upserts.push({ table: 'professors', id: params?.[0] as string, params, sql: s });
           return;
         }
         throw new Error('Unexpected runAsync: ' + s);
@@ -183,7 +185,7 @@ describe('catalogSyncService.pullNow', () => {
         },
       ],
       professors: [
-        { id: 'p1', name: 'Alex', email: null, updated_at: 'u1' },
+        { id: 'p1', doc_id: null, name: 'Alex', email: null, updated_at: 'u1' },
       ],
       server_now: '2026-04-18T13:00:00.000Z',
     };
@@ -199,6 +201,43 @@ describe('catalogSyncService.pullNow', () => {
     expect(fake1.upserts).toHaveLength(3);
     expect(fake2.upserts).toHaveLength(3);
     expect(fake1.upserts.map((u) => u.id)).toEqual(fake2.upserts.map((u) => u.id));
+  });
+
+  // Regression guard for the pre-010 sync bug: the upsert used to write
+  // `p.id` into the `doc_id` column as a workaround for the old NOT NULL
+  // constraint, blowing away any local CPF on the next pull.
+  it('professor upsert sends doc_id from server (not the id) and uses COALESCE to preserve local CPF', async () => {
+    const fake = makeFakeDb();
+    mockGetDatabase.mockResolvedValue(fake.db);
+    mockGetWithTimeout.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        series: [],
+        topics: [],
+        professors: [
+          { id: 'p1', doc_id: '11144477735', name: 'Alex', email: null, updated_at: 'u1' },
+          { id: 'p2', doc_id: null, name: 'Sem CPF', email: null, updated_at: 'u1' },
+        ],
+        server_now: '2026-04-18T13:00:00.000Z',
+      },
+      error: null,
+      headers: {},
+    });
+
+    await catalogSyncService.pullNow('auto');
+
+    const profUpserts = fake.upserts.filter((u) => u.table === 'professors');
+    expect(profUpserts).toHaveLength(2);
+
+    // Param order: id, doc_id, name, email, updated_at
+    expect(profUpserts[0]!.params).toEqual(['p1', '11144477735', 'Alex', null, 'u1']);
+    expect(profUpserts[1]!.params).toEqual(['p2', null, 'Sem CPF', null, 'u1']);
+
+    // The UPSERT SQL must use COALESCE so a server-side null does NOT clobber
+    // an existing local CPF.
+    expect(profUpserts[0]!.sql).toContain('COALESCE(excluded.doc_id, professors.doc_id)');
+    // And it must NOT pass the row id as the doc_id (the old workaround).
+    expect(profUpserts[0]!.params?.[0]).not.toBe(profUpserts[0]!.params?.[1]);
   });
 });
 

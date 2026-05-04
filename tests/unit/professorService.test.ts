@@ -50,7 +50,7 @@ describe('Professor Service', () => {
   });
 
   describe('createProfessor', () => {
-    it('creates with valid CPF and pushes to backend', async () => {
+    it('creates with valid CPF and pushes to backend with doc_id', async () => {
       mockDb.getFirstAsync.mockResolvedValue(null);
 
       const professor = await professorService.createProfessor({
@@ -62,9 +62,11 @@ describe('Professor Service', () => {
       expect(professor.doc_id).toBe('11144477735');
       expect(mockDb.withTransactionAsync).toHaveBeenCalled();
       expect(mockDb.runAsync).toHaveBeenCalled();
+      // Regression guard for the pre-010 bug: the POST payload MUST include
+      // doc_id so the CPF reaches the backend instead of being silently dropped.
       expect(apiClient.postWithTimeout).toHaveBeenCalledWith(
         '/catalog/professors',
-        { id: professor.id, name: 'João Silva' },
+        { id: professor.id, name: 'João Silva', doc_id: '11144477735' },
         30_000,
       );
       expect(enqueueCatalogPush).not.toHaveBeenCalled();
@@ -97,7 +99,7 @@ describe('Professor Service', () => {
       expect(mockDb.runAsync).not.toHaveBeenCalled();
     });
 
-    it('enqueues catalog push when backend POST fails', async () => {
+    it('enqueues catalog push (with doc_id) when backend POST fails', async () => {
       mockDb.getFirstAsync.mockResolvedValue(null);
       (apiClient.postWithTimeout as jest.Mock).mockResolvedValue({
         data: null,
@@ -113,12 +115,12 @@ describe('Professor Service', () => {
 
       // Local INSERT succeeded
       expect(mockDb.runAsync).toHaveBeenCalled();
-      // Backend failure → enqueued, NOT thrown
+      // Backend failure → enqueued (with doc_id), NOT thrown
       expect(enqueueCatalogPush).toHaveBeenCalledWith(mockDb, {
         entityType: 'PROFESSOR',
         entityId: professor.id,
         op: 'CREATE',
-        payload: { id: professor.id, name: 'João Silva' },
+        payload: { id: professor.id, name: 'João Silva', doc_id: '11144477735' },
         lastError: 'Sem conexão',
       });
     });
@@ -175,6 +177,16 @@ describe('Professor Service', () => {
       });
     });
 
+    it('PATCH propagates doc_id when CPF changes', async () => {
+      mockDb.getFirstAsync.mockResolvedValue(null);
+      await professorService.updateProfessor('p1', { doc_id: '111.444.777-35' });
+      expect(apiClient.patchWithTimeout).toHaveBeenCalledWith(
+        '/catalog/professors/p1',
+        { doc_id: '11144477735' },
+        30_000,
+      );
+    });
+
     it('falls back to POST on PATCH 404 and enqueues if POST also fails', async () => {
       (apiClient.patchWithTimeout as jest.Mock).mockResolvedValue({
         data: null,
@@ -188,19 +200,21 @@ describe('Professor Service', () => {
         status: 0,
         headers: {},
       });
+      // The 404-fallback path reads the local row to fill the POST payload.
+      mockDb.getFirstAsync.mockResolvedValue({ name: 'Maria', doc_id: null });
 
       await professorService.updateProfessor('p1', { name: 'Maria' });
 
       expect(apiClient.postWithTimeout).toHaveBeenCalledWith(
         '/catalog/professors',
-        { id: 'p1', name: 'Maria' },
+        { id: 'p1', name: 'Maria', doc_id: null },
         30_000,
       );
       expect(enqueueCatalogPush).toHaveBeenCalledWith(mockDb, {
         entityType: 'PROFESSOR',
         entityId: 'p1',
         op: 'CREATE',
-        payload: { id: 'p1', name: 'Maria' },
+        payload: { id: 'p1', name: 'Maria', doc_id: null },
         lastError: 'Sem conexão',
       });
     });
