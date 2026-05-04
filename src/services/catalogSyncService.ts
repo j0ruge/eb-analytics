@@ -32,6 +32,7 @@ interface CatalogTopicDto {
 
 interface CatalogProfessorDto {
   id: string;
+  doc_id: string | null;
   name: string;
   email: string | null;
   is_pending?: boolean;
@@ -85,18 +86,18 @@ async function upsertCatalog(resp: CatalogResponse): Promise<void> {
       );
     }
     for (const p of resp.professors) {
-      // doc_id is required NOT NULL on the legacy table; reuse `id` when
-      // server has none (server schema never sends doc_id — it uses email).
-      // For rows created via sync we treat doc_id as an opaque local key
-      // only used by pre-007 CRUD screens.
+      // doc_id (CPF) round-trips with the server. Sync preserves the local
+      // value when the server side is null — this stops a pull from blowing
+      // away a CPF the mobile created before the row reached the backend.
       await db.runAsync(
         `INSERT INTO professors (id, doc_id, name, email, updated_at)
          VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
+           doc_id = COALESCE(excluded.doc_id, professors.doc_id),
            name = excluded.name,
            email = excluded.email,
            updated_at = excluded.updated_at`,
-        [p.id, p.id, p.name, p.email ?? null, p.updated_at],
+        [p.id, p.doc_id ?? null, p.name, p.email ?? null, p.updated_at],
       );
     }
   }));

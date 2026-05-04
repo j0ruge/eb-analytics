@@ -57,7 +57,8 @@ export default function EditProfessorScreen() {
     }, [loadProfessor]),
   );
 
-  function formatCpfDisplay(cpf: string): string {
+  function formatCpfDisplay(cpf: string | null | undefined): string {
+    if (cpf === null || cpf === undefined) return '';
     const numbers = cpf.replace(/\D/g, "");
     if (numbers.length !== 11) return cpf;
     return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9)}`;

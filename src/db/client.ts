@@ -20,6 +20,7 @@ import {
   migrateAddSyncStatus,
   migrateNormalizeTopicSuggestedDate,
   migrateAddCatalogPendingPushes,
+  migrateProfessorDocIdNullable,
 } from './migrations';
 import { DB_NAME, DEFAULT_SERIES_ID, DEFAULT_TOPIC_ID } from './constants';
 
@@ -300,6 +301,10 @@ async function _doInitializeDatabase() {
 
   // Catalog write-back retry queue (offline-first parity with lessons_outbox).
   await migrateAddCatalogPendingPushes(db);
+
+  // Drop NOT NULL on professors.doc_id (was needed by the pre-010 sync
+  // workaround) and clean up any UUIDs the old sync wrote into doc_id.
+  await migrateProfessorDocIdNullable(db);
 
   // Boot reconciliation (008 EC-001): any row stuck in SENDING from a prior
   // crash must return to QUEUED so the sync loop can retry it. Server

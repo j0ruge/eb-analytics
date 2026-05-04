@@ -71,7 +71,7 @@ export default function ProfessorsScreen() {
       <View>
         <Text style={styles.professorName}>{item.name}</Text>
         <Text style={styles.professorCpf}>
-          CPF: {formatCpfDisplay(item.doc_id)}
+          CPF: {item.doc_id ? formatCpfDisplay(item.doc_id) : "não cadastrado"}
         </Text>
       </View>
     </AnimatedPressable>

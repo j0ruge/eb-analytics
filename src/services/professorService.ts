@@ -46,9 +46,14 @@ export const professorService = {
 
     // Push to backend with timeout. Local row is committed; on failure we
     // enqueue for the drainer to retry instead of throwing — offline-first.
+    const remotePayload = {
+      id: newProfessor.id,
+      name: newProfessor.name,
+      doc_id: newProfessor.doc_id,
+    };
     const r = await apiClient.postWithTimeout(
       '/catalog/professors',
-      { id: newProfessor.id, name: newProfessor.name },
+      remotePayload,
       CATALOG_WRITE_TIMEOUT_MS,
     );
     if (r.error) {
@@ -56,7 +61,7 @@ export const professorService = {
         entityType: 'PROFESSOR',
         entityId: newProfessor.id,
         op: 'CREATE',
-        payload: { id: newProfessor.id, name: newProfessor.name },
+        payload: remotePayload,
         lastError: r.error,
       });
     }
@@ -92,7 +97,7 @@ export const professorService = {
     if (entries.length === 0) return;
 
     let cleanDocId: string | null = null;
-    if (updates.doc_id !== undefined) {
+    if (updates.doc_id !== undefined && updates.doc_id !== null) {
       if (!validateCpf(updates.doc_id)) {
         throw new Error('CPF inválido');
       }
@@ -130,19 +135,35 @@ export const professorService = {
       );
     });
 
-    // Push to backend (catalog write-back). Only `name` maps server-side.
-    if (trimmedName !== null) {
+    // Push to backend (catalog write-back). Send whichever of {name, doc_id}
+    // actually changed so partial updates stay partial.
+    const patchPayload: { name?: string; doc_id?: string } = {};
+    if (trimmedName !== null) patchPayload.name = trimmedName;
+    if (cleanDocId !== null) patchPayload.doc_id = cleanDocId;
+
+    if (Object.keys(patchPayload).length > 0) {
       const r = await apiClient.patchWithTimeout(
         `/catalog/professors/${id}`,
-        { name: trimmedName },
+        patchPayload,
         CATALOG_WRITE_TIMEOUT_MS,
       );
       if (r.status === 404) {
         // Row exists locally but not on server — POST with the local id so
-        // future sync_batch calls can resolve professor_id.
+        // future sync_batch calls can resolve professor_id. Need both name
+        // and doc_id (or whichever the local row currently has) — fall back
+        // to the patch payload which is what the user just set.
+        const local = await db.getFirstAsync<{
+          name: string;
+          doc_id: string | null;
+        }>('SELECT name, doc_id FROM professors WHERE id = ?', [id]);
+        const postPayload = {
+          id,
+          name: patchPayload.name ?? local?.name ?? '',
+          doc_id: patchPayload.doc_id ?? local?.doc_id ?? null,
+        };
         const post = await apiClient.postWithTimeout(
           '/catalog/professors',
-          { id, name: trimmedName },
+          postPayload,
           CATALOG_WRITE_TIMEOUT_MS,
         );
         if (post.error) {
@@ -150,7 +171,7 @@ export const professorService = {
             entityType: 'PROFESSOR',
             entityId: id,
             op: 'CREATE',
-            payload: { id, name: trimmedName },
+            payload: postPayload,
             lastError: post.error,
           });
         }
@@ -159,7 +180,7 @@ export const professorService = {
           entityType: 'PROFESSOR',
           entityId: id,
           op: 'UPDATE',
-          payload: { name: trimmedName },
+          payload: patchPayload,
           lastError: r.error,
         });
       }

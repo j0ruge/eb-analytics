@@ -29,10 +29,14 @@ export const CREATE_INDEX_STATUS = `CREATE INDEX IF NOT EXISTS idx_lessons_statu
 export const CREATE_INDEX_DATE = `CREATE INDEX IF NOT EXISTS idx_lessons_date ON lessons_data(date);`;
 export const CREATE_INDEX_PROFESSOR_ID = `CREATE INDEX IF NOT EXISTS idx_lessons_professor_id ON lessons_data(professor_id);`;
 
+// doc_id (CPF) is UNIQUE but nullable so the catalog sync can persist
+// professors created via the backend before docId existed (legacy NULL rows
+// remain valid; UNIQUE in SQLite allows multiple NULLs). Locally created
+// professors must still supply a CPF — that's enforced at the service layer.
 export const CREATE_PROFESSORS_TABLE = `
 CREATE TABLE IF NOT EXISTS professors (
     id TEXT PRIMARY KEY NOT NULL,
-    doc_id TEXT NOT NULL UNIQUE,
+    doc_id TEXT UNIQUE,
     name TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );

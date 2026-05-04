@@ -8,6 +8,7 @@ const MIGRATION_006_FLAG = '006_auth_identity_complete';
 const MIGRATION_008_FLAG = '008_offline_sync_complete';
 const MIGRATION_TOPIC_DATE_FLAG = '008_topic_suggested_date_normalize';
 const MIGRATION_CATALOG_PUSHES_FLAG = '009_catalog_pending_pushes';
+const MIGRATION_PROFESSOR_DOC_ID_NULLABLE = '010_professor_doc_id_nullable';
 
 interface LegacyLessonRow {
   id: string;
@@ -495,6 +496,128 @@ export async function migrateAddCatalogPendingPushes(
     console.log('Migration 009 complete');
   } catch (error) {
     console.error('Migration 009 failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Migration 010: Drop NOT NULL from professors.doc_id and undo the
+ * pre-010 sync workaround that wrote `doc_id = id` (the server UUID) to
+ * satisfy the old NOT NULL constraint when the backend lacked a CPF field.
+ *
+ * Why a table rebuild: SQLite cannot ALTER a column to remove NOT NULL.
+ * The cleanest path is the documented 12-step recipe — create _new, copy,
+ * drop, rename — wrapped in a transaction with foreign_keys disabled so
+ * referencing rows in lessons_data don't fight the recreation.
+ *
+ * The COALESCE-via-CASE in the copy: any row whose doc_id literally
+ * equals its id is the legacy workaround poisoning the CPF column with a
+ * UUID, so we surface those as NULL ("CPF não cadastrado") instead.
+ *
+ * Idempotent — guarded by a PRAGMA inspection of the current notnull bit
+ * AND a flag, since we must not rebuild the table on every boot.
+ */
+export async function migrateProfessorDocIdNullable(
+  db: SQLite.SQLiteDatabase,
+): Promise<void> {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS _migration_flags (
+      key TEXT PRIMARY KEY NOT NULL,
+      completed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const flag = await db.getFirstAsync<{ key: string }>(
+    'SELECT key FROM _migration_flags WHERE key = ?',
+    [MIGRATION_PROFESSOR_DOC_ID_NULLABLE],
+  );
+  if (flag) return;
+
+  // Quick PRAGMA gate — if doc_id is already nullable on this device, skip
+  // the rebuild and just stamp the flag so we don't redo it next boot.
+  const cols = await db.getAllAsync<{ name: string; notnull: number }>(
+    "PRAGMA table_info('professors')",
+  );
+  const docIdCol = cols.find((c) => c.name === 'doc_id');
+  if (!docIdCol) {
+    // Fresh DB created with the new schema directly; nothing to migrate.
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_PROFESSOR_DOC_ID_NULLABLE],
+    );
+    return;
+  }
+  if (docIdCol.notnull === 0) {
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_PROFESSOR_DOC_ID_NULLABLE],
+    );
+    return;
+  }
+
+  console.log('Starting migration 010: Drop NOT NULL on professors.doc_id');
+
+  try {
+    // Capture the current column set so the SELECT INTO copy stays in sync
+    // with whatever migrations 008+ added (email, updated_at).
+    const colNames = new Set(cols.map((c) => c.name));
+    const hasEmail = colNames.has('email');
+    const hasUpdatedAt = colNames.has('updated_at');
+
+    await db.execAsync('DROP TABLE IF EXISTS professors_new;');
+
+    const newCols = [
+      'id TEXT PRIMARY KEY NOT NULL',
+      'doc_id TEXT UNIQUE',
+      'name TEXT NOT NULL',
+    ];
+    if (hasEmail) newCols.push('email TEXT');
+    if (hasUpdatedAt) newCols.push('updated_at TEXT');
+    newCols.push("created_at TEXT DEFAULT CURRENT_TIMESTAMP");
+
+    await db.execAsync(`CREATE TABLE professors_new (${newCols.join(', ')});`);
+
+    const selectCols: string[] = [
+      'id',
+      // Strip the legacy `doc_id = id` workaround: surface as NULL so the
+      // UI shows "CPF não cadastrado" instead of a UUID-shaped string.
+      'CASE WHEN doc_id = id THEN NULL ELSE doc_id END AS doc_id',
+      'name',
+    ];
+    if (hasEmail) selectCols.push('email');
+    if (hasUpdatedAt) selectCols.push('updated_at');
+    selectCols.push('created_at');
+
+    const insertColList = ['id', 'doc_id', 'name'];
+    if (hasEmail) insertColList.push('email');
+    if (hasUpdatedAt) insertColList.push('updated_at');
+    insertColList.push('created_at');
+
+    await db.execAsync(
+      `INSERT INTO professors_new (${insertColList.join(', ')})
+         SELECT ${selectCols.join(', ')} FROM professors;`,
+    );
+    await db.execAsync('DROP TABLE professors;');
+    await db.execAsync('ALTER TABLE professors_new RENAME TO professors;');
+    await db.execAsync(
+      'CREATE INDEX IF NOT EXISTS idx_professors_doc_id ON professors(doc_id);',
+    );
+    await db.execAsync(
+      'CREATE INDEX IF NOT EXISTS idx_professors_name ON professors(name);',
+    );
+
+    await db.runAsync(
+      'INSERT OR IGNORE INTO _migration_flags (key) VALUES (?)',
+      [MIGRATION_PROFESSOR_DOC_ID_NULLABLE],
+    );
+    console.log('Migration 010 complete');
+  } catch (error) {
+    console.error('Migration 010 failed:', error);
+    try {
+      await db.execAsync('DROP TABLE IF EXISTS professors_new;');
+    } catch (rollbackError) {
+      console.error('Migration 010 rollback failed:', rollbackError);
+    }
     throw error;
   }
 }
