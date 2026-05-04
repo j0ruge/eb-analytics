@@ -236,6 +236,82 @@ describe('Coordinator catalog mutations (US-6)', () => {
       expect(res.statusCode).toBe(409);
       expect(res.json().code).toBe('professor_referenced');
     });
+
+    it('POST with doc_id persists and round-trips via GET /catalog', async () => {
+      const coord = await registerUser(app);
+      const created = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { name: 'Prof CPF', doc_id: '11144477735' },
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().doc_id).toBe('11144477735');
+
+      const list = await app.inject({
+        method: 'GET',
+        url: '/catalog',
+        headers: coord.authHeader,
+      });
+      const found = list
+        .json()
+        .professors.find((p: { id: string }) => p.id === created.json().id);
+      expect(found.doc_id).toBe('11144477735');
+    });
+
+    it('PATCH updates doc_id', async () => {
+      const coord = await registerUser(app);
+      const prof = await prisma.professor.create({
+        data: { name: 'Prof', isPending: false },
+      });
+      const patched = await app.inject({
+        method: 'PATCH',
+        url: `/catalog/professors/${prof.id}`,
+        headers: coord.authHeader,
+        payload: { doc_id: '52998224725' },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json().doc_id).toBe('52998224725');
+    });
+
+    it('POST with duplicate doc_id returns 409 doc_id_already_exists', async () => {
+      const coord = await registerUser(app);
+      await prisma.professor.create({
+        data: { name: 'First', docId: '11144477735', isPending: false },
+      });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { name: 'Second', doc_id: '11144477735' },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe('doc_id_already_exists');
+    });
+
+    it('POST with invalid doc_id format returns 400', async () => {
+      const coord = await registerUser(app);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { name: 'Prof', doc_id: '123' },
+      });
+      // Fastify schema validation rejects pattern mismatch with 400
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('POST without doc_id is allowed and returns doc_id: null', async () => {
+      const coord = await registerUser(app);
+      const created = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { name: 'Prof Sem CPF' },
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().doc_id).toBeNull();
+    });
   });
 
   // Tests for the idempotent-create divergence detection added alongside the
@@ -365,6 +441,47 @@ describe('Coordinator catalog mutations (US-6)', () => {
       });
       expect(divergent.statusCode).toBe(409);
       expect(divergent.json().code).toBe('id_conflict');
+    });
+
+    it('professor: same id, different doc_id → 409 id_conflict', async () => {
+      const coord = await registerUser(app);
+      const id = '55555555-5555-5555-5555-555555555555';
+      await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { id, name: 'Same', doc_id: '11144477735' },
+      });
+      const divergent = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { id, name: 'Same', doc_id: '52998224725' },
+      });
+      expect(divergent.statusCode).toBe(409);
+      expect(divergent.json().code).toBe('id_conflict');
+    });
+
+    it('professor: same id, same doc_id → idempotent 201 with existing row', async () => {
+      const coord = await registerUser(app);
+      const id = '66666666-6666-6666-6666-666666666666';
+      const first = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { id, name: 'Replay', doc_id: '11144477735' },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const replay = await app.inject({
+        method: 'POST',
+        url: '/catalog/professors',
+        headers: coord.authHeader,
+        payload: { id, name: 'Replay', doc_id: '11144477735' },
+      });
+      expect(replay.statusCode).toBe(201);
+      expect(replay.json().id).toBe(id);
+      expect(replay.json().doc_id).toBe('11144477735');
     });
   });
 });
