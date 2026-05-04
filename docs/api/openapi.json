@@ -457,7 +457,7 @@
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/ProfessorCreate" },
-              "example": { "name": "João Silva", "email": "joao@example.com" }
+              "example": { "name": "João Silva", "email": "joao@example.com", "doc_id": "11144477735" }
             }
           }
         },
@@ -781,9 +781,15 @@
       },
       "ProfessorItem": {
         "type": "object",
-        "required": ["id", "name", "is_pending", "updated_at"],
+        "required": ["id", "doc_id", "name", "is_pending", "updated_at"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "doc_id": {
+            "type": "string",
+            "pattern": "^[0-9]{11}$",
+            "nullable": true,
+            "description": "CPF (11 dígitos, sem máscara). `null` para registros legados anteriores ao campo."
+          },
           "name": { "type": "string" },
           "email": { "type": "string", "format": "email", "nullable": true },
           "is_pending": { "type": "boolean" },
@@ -794,15 +800,27 @@
         "type": "object",
         "required": ["name"],
         "properties": {
+          "id": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
-          "email": { "type": "string", "format": "email", "nullable": true }
+          "email": { "type": "string", "format": "email", "nullable": true },
+          "doc_id": {
+            "type": "string",
+            "pattern": "^[0-9]{11}$",
+            "nullable": true,
+            "description": "CPF (11 dígitos sem máscara)."
+          }
         }
       },
       "ProfessorPatch": {
         "type": "object",
         "properties": {
           "name": { "type": "string", "minLength": 1 },
-          "email": { "type": "string", "format": "email", "nullable": true }
+          "email": { "type": "string", "format": "email", "nullable": true },
+          "doc_id": {
+            "type": "string",
+            "pattern": "^[0-9]{11}$",
+            "nullable": true
+          }
         }
       },
       "CatalogResponse": {

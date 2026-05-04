@@ -29,6 +29,7 @@ interface SerializedTopic {
 
 interface SerializedProfessor {
   id: string;
+  doc_id: string | null;
   name: string;
   email: string | null;
   is_pending: boolean;
@@ -73,11 +74,13 @@ export interface CreateProfessorDto {
   id?: string;
   name: string;
   email?: string | null;
+  doc_id?: string | null;
 }
 
 export interface UpdateProfessorDto {
   name?: string;
   email?: string | null;
+  doc_id?: string | null;
 }
 
 function serializeSeries(s: {
@@ -120,6 +123,7 @@ function serializeTopic(t: {
 
 function serializeProfessor(p: {
   id: string;
+  docId: string | null;
   name: string;
   email: string | null;
   isPending: boolean;
@@ -127,6 +131,7 @@ function serializeProfessor(p: {
 }): SerializedProfessor {
   return {
     id: p.id,
+    doc_id: p.docId,
     name: p.name,
     email: p.email,
     is_pending: p.isPending,
@@ -153,20 +158,52 @@ function isPrismaForeignKeyViolation(err: unknown): boolean {
 }
 
 /**
- * Extract `meta.target` from a Prisma `P2002` (unique violation) error.
+ * Extract field names from a Prisma `P2002` (unique violation) error.
  * Tells us *which* unique constraint was hit so we can distinguish
  * `id` collisions (idempotent replays) from `code`/`email` collisions
  * (real conflicts deserving a 409 with a specific code).
+ *
+ * Prisma 7 with the `prisma-client` driver adapter for Postgres surfaces
+ * the violation under `meta.driverAdapterError.cause.constraint.fields`
+ * (quoted, e.g. `"docId"`); older Prisma releases populate `meta.target`
+ * directly. Try both so this helper survives upgrades and adapter swaps.
  */
 function prismaUniqueTarget(err: unknown): string[] {
   if (!err || typeof err !== 'object') return [];
-  const meta = (err as { meta?: { target?: unknown } }).meta;
-  if (!meta || meta.target === undefined || meta.target === null) return [];
-  if (Array.isArray(meta.target)) {
-    return meta.target.filter((t): t is string => typeof t === 'string');
+  const meta = (err as {
+    meta?: {
+      target?: unknown;
+      driverAdapterError?: { cause?: { constraint?: { fields?: unknown } } };
+    };
+  }).meta;
+  if (!meta) return [];
+  if (meta.target !== undefined && meta.target !== null) {
+    if (Array.isArray(meta.target)) {
+      return meta.target.filter((t): t is string => typeof t === 'string');
+    }
+    if (typeof meta.target === 'string') return [meta.target];
   }
-  if (typeof meta.target === 'string') return [meta.target];
+  const fields = meta.driverAdapterError?.cause?.constraint?.fields;
+  if (Array.isArray(fields)) {
+    return fields
+      .filter((f): f is string => typeof f === 'string')
+      .map((f) => f.replace(/^"+|"+$/g, ''));
+  }
   return [];
+}
+
+/**
+ * Match a Prisma unique-violation target against a logical field name.
+ * Postgres reports the index name (e.g. `Professor_docId_key`); SQLite
+ * adapters can report the bare field. Compare case-insensitively against
+ * both shapes so callers don't need to know which form arrived.
+ */
+function targetMatches(target: string[], field: string): boolean {
+  const lowered = field.toLowerCase();
+  return target.some((t) => {
+    const l = t.toLowerCase();
+    return l === lowered || l.includes(`_${lowered}_`);
+  });
 }
 
 /**
@@ -473,8 +510,20 @@ export const catalogService = {
       throw httpError('invalid_payload', 'name obrigatório.', 400);
     }
     const email = dto.email ?? null;
-    const checkDivergence = (existing: { name: string; email: string | null }) => {
-      if (existing.name !== dto.name || (existing.email ?? null) !== email) {
+    const docId = dto.doc_id ?? null;
+    if (docId !== null && !/^[0-9]{11}$/.test(docId)) {
+      throw httpError('invalid_payload', 'doc_id deve conter 11 dígitos.', 400);
+    }
+    const checkDivergence = (existing: {
+      name: string;
+      email: string | null;
+      docId: string | null;
+    }) => {
+      if (
+        existing.name !== dto.name ||
+        (existing.email ?? null) !== email ||
+        (existing.docId ?? null) !== docId
+      ) {
         throw httpError('id_conflict', 'ID já existe com payload diferente.', 409);
       }
     };
@@ -491,6 +540,7 @@ export const catalogService = {
           ...(dto.id ? { id: dto.id } : {}),
           name: dto.name,
           email,
+          docId,
           isPending: false,
         },
       });
@@ -498,12 +548,15 @@ export const catalogService = {
     } catch (err) {
       if (isPrismaUniqueViolation(err)) {
         const target = prismaUniqueTarget(err);
-        if (dto.id && target.includes('id')) {
+        if (dto.id && targetMatches(target, 'id')) {
           const existing = await prisma.professor.findUnique({ where: { id: dto.id } });
           if (existing) {
             checkDivergence(existing);
             return serializeProfessor(existing);
           }
+        }
+        if (targetMatches(target, 'docId')) {
+          throw httpError('doc_id_already_exists', 'CPF já cadastrado.', 409);
         }
         throw httpError('email_already_exists', 'E-mail já existe.', 409);
       }
@@ -512,12 +565,20 @@ export const catalogService = {
   },
 
   async updateProfessor(id: string, dto: UpdateProfessorDto): Promise<SerializedProfessor> {
+    if (
+      dto.doc_id !== undefined &&
+      dto.doc_id !== null &&
+      !/^[0-9]{11}$/.test(dto.doc_id)
+    ) {
+      throw httpError('invalid_payload', 'doc_id deve conter 11 dígitos.', 400);
+    }
     try {
       const row = await prisma.professor.update({
         where: { id },
         data: {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
           ...(dto.email !== undefined ? { email: dto.email } : {}),
+          ...(dto.doc_id !== undefined ? { docId: dto.doc_id } : {}),
           isPending: false,
         },
       });
@@ -527,6 +588,10 @@ export const catalogService = {
         throw httpError('not_found', 'Registro não encontrado.', 404);
       }
       if (isPrismaUniqueViolation(err)) {
+        const target = prismaUniqueTarget(err);
+        if (targetMatches(target, 'docId')) {
+          throw httpError('doc_id_already_exists', 'CPF já cadastrado.', 409);
+        }
         throw httpError('email_already_exists', 'E-mail já existe.', 409);
       }
       throw err;

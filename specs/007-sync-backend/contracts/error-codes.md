@@ -38,6 +38,7 @@ These are **not** HTTP errors — they are per-item outcomes carried by a 200 re
 |---|---|---|---|
 | 409 | `code_already_exists` | `Código já existe.` | FR-032 unique |
 | 409 | `email_already_exists` | `E-mail já existe.` | FR-032 unique |
+| 409 | `doc_id_already_exists` | `CPF já cadastrado.` | FR-032 unique |
 | 409 | `id_conflict` | `ID já existe com payload diferente.` | Idempotent replay divergence |
 | 404 | `not_found` | `Registro não encontrado.` | Generic |
 | 409 | `series_referenced` | `Série não pode ser excluída enquanto houver aulas associadas.` | FR-034 |

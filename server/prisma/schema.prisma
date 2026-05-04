@@ -58,6 +58,9 @@ model LessonTopic {
 
 model Professor {
   id        String           @id @default(uuid())
+  // CPF (11-digit Brazilian document). Nullable so legacy rows synced
+  // before the field existed remain valid; new mobile creates always send it.
+  docId     String?          @unique
   name      String
   email     String?          @unique
   isPending Boolean          @default(false)

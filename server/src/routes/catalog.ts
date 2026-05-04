@@ -61,6 +61,7 @@ const professorCreateSchema = {
     id: { type: 'string', minLength: 1 },
     name: { type: 'string', minLength: 1 },
     email: { type: ['string', 'null'] },
+    doc_id: { type: ['string', 'null'], pattern: '^[0-9]{11}$' },
   },
   additionalProperties: false,
 } as const;
@@ -70,6 +71,7 @@ const professorPatchSchema = {
   properties: {
     name: { type: 'string', minLength: 1 },
     email: { type: ['string', 'null'] },
+    doc_id: { type: ['string', 'null'], pattern: '^[0-9]{11}$' },
   },
   additionalProperties: false,
 } as const;
@@ -184,7 +186,9 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------- Professor CRUD ----------------
 
-  fastify.post<{ Body: { id?: string; name: string; email?: string | null } }>(
+  fastify.post<{
+    Body: { id?: string; name: string; email?: string | null; doc_id?: string | null };
+  }>(
     '/catalog/professors',
     { preHandler: [coordinatorOnly], schema: { body: professorCreateSchema } },
     async (request, reply) => {
@@ -192,6 +196,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
         id: request.body.id,
         name: request.body.name,
         email: request.body.email ?? null,
+        doc_id: request.body.doc_id ?? null,
       });
       return reply.status(201).send(row);
     },
@@ -199,7 +204,7 @@ const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch<{
     Params: { id: string };
-    Body: { name?: string; email?: string | null };
+    Body: { name?: string; email?: string | null; doc_id?: string | null };
   }>(
     '/catalog/professors/:id',
     { preHandler: [coordinatorOnly], schema: { body: professorPatchSchema } },
